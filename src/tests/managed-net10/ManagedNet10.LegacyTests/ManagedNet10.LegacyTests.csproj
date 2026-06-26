@@ -26,7 +26,9 @@
     <Compile Include="Instructions\Arithmetic\TC_sub.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_xor.cs" Link="Instructions\Arithmetic\TC_xor.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Br.cs" Link="Instructions\Branches\TC_Br.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Beq.cs" Link="Instructions\Branches\TC_Beq.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Brfalse.cs" Link="Instructions\Branches\TC_Brfalse.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Bne_un.cs" Link="Instructions\Branches\TC_Bne_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_brtrue.cs" Link="Instructions\Branches\TC_brtrue.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_switch.cs" Link="Instructions\Branches\TC_switch.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Ceq.cs" Link="Instructions\Compare\TC_Ceq.cs" />
