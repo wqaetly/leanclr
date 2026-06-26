@@ -73,10 +73,7 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_u2.cs" Link="Instructions\Converts\TC_conv_u2.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_u4.cs" Link="Instructions\Converts\TC_conv_u4.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_u8.cs" Link="Instructions\Converts\TC_conv_u8.cs" />
-    <Compile Include="..\..\managed\SharedTests\Instructions\Memory\TC_ldc.cs" Link="Instructions\Memory\TC_ldc.cs" />
-    <Compile Include="..\..\managed\SharedTests\Instructions\Memory\TC_ldloc.cs" Link="Instructions\Memory\TC_ldloc.cs" />
-    <Compile Include="..\..\managed\SharedTests\Instructions\Memory\TC_ldnull.cs" Link="Instructions\Memory\TC_ldnull.cs" />
-    <Compile Include="..\..\managed\SharedTests\Instructions\Memory\TC_stloc.cs" Link="Instructions\Memory\TC_stloc.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Memory\*.cs" LinkBase="Instructions\Memory" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Misc\*.cs" LinkBase="Instructions\Misc" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Objects\*.cs" LinkBase="Instructions\Objects" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
