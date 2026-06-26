@@ -2,6 +2,7 @@
 #include "system_array.h"
 #include "system_object.h"
 #include "system_span.h"
+#include "system_runtime_compilerservices_runtimehelpers.h"
 #include "intrinsics/system_string.h"
 #include "system_mathf.h"
 #include "system_threading_interlocked.h"
@@ -25,6 +26,7 @@ void IntrinsicStubs::get_intrinsic_entries(utils::Vector<vm::IntrinsicEntry>& en
     Append(entries, SystemArray::get_intrinsic_entries());
     Append(entries, SystemObject::get_intrinsic_entries());
     Append(entries, SystemSpan::get_intrinsic_entries());
+    Append(entries, SystemRuntimeCompilerServicesRuntimeHelpers::get_intrinsic_entries());
     Append(entries, SystemString::get_intrinsic_entries());
     Append(entries, SystemMathF::get_intrinsic_entries());
     Append(entries, SystemThreadingInterlocked::get_intrinsic_entries());
