@@ -3,7 +3,9 @@
 #include "interp/eval_stack_op.h"
 #include "metadata/metadata_name.h"
 #include "metadata/metadata_cache.h"
+#include "metadata/module_def.h"
 #include "utils/string_builder.h"
+#include "vm/assembly.h"
 #include "vm/class.h"
 #include "vm/field.h"
 #include "vm/generic_class.h"
@@ -54,6 +56,34 @@ RtResult<const metadata::RtTypeSig*> get_type_sig_from_qcall_type_handle(void* q
     }
 
     RET_OK(runtime_type->reflection_type.type_handle);
+}
+
+RtResult<metadata::RtModuleDef*> get_module_from_qcall_module(void* qcall_module, void* native_handle) noexcept
+{
+    if (native_handle != nullptr)
+    {
+        RET_OK(reinterpret_cast<metadata::RtModuleDef*>(native_handle));
+    }
+
+    if (qcall_module == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto runtime_module_klass = vm::Class::get_corlib_types().cls_reflection_module;
+    auto direct_module = reinterpret_cast<vm::RtReflectionModule*>(qcall_module);
+    if (direct_module->klass == runtime_module_klass)
+    {
+        RET_OK(direct_module->native_handle);
+    }
+
+    auto runtime_module = *reinterpret_cast<vm::RtReflectionModule**>(qcall_module);
+    if (runtime_module == nullptr || runtime_module->klass != runtime_module_klass)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    RET_OK(runtime_module->native_handle);
 }
 
 RtResultVoid append_basic_type_name(utils::Utf8StringBuilder& sb, const metadata::RtTypeSig* type_sig) noexcept
@@ -131,6 +161,12 @@ RtResult<int32_t> get_cor_element_type(void* type_handle) noexcept
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
                                             get_type_sig_from_qcall_type_handle(type_handle, type_handle));
     RET_OK(static_cast<int32_t>(type_sig->ele_type));
+}
+
+RtResult<vm::RtArray*> get_module_types(void* qcall_module, void* native_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, module, get_module_from_qcall_module(qcall_module, native_handle));
+    return vm::Assembly::get_types(module->get_assembly(), false);
 }
 
 RtResult<vm::RtReflectionRuntimeType*> get_runtime_type_from_type_sig(const metadata::RtTypeSig* type_sig) noexcept
@@ -338,6 +374,22 @@ RtResultVoid get_cor_element_type_invoker(metadata::RtManagedMethodPointer, cons
     RET_VOID_OK();
 }
 
+RtResultVoid get_module_types_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                      interp::RtStackObject* ret) noexcept
+{
+    auto qcall_module = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto types_slot = interp::EvalStackOp::get_param<vm::RtArray**>(params, 2);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, types, get_module_types(qcall_module, native_handle));
+    if (types_slot != nullptr)
+    {
+        *types_slot = types;
+    }
+    interp::EvalStackOp::set_return(ret, types);
+    RET_VOID_OK();
+}
+
 RtResultVoid create_instance_for_another_generic_parameter_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                                    const interp::RtStackObject* params, interp::RtStackObject*) noexcept
 {
@@ -395,6 +447,10 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.TypeHandle::GetCorElementType(System.IntPtr)", nullptr,
                                    get_cor_element_type_invoker);
     vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.TypeHandle::GetCorElementType", nullptr, get_cor_element_type_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeModule::GetTypes(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, get_module_types_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeModule::GetTypes", nullptr, get_module_types_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::CreateInstanceForAnotherGenericParameter(System.Runtime.CompilerServices.QCallTypeHandle,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, create_instance_for_another_generic_parameter_invoker);

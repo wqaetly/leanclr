@@ -22,6 +22,23 @@ namespace ManagedNet10.LegacyTests
             return executed;
         }
 
+        public static int RunAssembly(Assembly assembly)
+        {
+            int executed = 0;
+            Type[] types = assembly.GetTypes();
+            for (int i = 0; i < types.Length; i++)
+            {
+                executed += RunType(types[i]);
+            }
+
+            if (executed == 0)
+            {
+                throw new Exception("No UnitTest methods executed for " + assembly.FullName);
+            }
+
+            return executed;
+        }
+
         public static int RunType(Type type)
         {
             if (Attribute.IsDefined(type, typeof(IgnoreTestAttribute), inherit: true))

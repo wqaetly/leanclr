@@ -9,14 +9,7 @@ namespace ManagedNet10.LegacyTests
 
         public static void RunAll()
         {
-            RunActivator();
-            RunArithmeticInstructions();
-            RunBranchInstructions();
-            RunCompareInstructions();
-            RunConvertInstructions();
-            RunMemoryInstructions();
-            RunArrayInstructions();
-            RunBoxingInstructions();
+            LegacyTestRunner.RunAssembly(typeof(Program).Assembly);
         }
 
         public static void RunActivator()
