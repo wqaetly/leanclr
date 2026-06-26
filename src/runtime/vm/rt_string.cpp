@@ -96,8 +96,7 @@ RtResultVoid String::initialize()
 {
     metadata::RtClass* stringClass = Class::get_corlib_types().cls_string;
     g_stringClass = stringClass;
-    RET_ERR_ON_FAIL(Class::initialize_fields(stringClass));
-    RET_ERR_ON_FAIL(Class::initialize_methods(stringClass));
+    RET_ERR_ON_FAIL(Class::initialize_all(stringClass));
     RET_ERR_ON_FAIL(init_static_empty_string(stringClass));
     RET_ERR_ON_FAIL(init_redirected_ctor_method(stringClass));
     RET_VOID_OK();

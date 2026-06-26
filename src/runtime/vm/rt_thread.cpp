@@ -46,6 +46,9 @@ void Thread::setup_internal_thread(RtThread* thread)
         thread->internal_thread = nullptr;
         return;
     }
+    auto init_result = Class::initialize_all(internal_thread_class);
+    assert(init_result.is_ok());
+    (void)init_result;
 
     auto internal_thread_obj = static_cast<RtInternalThread*>(LEANCLR_NEWOBJ_INTERNAL(internal_thread_class, "Thread::setup_internal_thread").unwrap());
 
@@ -63,6 +66,9 @@ RtThread* Thread::attach_current_thread(RtAppDomain* app_domain)
     // Get thread class from corlib
     auto thread_class = Class::get_corlib_types().cls_thread;
     assert(thread_class != nullptr);
+    auto init_result = Class::initialize_all(thread_class);
+    assert(init_result.is_ok());
+    (void)init_result;
 
     // Create thread object
     auto thread_obj = static_cast<RtThread*>(LEANCLR_NEWOBJ_INTERNAL(thread_class, "Thread::attach_current_thread").unwrap());

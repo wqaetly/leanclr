@@ -3,6 +3,7 @@
 #include "method.h"
 #include "class.h"
 #include "metadata/module_def.h"
+#include "pinvokes/coreclr_qcall.h"
 #include "utils/string_builder.h"
 #include "utils/string_util.h"
 #include "metadata/metadata_name.h"
@@ -86,6 +87,7 @@ RtResult<const PInvokeRegistry*> PInvokes::get_pinvoke_by_method(const metadata:
 // Initialize internal calls system
 void PInvokes::initialize()
 {
+    pinvokes::register_coreclr_qcall_pinvokes();
 }
 
 } // namespace vm

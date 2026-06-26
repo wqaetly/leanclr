@@ -341,6 +341,74 @@ internal static class Program
         Require(Volatile.Read(ref value) == 41, "volatile read/write failed");
     }
 
+    private static void TestCurrentThreadOnly()
+    {
+        Require(Thread.CurrentThread != null, "current thread lookup failed");
+    }
+
+    private static void TestTaskFromResultOnly()
+    {
+        var task = Task.FromResult(42);
+        Require(task != null, "Task.FromResult returned null");
+    }
+
+    private static void TestTaskFromResultValueOnly()
+    {
+        Require(Task.FromResult(42).Result == 42, "Task.FromResult value failed");
+    }
+
+    private static void TestReturnsResultAsyncOnly()
+    {
+        Require(ReturnsResultAsync().Result == 42, "ReturnsResultAsync value failed");
+    }
+
+    private static void TestYieldAwaiterOnly()
+    {
+        var awaiter = Task.Yield().GetAwaiter();
+        awaiter.GetResult();
+    }
+
+    private static void TestAsyncTaskMethodBuilderTaskOnly()
+    {
+        var builder = AsyncTaskMethodBuilder.Create();
+        Require(builder.Task != null, "async builder task failed");
+    }
+
+    private static void TestAsyncTaskMethodBuilderSetResultOnly()
+    {
+        var builder = AsyncTaskMethodBuilder.Create();
+        builder.SetResult();
+        Require(builder.Task != null, "async builder set result failed");
+    }
+
+    private static void TestAsyncNoAwaitCreateOnly()
+    {
+        var task = AsyncNoAwait();
+        Require(task != null, "async no-await method returned null");
+    }
+
+    private static void TestAsyncCompletedAwaitCreateOnly()
+    {
+        var task = AsyncCompletedAwait();
+        Require(task != null, "async completed-await method returned null");
+    }
+
+    private static void TestAsyncCreateOnly()
+    {
+        var task = TestAsync();
+        Require(task != null, "async method returned null");
+    }
+
+    private static async Task AsyncNoAwait()
+    {
+        Require(true, "async no-await body failed");
+    }
+
+    private static async Task AsyncCompletedAwait()
+    {
+        Require(await ReturnsResultAsync() == 42, "async completed-await result failed");
+    }
+
     private static async Task TestAsync()
     {
         await Task.Yield();

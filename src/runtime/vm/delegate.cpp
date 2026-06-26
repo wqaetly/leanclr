@@ -41,7 +41,7 @@ RtResult<RtMulticastDelegate*> Delegate::create_delegate_from_reflection(RtRefle
 
 RtResultVoid Delegate::constructor_delegate(RtMulticastDelegate* del, RtObject* target, const metadata::RtMethodInfo* method) noexcept
 {
-    assert(!del->deles);
+    del->deles = nullptr;
     auto& sub_del = del->dele;
     sub_del.target = target;
     sub_del.method = method;
