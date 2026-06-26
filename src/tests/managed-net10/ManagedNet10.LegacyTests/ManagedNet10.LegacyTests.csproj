@@ -15,6 +15,7 @@
     <Compile Include="CompareTestEntries.cs" />
     <Compile Include="ConvertTestEntries.cs" />
     <Compile Include="ExceptionTestEntries.cs" />
+    <Compile Include="FieldTestEntries.cs" />
     <Compile Include="LegacyTestRunner.cs" />
     <Compile Include="MemoryTestEntries.cs" />
     <Compile Include="ObjectMiscTestEntries.cs" />
@@ -30,7 +31,11 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTActivator.cs" Link="Fixtures\AOTActivator.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTEnums.cs" Link="Fixtures\AOTEnums.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTValueTypes.cs" Link="Fixtures\AOTValueTypes.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\ArmHFAStructs.cs" Link="Fixtures\ArmHFAStructs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdftnDefs.cs" Link="Fixtures\LdftnDefs.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\TypeFields.cs" Link="Fixtures\TypeFields.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields.cs" Link="Fixtures\TypeStaticFields.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields2.cs" Link="Fixtures\TypeStaticFields2.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_add.cs" Link="Instructions\Arithmetic\TC_add.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_and.cs" Link="Instructions\Arithmetic\TC_and.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_mul.cs" Link="Instructions\Arithmetic\TC_mul.cs" />
@@ -69,6 +74,7 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt_un.cs" Link="Instructions\Compare\TC_Clt_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\*.cs" LinkBase="Instructions\Converts" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Exceptions\*.cs" LinkBase="Instructions\Exceptions" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Fields\*.cs" LinkBase="Instructions\Fields" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Memory\*.cs" LinkBase="Instructions\Memory" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Misc\*.cs" LinkBase="Instructions\Misc" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Objects\*.cs" LinkBase="Instructions\Objects" />
