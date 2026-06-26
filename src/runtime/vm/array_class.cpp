@@ -353,7 +353,7 @@ RtResultVoid ArrayClass::setup_methods(RtClass* klass)
             for (size_t i = parameter_count; i < parameter_count * 2; ++i)
                 params_buf[i] = int32_type_sig;
             DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const RtMethodInfo*, cctor_m,
-                                                    build_array_method(klass, STR_CCTOR, void_type_sig, params_buf, parameter_count * 2));
+                                                    build_array_method(klass, STR_CTOR, void_type_sig, params_buf, parameter_count * 2));
             methods[cur_method_index++] = cctor_m;
         }
     }

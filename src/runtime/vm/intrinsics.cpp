@@ -18,6 +18,27 @@ static utils::HashMap<const char*, IntrinsicInvoker, utils::CStrHasher, utils::C
 static utils::Vector<IntrinsicInvoker> g_intrinsicInvokerIdList;
 static utils::HashMap<IntrinsicInvoker, uint16_t> g_intrinsicInvokerIdMap;
 
+static RtResultVoid get_runtime_intrinsics_is_supported_false_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    (void)params;
+    interp::EvalStackOp::set_return(ret, 0);
+    RET_VOID_OK();
+}
+
+static bool is_runtime_intrinsics_is_supported(const metadata::RtMethodInfo* method) noexcept
+{
+    const metadata::RtClass* klass = method->parent;
+    constexpr const char* runtime_intrinsics_namespace = "System.Runtime.Intrinsics";
+    constexpr size_t runtime_intrinsics_namespace_len = sizeof("System.Runtime.Intrinsics") - 1;
+
+    return method->parameter_count == 0 && method->return_type->ele_type == metadata::RtElementType::Boolean &&
+           std::strcmp(method->name, "get_IsSupported") == 0 &&
+           std::strncmp(klass->namespaze, runtime_intrinsics_namespace, runtime_intrinsics_namespace_len) == 0;
+}
+
 // Register an intrinsic function by name
 void Intrinsics::register_intrinsic(const char* name, IntrinsicFunction func, IntrinsicInvoker invoker)
 {
@@ -75,6 +96,10 @@ static RtResultVoid append_open_declaring_type_method_name_with_params(utils::Ut
 // Get intrinsic by method info (builds full method name with params)
 RtResult<const IntrinsicRegistry*> Intrinsics::get_intrinsic_by_method(const metadata::RtMethodInfo* method)
 {
+    static const IntrinsicRegistry runtime_intrinsics_is_supported_false = {
+        reinterpret_cast<IntrinsicFunction>(get_runtime_intrinsics_is_supported_false_invoker),
+        get_runtime_intrinsics_is_supported_false_invoker};
+
     utils::Utf8StringBuilder sb;
 
     {
@@ -99,6 +124,12 @@ RtResult<const IntrinsicRegistry*> Intrinsics::get_intrinsic_by_method(const met
         if (it != g_intrinsicMap.end())
             RET_OK(&it->second);
     }
+
+    if (is_runtime_intrinsics_is_supported(method))
+    {
+        RET_OK(&runtime_intrinsics_is_supported_false);
+    }
+
     RET_OK(nullptr);
 }
 

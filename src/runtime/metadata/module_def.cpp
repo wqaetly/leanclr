@@ -1506,7 +1506,7 @@ RtResult<RtMethodSig> RtModuleDef::read_method_sig(utils::BinaryReader& reader, 
         RET_ASSERT_ERR(RtErr::BadImageFormat);
     }
     RtSigType sigType = RtMetadata::decode_sig_type(byteType);
-    if (sigType >= RtSigType::Field)
+    if (sigType == RtSigType::Field || sigType == RtSigType::LocalVar || sigType == RtSigType::Property || sigType == RtSigType::MethodSpec)
     {
         RET_ASSERT_ERR(RtErr::BadImageFormat);
     }
@@ -2054,18 +2054,24 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
     RtSigType sigType = RtMetadata::decode_sig_type(byteType);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, name, get_string(row.name));
 
+    const RtTypeSig* memberLookupTypeSig = parentTypeSig;
+    if (parentTypeSig->ele_type == RtElementType::Ptr)
+    {
+        memberLookupTypeSig = parentTypeSig->data.element_type;
+    }
+
     RtClass* baseClass;
-    RtElementType eleType = parentTypeSig->ele_type;
+    RtElementType eleType = memberLookupTypeSig->ele_type;
     switch (eleType)
     {
     case RtElementType::GenericInst:
     {
-        UNWRAP_OR_RET_ERR_ON_FAIL(baseClass, vm::Class::get_class_by_type_def_gid(parentTypeSig->data.generic_class->base_type_def_gid));
+        UNWRAP_OR_RET_ERR_ON_FAIL(baseClass, vm::Class::get_class_by_type_def_gid(memberLookupTypeSig->data.generic_class->base_type_def_gid));
         break;
     }
     default:
     {
-        UNWRAP_OR_RET_ERR_ON_FAIL(baseClass, vm::Class::get_class_from_typesig(parentTypeSig));
+        UNWRAP_OR_RET_ERR_ON_FAIL(baseClass, vm::Class::get_class_from_typesig(memberLookupTypeSig));
         break;
     }
     }
@@ -2090,7 +2096,7 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
             }
             if (eleType == RtElementType::GenericInst)
             {
-                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtClass*, fieldDeclClass, vm::Class::get_class_from_typesig(parentTypeSig));
+                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtClass*, fieldDeclClass, vm::Class::get_class_from_typesig(memberLookupTypeSig));
                 RET_ERR_ON_FAIL(vm::Class::initialize_fields(fieldDeclClass));
                 RET_OK(RtRuntimeHandle{fieldDeclClass->fields + i});
             }
@@ -2132,7 +2138,7 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
             }
             if (eleType == RtElementType::GenericInst)
             {
-                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtClass*, methodDeclClass, vm::Class::get_class_from_typesig(parentTypeSig));
+                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtClass*, methodDeclClass, vm::Class::get_class_from_typesig(memberLookupTypeSig));
                 RET_ERR_ON_FAIL(vm::Class::initialize_methods(methodDeclClass));
                 RET_OK(RtRuntimeHandle{methodDeclClass->methods[i]});
             }

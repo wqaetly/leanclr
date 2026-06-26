@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstring>
 #include <limits>
 
 #include "interpreter.h"
@@ -41,9 +42,11 @@ static RtResult<const RtInterpMethodInfo*> transform(const metadata::RtMethodInf
     size_t pageSize = 1024;
     alloc::MemPool pool(guessSize, pageSize, utils::MemOp::align_up(guessSize, pageSize));
     hl::Transformer hl_transformer(mod, method, methodBody, pool);
-    RET_ERR_ON_FAIL(hl_transformer.transform());
+    auto hl_ret = hl_transformer.transform();
+    RET_ERR_ON_FAIL(hl_ret);
     ll::Transformer ll_transformer(hl_transformer, pool);
-    RET_ERR_ON_FAIL(ll_transformer.transform());
+    auto ll_ret = ll_transformer.transform();
+    RET_ERR_ON_FAIL(ll_ret);
     return ll_transformer.build_interp_method_info();
 }
 

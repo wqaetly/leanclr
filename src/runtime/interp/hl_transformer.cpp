@@ -1249,6 +1249,17 @@ RtResultVoid Transformer::add_call_common(const metadata::RtMethodInfo* method, 
 
 RtResultVoid Transformer::add_call(const metadata::RtMethodInfo* method)
 {
+    if (((uint32_t)_prefix & (uint32_t)il::OpCodePrefix::Constrained) != 0 && _constrained_class &&
+        vm::Method::is_static(method) && vm::Class::is_interface(method->parent))
+    {
+        metadata::RtClass* cons_klass = _constrained_class;
+        _constrained_class = nullptr;
+        RET_ERR_ON_FAIL(vm::Class::initialize_all(cons_klass));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, cons_method,
+                                                vm::Method::get_static_interface_method_impl_on_klass(cons_klass, method));
+        return add_call(cons_method);
+    }
+
     return add_call_common(method, method->invoker_type, method->invoke_method_ptr, false, false);
 }
 
@@ -2701,8 +2712,17 @@ RtResultVoid Transformer::transform_body()
             case il::OpCodeValue::Call:
             {
                 uint32_t method_token = utils::MemOp::read_u32_may_unaligned(codes_begin + il_offset_cur + 1);
-                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_token(method_token));
-                RET_ERR_ON_FAIL(add_call(method));
+                auto method_ret = get_method_from_token(method_token);
+                if (method_ret.is_err())
+                {
+                    RET_ERR(method_ret.unwrap_err());
+                }
+                const metadata::RtMethodInfo* method = method_ret.unwrap();
+                auto call_ret = add_call(method);
+                if (call_ret.is_err())
+                {
+                    RET_ERR(call_ret.unwrap_err());
+                }
                 il_offset_cur += 5;
                 break;
             }

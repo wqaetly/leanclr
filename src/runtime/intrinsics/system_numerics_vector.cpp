@@ -28,6 +28,12 @@ static RtResultVoid get_is_hardware_accelerated_invoker(metadata::RtManagedMetho
 static vm::IntrinsicEntry s_intrinsic_entries_system_numerics_vector[] = {
     {"System.Numerics.Vector::get_IsHardwareAccelerated", (vm::IntrinsicFunction)&SystemNumericsVector::get_is_hardware_accelerated,
      get_is_hardware_accelerated_invoker},
+    {"System.Runtime.Intrinsics.Vector128::get_IsHardwareAccelerated",
+     (vm::IntrinsicFunction)&SystemNumericsVector::get_is_hardware_accelerated, get_is_hardware_accelerated_invoker},
+    {"System.Runtime.Intrinsics.Vector256::get_IsHardwareAccelerated",
+     (vm::IntrinsicFunction)&SystemNumericsVector::get_is_hardware_accelerated, get_is_hardware_accelerated_invoker},
+    {"System.Runtime.Intrinsics.Vector512::get_IsHardwareAccelerated",
+     (vm::IntrinsicFunction)&SystemNumericsVector::get_is_hardware_accelerated, get_is_hardware_accelerated_invoker},
 };
 
 utils::Span<vm::IntrinsicEntry> SystemNumericsVector::get_intrinsic_entries() noexcept

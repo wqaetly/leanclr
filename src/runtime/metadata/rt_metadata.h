@@ -364,6 +364,7 @@ enum class RtSigType : uint8_t
     Field = 0x6,
     LocalVar = 0x7,
     Property = 0x8,
+    Unmanaged = 0x9,
     MethodSpec = 0xA,
     GenericInst = 0x10,
     HasThis = 0x20,

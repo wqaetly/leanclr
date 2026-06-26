@@ -143,13 +143,9 @@ struct RtReflectionAssembly;
 // Reflection module
 struct RtReflectionModule : public RtObject
 {
-    const void* image; // EEImage*
-    RtReflectionAssembly* assembly;
-    RtString* fqname;
-    RtString* name;
-    RtString* scope_name;
-    bool is_resource;
-    uint32_t token;
+    RtReflectionRuntimeType* runtime_type; // System.Reflection.RuntimeModule.m_runtimeType
+    RtReflectionAssembly* assembly;        // System.Reflection.RuntimeModule.m_runtimeAssembly
+    metadata::RtModuleDef* native_handle;  // System.Reflection.RuntimeModule.m_pData
 };
 
 // Reflection assembly

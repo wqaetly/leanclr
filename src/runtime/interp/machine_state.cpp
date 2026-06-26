@@ -1,4 +1,4 @@
-#include <cstdio>
+#include <cstring>
 #include "machine_state.h"
 
 #include "alloc/general_allocation.h"

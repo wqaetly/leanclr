@@ -9,6 +9,7 @@
 #include "system_runtime_compilerservices_unsafe.h"
 #include "system_runtime_compilerservices_runtimehelpers.h"
 #include "system_runtime_compilerservices_yieldawaiter.h"
+#include "system_runtime_interopservices_memorymarshal.h"
 #include "system_runtimetype.h"
 #include "system_runtimetypehandle.h"
 #include "system_type.h"
@@ -16,6 +17,7 @@
 #include "system_mathf.h"
 #include "system_threading_interlocked.h"
 #include "system_threading_volatile.h"
+#include "system_threading_thread_intrinsics.h"
 #include "system_numerics_vector.h"
 
 namespace leanclr
@@ -42,6 +44,7 @@ void IntrinsicStubs::get_intrinsic_entries(utils::Vector<vm::IntrinsicEntry>& en
     Append(entries, SystemRuntimeCompilerServicesUnsafe::get_intrinsic_entries());
     Append(entries, SystemRuntimeCompilerServicesRuntimeHelpers::get_intrinsic_entries());
     Append(entries, SystemRuntimeCompilerServicesYieldAwaiter::get_intrinsic_entries());
+    Append(entries, SystemRuntimeInteropServicesMemoryMarshal::get_intrinsic_entries());
     Append(entries, SystemRuntimeType::get_intrinsic_entries());
     Append(entries, SystemRuntimeTypeHandle::get_intrinsic_entries());
     Append(entries, SystemType::get_intrinsic_entries());
@@ -49,6 +52,7 @@ void IntrinsicStubs::get_intrinsic_entries(utils::Vector<vm::IntrinsicEntry>& en
     Append(entries, SystemMathF::get_intrinsic_entries());
     Append(entries, SystemThreadingInterlocked::get_intrinsic_entries());
     Append(entries, SystemThreadingVolatile::get_intrinsic_entries());
+    Append(entries, SystemThreadingThreadIntrinsics::get_intrinsic_entries());
     Append(entries, SystemNumericsVector::get_intrinsic_entries());
 }
 

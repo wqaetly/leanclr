@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Compile Include="BranchTestEntries.cs" />
+    <Compile Include="ArrayBoxingTestEntries.cs" />
     <Compile Include="CompareTestEntries.cs" />
     <Compile Include="ConvertTestEntries.cs" />
     <Compile Include="LegacyTestRunner.cs" />
@@ -20,6 +21,8 @@
     <Compile Include="..\..\managed\Common\TestCaseBase.cs" Link="Common\TestCaseBase.cs" />
     <Compile Include="..\..\managed\Common\UnitTestAttribute.cs" Link="Common\UnitTestAttribute.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTActivator.cs" Link="Fixtures\AOTActivator.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\AOTEnums.cs" Link="Fixtures\AOTEnums.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\AOTValueTypes.cs" Link="Fixtures\AOTValueTypes.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_add.cs" Link="Instructions\Arithmetic\TC_add.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_and.cs" Link="Instructions\Arithmetic\TC_and.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_mul.cs" Link="Instructions\Arithmetic\TC_mul.cs" />
@@ -35,6 +38,8 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_div_un.cs" Link="Instructions\Ariths\TC_div_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_rem.cs" Link="Instructions\Ariths\TC_rem.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_rem_un.cs" Link="Instructions\Ariths\TC_rem_un.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arrays\*.cs" LinkBase="Instructions\Arrays" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Boxing\*.cs" LinkBase="Instructions\Boxing" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Br.cs" Link="Instructions\Branches\TC_Br.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Beq.cs" Link="Instructions\Branches\TC_Beq.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Bge.cs" Link="Instructions\Branches\TC_Bge.cs" />

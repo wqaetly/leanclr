@@ -18,7 +18,7 @@ namespace icalls
 
 RtResult<int32_t> SystemReflectionRuntimeModule::get_metadata_token(vm::RtReflectionModule* module) noexcept
 {
-    RET_OK(static_cast<int32_t>(module->assembly->assembly->mod->get_module_token()));
+    RET_OK(static_cast<int32_t>(module->native_handle->get_module_token()));
 }
 
 /// @icall: System.Reflection.RuntimeModule::get_MetadataToken(System.Reflection.Module)

@@ -24,6 +24,7 @@
 #include "system_runtime_interopservices_gchandle.h"
 #include "system_runtime_interopservices_marshal.h"
 #include "system_runtime_interopservices_runtimeinformation.h"
+#include "system_runtime_dependenthandle.h"
 #include "system_runtime_runtimeimports.h"
 #include "system_runtime_remoting_activation_activationservices.h"
 #include "system_runtime_remoting_remotingservices.h"
@@ -119,6 +120,7 @@ void InternalCallStubs::get_internal_call_entries(utils::Vector<vm::InternalCall
     Append(entries, SystemRuntimeInteropServicesMarshal::get_internal_call_entries());
     Append(entries, SystemRuntimeInteropServicesGCHandle::get_internal_call_entries());
     Append(entries, SystemRuntimeInteropServicesRuntimeInformation::get_internal_call_entries());
+    Append(entries, SystemRuntimeDependentHandle::get_internal_call_entries());
     Append(entries, SystemRuntimeRuntimeImports::get_internal_call_entries());
     Append(entries, SystemRuntimeRemotingActivationActivationServices::get_internal_call_entries());
     Append(entries, SystemRuntimeRemotingRemotingServices::get_internal_call_entries());

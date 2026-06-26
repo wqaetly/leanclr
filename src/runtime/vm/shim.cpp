@@ -33,7 +33,12 @@ RtResultVoid fn_interpreter_invoker(metadata::RtManagedMethodPointer method_poin
         assert(method_pointer == method->virtual_method_ptr);
         const_cast<interp::RtStackObject*>(params)[0].obj = params[0].obj + 1;
     }
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const interp::RtStackObject*, result, interp::Interpreter::execute(method, params));
+    auto execute_ret = interp::Interpreter::execute(method, params);
+    if (execute_ret.is_err())
+    {
+        RET_ERR(execute_ret.unwrap_err());
+    }
+    const interp::RtStackObject* result = execute_ret.unwrap();
     if (method->ret_stack_object_size > 0)
     {
         std::memcpy(ret, result, method->ret_stack_object_size * sizeof(interp::RtStackObject));

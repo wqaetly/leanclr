@@ -940,6 +940,7 @@ RtResultVoid Class::initialize_fields(metadata::RtClass* klass)
     }
     case metadata::RtClassFamily::ArrayOrSZArray:
     {
+        RET_ERR_ON_FAIL(initialize_fields(const_cast<metadata::RtClass*>(klass->element_class)));
         klass->instance_size_without_header = 0;
         klass->alignment = PTR_ALIGN;
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, isRefType, is_reference_type_or_contains_reference_type_in_typesig(klass->element_class->by_val));
@@ -1433,7 +1434,12 @@ RtResultVoid Class::setup_methods_typedef(metadata::RtClass* klass)
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtGenericContainer*, genericContainer, mod->get_generic_container(method->token));
         metadata::RtGenericContainerContext gcc{klass->generic_container, genericContainer};
 
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtMethodSig, methodSig, mod->read_method_sig(methodRow.signature, gcc, nullptr));
+        auto method_sig_ret = mod->read_method_sig(methodRow.signature, gcc, nullptr);
+        if (method_sig_ret.is_err())
+        {
+            RET_ERR(method_sig_ret.unwrap_err());
+        }
+        metadata::RtMethodSig methodSig = method_sig_ret.unwrap();
         method->return_type = methodSig.return_type;
         size_t paramCount = methodSig.params.size();
         method->parameter_count = static_cast<uint16_t>(paramCount);
@@ -1456,7 +1462,12 @@ RtResultVoid Class::setup_methods_typedef(metadata::RtClass* klass)
             }
         }
 
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(InvokeTypeAndMethod, invoker_type_and_method, Shim::get_invoker(method));
+        auto invoker_ret = Shim::get_invoker(method);
+        if (invoker_ret.is_err())
+        {
+            RET_ERR(invoker_ret.unwrap_err());
+        }
+        InvokeTypeAndMethod invoker_type_and_method = invoker_ret.unwrap();
         method->invoke_method_ptr = invoker_type_and_method.invoker;
         method->invoker_type = invoker_type_and_method.invoker_type;
         MethodAndVirtualMethod method_and_virtual_method = Shim::get_method_pointer(method);
@@ -1481,7 +1492,11 @@ RtResultVoid Class::build_methods_arg_descs(metadata::RtClass* klass)
             // Generic methods arg descs are built on demand
             continue;
         }
-        RET_ERR_ON_FAIL(Method::build_method_arg_descs(const_cast<metadata::RtMethodInfo*>(method)));
+        auto arg_desc_ret = Method::build_method_arg_descs(const_cast<metadata::RtMethodInfo*>(method));
+        if (arg_desc_ret.is_err())
+        {
+            RET_ERR(arg_desc_ret.unwrap_err());
+        }
     }
     RET_VOID_OK();
 }

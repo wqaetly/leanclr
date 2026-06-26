@@ -15,6 +15,8 @@ namespace ManagedNet10.LegacyTests
             RunCompareInstructions();
             RunConvertInstructions();
             RunMemoryInstructions();
+            RunArrayInstructions();
+            RunBoxingInstructions();
         }
 
         public static void RunActivator()

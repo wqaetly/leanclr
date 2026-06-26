@@ -118,6 +118,48 @@ RtResult<bool> SystemEnum::get_enum_values_and_names(vm::RtReflectionRuntimeType
     RET_OK(sorted);
 }
 
+static RtResult<const metadata::RtTypeSig*> get_type_sig_from_qcall_type_handle(void* qcall_type_handle, void* native_handle) noexcept
+{
+    if (native_handle != nullptr)
+    {
+        RET_OK(reinterpret_cast<const metadata::RtTypeSig*>(native_handle));
+    }
+
+    if (qcall_type_handle == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto runtime_type_klass = vm::Class::get_corlib_types().cls_runtimetype;
+    auto direct_runtime_type = reinterpret_cast<vm::RtReflectionRuntimeType*>(qcall_type_handle);
+    if (direct_runtime_type->reflection_type.header.klass == runtime_type_klass)
+    {
+        RET_OK(direct_runtime_type->reflection_type.type_handle);
+    }
+
+    auto runtime_type = *reinterpret_cast<vm::RtReflectionRuntimeType**>(qcall_type_handle);
+    if (runtime_type == nullptr || runtime_type->reflection_type.header.klass != runtime_type_klass)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    RET_OK(runtime_type->reflection_type.type_handle);
+}
+
+RtResultVoid SystemEnum::get_enum_values_and_names_qcall(void* qcall_type_handle, void* native_handle, vm::RtArray** values, vm::RtArray** names,
+                                                         bool get_names) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig, get_type_sig_from_qcall_type_handle(qcall_type_handle, native_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    auto result = vm::Enum::get_enum_storage_values_and_names(klass, get_names);
+    RET_ERR_ON_FAIL(result);
+    auto result_tuple = result.unwrap();
+
+    *values = std::get<1>(result_tuple);
+    *names = std::get<2>(result_tuple);
+    RET_VOID_OK();
+}
+
 RtResult<vm::RtObject*> SystemEnum::internal_box_enum(vm::RtReflectionRuntimeType* runtime_type, uint64_t value) noexcept
 {
     const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
@@ -175,9 +217,20 @@ static RtResultVoid internal_get_underlying_type_invoker(metadata::RtManagedMeth
 }
 
 /// @icall: System.Enum::GetEnumValuesAndNames
-static RtResultVoid get_enum_values_and_names_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+static RtResultVoid get_enum_values_and_names_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                                       interp::RtStackObject* ret) noexcept
 {
+    if (method->return_type->ele_type == metadata::RtElementType::Void && method->parameter_count == 4)
+    {
+        auto qcall_type_handle = EvalStackOp::get_param<void*>(params, 0);
+        auto native_handle = EvalStackOp::get_param<void*>(params, 1);
+        auto values_ptr = EvalStackOp::get_param<vm::RtArray**>(params, 2);
+        auto names_ptr = EvalStackOp::get_param<vm::RtArray**>(params, 3);
+        bool get_names = EvalStackOp::get_param<int32_t>(params, 4) != 0;
+        RET_ERR_ON_FAIL(SystemEnum::get_enum_values_and_names_qcall(qcall_type_handle, native_handle, values_ptr, names_ptr, get_names));
+        RET_VOID_OK();
+    }
+
     vm::RtReflectionRuntimeType* enum_klass = EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
     vm::RtArray* values = nullptr;
     vm::RtArray* names = nullptr;

@@ -247,6 +247,7 @@ RtResult<RtReflectionType*> Reflection::get_type_reflection_object(const metadat
 
     s_class_reflection_type_map.emplace(pooled_type_sig, ref_obj);
     ref_obj->type_handle = pooled_type_sig;
+    ref_obj->cache = nullptr;
     RET_OK(ref_obj);
 }
 
@@ -477,18 +478,11 @@ RtResult<RtReflectionModule*> Reflection::get_module_reflection_object(metadata:
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ref_obj_raw, LEANCLR_NEWOBJ_INTERNAL(runtime_module_klass, "Reflection::get_module_reflection_object"));
     auto ref_obj = reinterpret_cast<RtReflectionModule*>(ref_obj_raw);
 
-    ref_obj->image = mod;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, global_cls, mod->get_global_type_def());
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, global_type, get_klass_reflection_object(global_cls));
+    ref_obj->runtime_type = reinterpret_cast<RtReflectionRuntimeType*>(global_type);
     UNWRAP_OR_RET_ERR_ON_FAIL(ref_obj->assembly, get_assembly_reflection_object(mod->get_assembly()));
-
-    utils::Utf8StringBuilder fqname_buf;
-    metadata::MetadataName::append_assembly_name(fqname_buf, mod->get_assembly_name());
-
-    auto name_no_ext = mod->get_name_no_ext();
-    auto name = mod->get_name();
-    ref_obj->fqname = String::create_string_from_utf8chars(fqname_buf.get_const_chars(), static_cast<int32_t>(fqname_buf.length()));
-    ref_obj->name = String::create_string_from_utf8chars(name, static_cast<int32_t>(std::strlen(name)));
-    ref_obj->scope_name = String::create_string_from_utf8chars(name_no_ext, static_cast<int32_t>(std::strlen(name_no_ext)));
-    ref_obj->token = mod->get_assembly_token();
+    ref_obj->native_handle = mod;
     s_module_reflection_map.insert({mod, ref_obj});
     RET_OK(ref_obj);
 }
