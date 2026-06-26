@@ -33,6 +33,7 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTEnums.cs" Link="Fixtures\AOTEnums.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTValueTypes.cs" Link="Fixtures\AOTValueTypes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\ArmHFAStructs.cs" Link="Fixtures\ArmHFAStructs.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\CallDefs.cs" Link="Fixtures\CallDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdftnDefs.cs" Link="Fixtures\LdftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdvirftnDefs.cs" Link="Fixtures\LdvirftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeFields.cs" Link="Fixtures\TypeFields.cs" />
@@ -77,6 +78,10 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\*.cs" LinkBase="Instructions\Converts" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Exceptions\*.cs" LinkBase="Instructions\Exceptions" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Fields\*.cs" LinkBase="Instructions\Fields" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInhereAotClass.cs" Link="Instructions\Funcs\ForInhereAotClass.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInhereAotValue.cs" Link="Instructions\Funcs\ForInhereAotValue.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_aot.cs" Link="Instructions\Funcs\TC_call_aot.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_interp.cs" Link="Instructions\Funcs\TC_call_interp.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_ldftn.cs" Link="Instructions\Funcs\TC_ldftn.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_ldvirftn.cs" Link="Instructions\Funcs\TC_ldvirftn.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Memory\*.cs" LinkBase="Instructions\Memory" />
