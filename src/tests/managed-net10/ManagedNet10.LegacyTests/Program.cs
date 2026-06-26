@@ -81,6 +81,7 @@ namespace ManagedNet10.LegacyTests
             RunArithmeticAdd();
             RunArithmeticSub();
             RunArithmeticMul();
+            RunArithmeticDivRem();
             RunArithmeticBitwise();
             RunArithmeticNeg();
             RunArithmeticShift();
@@ -230,6 +231,64 @@ namespace ManagedNet10.LegacyTests
             RunArithmeticOr();
             RunArithmeticXor();
             RunArithmeticNot();
+        }
+
+        public static void RunArithmeticDivRem()
+        {
+            RunArithmeticDiv();
+            RunArithmeticDivUn();
+            RunArithmeticRem();
+            RunArithmeticRemUn();
+        }
+
+        public static void RunArithmeticDiv()
+        {
+            Tests.Instruments.Ariths.TC_div.byte_1();
+            Tests.Instruments.Ariths.TC_div.sbyte_1();
+            Tests.Instruments.Ariths.TC_div.short_1();
+            Tests.Instruments.Ariths.TC_div.ushort_1();
+            Tests.Instruments.Ariths.TC_div.int_1();
+            Tests.Instruments.Ariths.TC_div.int_2();
+            Tests.Instruments.Ariths.TC_div.uint_1();
+            Tests.Instruments.Ariths.TC_div.long_1();
+            Tests.Instruments.Ariths.TC_div.long_2();
+            Tests.Instruments.Ariths.TC_div.ulong_1();
+            Tests.Instruments.Ariths.TC_div.float_1();
+            Tests.Instruments.Ariths.TC_div.float_NaN();
+            Tests.Instruments.Ariths.TC_div.float_NaN_1();
+            Tests.Instruments.Ariths.TC_div.float_0();
+            Tests.Instruments.Ariths.TC_div.double_1();
+            Tests.Instruments.Ariths.TC_div.double_NaN();
+            Tests.Instruments.Ariths.TC_div.double_NaN_1();
+            Tests.Instruments.Ariths.TC_div.double_0();
+        }
+
+        public static void RunArithmeticDivUn()
+        {
+            Tests.Instruments.Ariths.TC_div_un.uint_1();
+            Tests.Instruments.Ariths.TC_div_un.ulong_1();
+        }
+
+        public static void RunArithmeticRem()
+        {
+            Tests.Instruments.Ariths.TC_rem.int_1();
+            Tests.Instruments.Ariths.TC_rem.int_2();
+            Tests.Instruments.Ariths.TC_rem.long_1();
+            Tests.Instruments.Ariths.TC_rem.long_2();
+            Tests.Instruments.Ariths.TC_rem.float_1();
+            Tests.Instruments.Ariths.TC_rem.float_2();
+            Tests.Instruments.Ariths.TC_rem.float_NaN();
+            Tests.Instruments.Ariths.TC_rem.float_0();
+            Tests.Instruments.Ariths.TC_rem.double_1();
+            Tests.Instruments.Ariths.TC_rem.double_2();
+            Tests.Instruments.Ariths.TC_rem.double_NaN();
+            Tests.Instruments.Ariths.TC_rem.double_OverflowException();
+        }
+
+        public static void RunArithmeticRemUn()
+        {
+            Tests.Instruments.Ariths.TC_un.un_uint();
+            Tests.Instruments.Ariths.TC_un.un_ulong();
         }
 
         public static void RunArithmeticAnd()

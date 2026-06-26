@@ -29,6 +29,10 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_shr_un.cs" Link="Instructions\Arithmetic\TC_shr_un.cs" />
     <Compile Include="Instructions\Arithmetic\TC_sub.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_xor.cs" Link="Instructions\Arithmetic\TC_xor.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_div.cs" Link="Instructions\Ariths\TC_div.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_div_un.cs" Link="Instructions\Ariths\TC_div_un.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_rem.cs" Link="Instructions\Ariths\TC_rem.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_rem_un.cs" Link="Instructions\Ariths\TC_rem_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Br.cs" Link="Instructions\Branches\TC_Br.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Beq.cs" Link="Instructions\Branches\TC_Beq.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Bge.cs" Link="Instructions\Branches\TC_Bge.cs" />
