@@ -36,6 +36,7 @@ void IntrinsicStubs::get_newobj_intrinsic_entries(utils::Vector<vm::NewobjIntrin
 {
     entries.reserve(200);
     Append(entries, SystemObject::get_newobj_intrinsic_entries());
+    Append(entries, SystemSpan::get_newobj_intrinsic_entries());
     // append newobj intrinsic entries from various classes
 }
 } // namespace intrinsics

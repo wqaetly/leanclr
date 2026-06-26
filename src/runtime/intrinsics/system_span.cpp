@@ -19,6 +19,17 @@ RtResult<const uint8_t*> SystemSpan::get_item(const vm::RtReadOnlySpan<uint8_t>&
     RET_OK(span.pointer + (static_cast<size_t>(index) * ele_size));
 }
 
+RtResult<vm::RtReadOnlySpan<uint8_t>> SystemSpan::newobj_pointer_length(void* pointer, int32_t length) noexcept
+{
+    if (length < 0)
+    {
+        RET_ERR(RtErr::ArgumentOutOfRange);
+    }
+
+    vm::RtReadOnlySpan<uint8_t> span{reinterpret_cast<const uint8_t*>(pointer), length};
+    RET_OK(span);
+}
+
 // ========== Invoker Functions ==========
 
 /// @intrinsic: System.Span`1::get_Item
@@ -40,6 +51,21 @@ static RtResultVoid get_item_invoker(metadata::RtManagedMethodPointer methodPtr,
     RET_VOID_OK();
 }
 
+/// @newobj: System.Span`1::.ctor(System.Void*,System.Int32)
+/// @newobj: System.ReadOnlySpan`1::.ctor(System.Void*,System.Int32)
+static RtResultVoid newobj_pointer_length_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    void* pointer = interp::EvalStackOp::get_param<void*>(params, 0);
+    int32_t length = interp::EvalStackOp::get_param<int32_t>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReadOnlySpan<uint8_t>, span, SystemSpan::newobj_pointer_length(pointer, length));
+    interp::EvalStackOp::set_return(ret, span);
+    RET_VOID_OK();
+}
+
 // ========== Intrinsic Entries ==========
 
 static vm::IntrinsicEntry s_intrinsic_entries_system_span[] = {
@@ -47,10 +73,21 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_span[] = {
     {"System.ReadOnlySpan`1::get_Item", (vm::IntrinsicFunction)&SystemSpan::get_item, get_item_invoker},
 };
 
+static vm::NewobjIntrinsicEntry s_newobj_intrinsic_entries_system_span[] = {
+    {"System.Span`1::.ctor(System.Void*,System.Int32)", newobj_pointer_length_invoker},
+    {"System.ReadOnlySpan`1::.ctor(System.Void*,System.Int32)", newobj_pointer_length_invoker},
+};
+
 utils::Span<vm::IntrinsicEntry> SystemSpan::get_intrinsic_entries() noexcept
 {
     constexpr size_t entry_count = sizeof(s_intrinsic_entries_system_span) / sizeof(s_intrinsic_entries_system_span[0]);
     return utils::Span<vm::IntrinsicEntry>(s_intrinsic_entries_system_span, entry_count);
+}
+
+utils::Span<vm::NewobjIntrinsicEntry> SystemSpan::get_newobj_intrinsic_entries() noexcept
+{
+    constexpr size_t entry_count = sizeof(s_newobj_intrinsic_entries_system_span) / sizeof(s_newobj_intrinsic_entries_system_span[0]);
+    return utils::Span<vm::NewobjIntrinsicEntry>(s_newobj_intrinsic_entries_system_span, entry_count);
 }
 
 } // namespace intrinsics

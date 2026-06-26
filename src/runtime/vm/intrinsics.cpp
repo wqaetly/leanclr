@@ -53,6 +53,25 @@ static RtResultVoid append_open_declaring_type_method_name(utils::Utf8StringBuil
     RET_VOID_OK();
 }
 
+static RtResultVoid append_open_declaring_type_method_name_with_params(utils::Utf8StringBuilder& sb, const metadata::RtMethodInfo* method)
+{
+    RET_ERR_ON_FAIL(append_open_declaring_type_method_name(sb, method));
+
+    sb.append_char('(');
+    for (uint16_t i = 0; i < method->parameter_count; ++i)
+    {
+        if (i > 0)
+        {
+            sb.append_char(',');
+        }
+
+        RET_ERR_ON_FAIL(metadata::MetadataName::append_type_full_name(sb, method->parameters[i], metadata::TypeNameFormat::InternalName, false));
+    }
+    sb.append_char(')');
+    sb.sure_null_terminator_but_not_append();
+    RET_VOID_OK();
+}
+
 // Get intrinsic by method info (builds full method name with params)
 RtResult<const IntrinsicRegistry*> Intrinsics::get_intrinsic_by_method(const metadata::RtMethodInfo* method)
 {
@@ -106,6 +125,14 @@ RtResult<IntrinsicInvoker> Intrinsics::get_newobj_intrinsic_by_method(const meta
 
     {
         RET_ERR_ON_FAIL(metadata::MetadataName::append_method_full_name_with_params(sb, method, metadata::TypeNameFormat::InternalName));
+        auto it = g_newobjIntrinsicMap.find(sb.get_const_chars());
+        if (it != g_newobjIntrinsicMap.end())
+            RET_OK(it->second);
+    }
+
+    {
+        sb.clear();
+        RET_ERR_ON_FAIL(append_open_declaring_type_method_name_with_params(sb, method));
         auto it = g_newobjIntrinsicMap.find(sb.get_const_chars());
         if (it != g_newobjIntrinsicMap.end())
             RET_OK(it->second);
