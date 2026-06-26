@@ -138,13 +138,13 @@ Transformer::LeaveSurroundingBlockType Transformer::get_leave_surrounding_block_
             continue;
         }
 
-        if (clause.is_in_try_block(il_src) && !clause.is_in_try_block(il_target))
-        {
-            result = LeaveSurroundingBlockType::Try;
-        }
-        else if (clause.is_in_handler_block(il_src) && !clause.is_in_handler_block(il_target))
+        if (clause.is_in_handler_block(il_src) && !clause.is_in_handler_block(il_target))
         {
             result = LeaveSurroundingBlockType::CatchOrFilter;
+        }
+        else if (clause.is_in_try_block(il_src) && !clause.is_in_try_block(il_target) && result != LeaveSurroundingBlockType::CatchOrFilter)
+        {
+            result = LeaveSurroundingBlockType::Try;
         }
     }
 
