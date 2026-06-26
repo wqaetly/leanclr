@@ -14,6 +14,7 @@
 #include "vm/runtime.h"
 #include "vm/rt_array.h"
 #include "vm/rt_string.h"
+#include "utils/rt_vector.h"
 
 namespace leanclr
 {
@@ -94,6 +95,52 @@ static bool field_matches_binding_flags(const metadata::RtFieldInfo* field, cons
 
     return true;
 }
+
+static bool method_matches_binding_flags(const metadata::RtMethodInfo* method, const metadata::RtClass* declaring_klass,
+                                         const metadata::RtClass* target_klass, int32_t binding_flags) noexcept
+{
+    if (vm::Method::is_ctor_or_cctor(method))
+    {
+        return false;
+    }
+
+    if (vm::Method::is_public(method))
+    {
+        if ((binding_flags & BINDING_FLAGS_PUBLIC) == 0)
+        {
+            return false;
+        }
+    }
+    else
+    {
+        if ((binding_flags & BINDING_FLAGS_NON_PUBLIC) == 0)
+        {
+            return false;
+        }
+        if (vm::Method::is_private(method) && declaring_klass != target_klass)
+        {
+            return false;
+        }
+    }
+
+    if (vm::Method::is_static(method))
+    {
+        if ((binding_flags & BINDING_FLAGS_STATIC) == 0)
+        {
+            return false;
+        }
+        if (declaring_klass != target_klass && (binding_flags & BINDING_FLAGS_FLATTEN_HIERARCHY) == 0)
+        {
+            return false;
+        }
+    }
+    else if ((binding_flags & BINDING_FLAGS_INSTANCE) == 0)
+    {
+        return false;
+    }
+
+    return true;
+}
 } // namespace
 
 RtResult<vm::RtReflectionField*> SystemRuntimeType::get_field(vm::RtReflectionRuntimeType* runtime_type, vm::RtString* name,
@@ -146,6 +193,59 @@ RtResult<vm::RtReflectionField*> SystemRuntimeType::get_field(vm::RtReflectionRu
     }
 
     RET_OK(nullptr);
+}
+
+RtResult<vm::RtArray*> SystemRuntimeType::get_methods(vm::RtReflectionRuntimeType* runtime_type, int32_t binding_flags) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    const auto& corlib_types = vm::Class::get_corlib_types();
+    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    if (type_sig->by_ref)
+    {
+        return LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(corlib_types.cls_reflection_method,
+                                                               "SystemRuntimeType::get_methods");
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+
+    utils::Vector<const metadata::RtMethodInfo*> methods;
+    const metadata::RtClass* current_klass = klass;
+    while (current_klass != nullptr)
+    {
+        RET_ERR_ON_FAIL(vm::Class::initialize_methods(const_cast<metadata::RtClass*>(current_klass)));
+        for (uint32_t i = 0; i < current_klass->method_count; ++i)
+        {
+            const metadata::RtMethodInfo* method = current_klass->methods[i];
+            if (!method_matches_binding_flags(method, current_klass, klass, binding_flags))
+            {
+                continue;
+            }
+            methods.push_back(method);
+        }
+
+        if ((binding_flags & BINDING_FLAGS_DECLARED_ONLY) != 0)
+        {
+            break;
+        }
+        current_klass = current_klass->parent;
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        vm::RtArray*, result,
+        LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_reflection_method, static_cast<int32_t>(methods.size()),
+                                                    "SystemRuntimeType::get_methods"));
+    for (int32_t i = 0; i < static_cast<int32_t>(methods.size()); ++i)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethod*, ref_method,
+                                                vm::Reflection::get_method_reflection_object(methods[static_cast<size_t>(i)], klass));
+        vm::Array::set_array_data_at<vm::RtReflectionMethod*>(result, i, ref_method);
+    }
+
+    RET_OK(result);
 }
 
 RtResult<vm::RtArray*> SystemRuntimeType::get_custom_attributes(vm::RtReflectionRuntimeType* runtime_type,
@@ -264,6 +364,18 @@ static RtResultVoid get_field_invoker(metadata::RtManagedMethodPointer, const me
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.RuntimeType::GetMethods(System.Reflection.BindingFlags)
+static RtResultVoid get_methods_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                        interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+    int32_t binding_flags = interp::EvalStackOp::get_param<int32_t>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, methods, SystemRuntimeType::get_methods(runtime_type, binding_flags));
+    interp::EvalStackOp::set_return(ret, methods);
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.RuntimeType::GetCustomAttributes(System.Type,System.Boolean)
 static RtResultVoid get_custom_attributes_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                   interp::RtStackObject* ret) noexcept
@@ -334,6 +446,7 @@ static RtResultVoid call_default_struct_constructor_invoker(metadata::RtManagedM
 
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtimetype[] = {
     {"System.RuntimeType::GetField(System.String,System.Reflection.BindingFlags)", (vm::IntrinsicFunction)&SystemRuntimeType::get_field, get_field_invoker},
+    {"System.RuntimeType::GetMethods(System.Reflection.BindingFlags)", (vm::IntrinsicFunction)&SystemRuntimeType::get_methods, get_methods_invoker},
     {"System.RuntimeType::GetCustomAttributes(System.Type,System.Boolean)", (vm::IntrinsicFunction)&SystemRuntimeType::get_custom_attributes,
      get_custom_attributes_invoker},
     {"System.RuntimeType::get_BaseType", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},

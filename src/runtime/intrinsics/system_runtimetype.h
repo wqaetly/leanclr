@@ -10,6 +10,7 @@ class SystemRuntimeType
 {
   public:
     static RtResult<vm::RtReflectionField*> get_field(vm::RtReflectionRuntimeType* runtime_type, vm::RtString* name, int32_t binding_flags) noexcept;
+    static RtResult<vm::RtArray*> get_methods(vm::RtReflectionRuntimeType* runtime_type, int32_t binding_flags) noexcept;
     static RtResult<vm::RtArray*> get_custom_attributes(vm::RtReflectionRuntimeType* runtime_type, vm::RtReflectionRuntimeType* attribute_type,
                                                         bool inherit) noexcept;
     static RtResult<vm::RtReflectionRuntimeType*> get_parent_type(vm::RtReflectionRuntimeType* runtime_type) noexcept;

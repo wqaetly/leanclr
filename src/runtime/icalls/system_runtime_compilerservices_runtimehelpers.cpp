@@ -53,6 +53,17 @@ RtResult<vm::RtObject*> SystemRuntimeCompilerServicesRuntimeHelpers::get_object_
     }
 }
 
+RtResult<int32_t> SystemRuntimeCompilerServicesRuntimeHelpers::get_hash_code(vm::RtObject* obj) noexcept
+{
+    if (obj == nullptr)
+    {
+        RET_OK(0);
+    }
+
+    int32_t hash = static_cast<int32_t>(reinterpret_cast<uintptr_t>(obj));
+    RET_OK(hash);
+}
+
 RtResultVoid SystemRuntimeCompilerServicesRuntimeHelpers::run_class_constructor(intptr_t type_handle) noexcept
 {
     const metadata::RtTypeSig* type_sig = reinterpret_cast<const metadata::RtTypeSig*>(type_handle);
@@ -99,6 +110,18 @@ RtResultVoid get_object_value_invoker(metadata::RtManagedMethodPointer methodPtr
     RET_VOID_OK();
 }
 
+/// @icall: System.Runtime.CompilerServices.RuntimeHelpers::GetHashCode(System.Object)
+RtResultVoid get_hash_code_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
+                                   interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    vm::RtObject* obj = EvalStackOp::get_param<vm::RtObject*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, result, SystemRuntimeCompilerServicesRuntimeHelpers::get_hash_code(obj));
+    EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 /// @icall: System.Runtime.CompilerServices.RuntimeHelpers::RunClassConstructor(System.IntPtr)
 RtResultVoid run_class_constructor_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -132,6 +155,12 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtime_compilerserv
      (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_offset_to_string_data, get_offset_to_string_data_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::GetObjectValue(System.Object)",
      (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_object_value, get_object_value_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::GetHashCode(System.Object)",
+     (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_hash_code, get_hash_code_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::TryGetHashCode(System.Object)",
+     (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_hash_code, get_hash_code_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::TryGetHashCode",
+     (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_hash_code, get_hash_code_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::RunClassConstructor(System.IntPtr)",
      (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::run_class_constructor, run_class_constructor_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::SufficientExecutionStack",

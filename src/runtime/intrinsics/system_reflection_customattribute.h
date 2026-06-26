@@ -1,0 +1,18 @@
+#pragma once
+
+#include "vm/intrinsics.h"
+
+namespace leanclr
+{
+namespace intrinsics
+{
+
+class SystemReflectionCustomAttribute
+{
+  public:
+    static RtResult<bool> is_defined(vm::RtReflectionMethod* method, vm::RtReflectionRuntimeType* attribute_type, bool inherit) noexcept;
+    static utils::Span<vm::IntrinsicEntry> get_intrinsic_entries() noexcept;
+};
+
+} // namespace intrinsics
+} // namespace leanclr

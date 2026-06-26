@@ -2,6 +2,7 @@
 #include "system_activator.h"
 #include "system_array.h"
 #include "system_object.h"
+#include "system_reflection_customattribute.h"
 #include "system_reflection_rtfieldinfo.h"
 #include "system_span.h"
 #include "system_sr.h"
@@ -34,6 +35,7 @@ void IntrinsicStubs::get_intrinsic_entries(utils::Vector<vm::IntrinsicEntry>& en
     Append(entries, SystemActivator::get_intrinsic_entries());
     Append(entries, SystemArray::get_intrinsic_entries());
     Append(entries, SystemObject::get_intrinsic_entries());
+    Append(entries, SystemReflectionCustomAttribute::get_intrinsic_entries());
     Append(entries, SystemReflectionRtFieldInfo::get_intrinsic_entries());
     Append(entries, SystemSpan::get_intrinsic_entries());
     Append(entries, SystemSR::get_intrinsic_entries());
