@@ -52,12 +52,6 @@ struct FieldObjectData
     const metadata::RtClass* klass;
 };
 
-struct MethodObjectData
-{
-    const metadata::RtMethodInfo* method;
-    const metadata::RtClass* klass;
-};
-
 struct PropertyKey
 {
     const metadata::RtPropertyInfo* property;
@@ -141,7 +135,6 @@ struct EventKeyEqual
 static utils::HashMap<const metadata::RtTypeSig*, RtReflectionType*, metadata::TypeSigIgnoreAttrsHasher, metadata::TypeSigIgnoreAttrsEqual>
     s_class_reflection_type_map;
 static utils::HashMap<MethodKey, RtReflectionMethod*, MethodKeyHash, MethodKeyEqual> s_method_reflection_map;
-static utils::HashMap<RtReflectionMethod*, MethodObjectData> s_method_object_data_map;
 static utils::HashMap<MethodKey, RtArray*, MethodKeyHash, MethodKeyEqual> s_method_params_map;
 static utils::HashMap<FieldKey, RtReflectionField*, FieldKeyHash, FieldKeyEqual> s_field_reflection_map;
 static utils::HashMap<RtReflectionField*, FieldObjectData> s_field_object_data_map;
@@ -234,10 +227,6 @@ static bool has_legacy_reflection_field_layout(const metadata::RtClass* runtime_
     return Class::get_instance_size_with_object_header(runtime_field_klass) == sizeof(RtReflectionField);
 }
 
-static bool has_legacy_reflection_method_layout(const metadata::RtClass* runtime_method_klass)
-{
-    return Class::get_instance_size_with_object_header(runtime_method_klass) == sizeof(RtReflectionMethod);
-}
 } // namespace
 
 RtResult<RtReflectionType*> Reflection::get_type_reflection_object(const metadata::RtTypeSig* type_sig)
@@ -279,59 +268,11 @@ RtResult<RtReflectionMethod*> Reflection::get_method_reflection_object(const met
     auto runtime_method_klass = Method::is_ctor_or_cctor(method) ? corlib_types.cls_reflection_constructor : corlib_types.cls_reflection_method;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ref_obj_raw, LEANCLR_NEWOBJ_INTERNAL(runtime_method_klass, "Reflection::get_method_reflection_object"));
     auto ref_obj = reinterpret_cast<RtReflectionMethod*>(ref_obj_raw);
+    ref_obj->method = method;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, ref_type, get_klass_reflection_object(reflection_at_klass));
+    ref_obj->ref_type = ref_type;
     s_method_reflection_map.emplace(key, ref_obj);
-    s_method_object_data_map.emplace(ref_obj, MethodObjectData{method, reflection_at_klass});
-
-    if (has_legacy_reflection_method_layout(runtime_method_klass))
-    {
-        ref_obj->method = method;
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, ref_type, get_klass_reflection_object(reflection_at_klass));
-        ref_obj->ref_type = ref_type;
-    }
     RET_OK(ref_obj);
-}
-
-RtResult<const metadata::RtMethodInfo*> Reflection::get_method_info_from_reflection_object(RtReflectionMethod* method_obj)
-{
-    if (method_obj == nullptr)
-    {
-        RET_ERR(RtErr::NullReference);
-    }
-
-    auto found = s_method_object_data_map.find(method_obj);
-    if (found != s_method_object_data_map.end())
-    {
-        RET_OK(found->second.method);
-    }
-
-    if (has_legacy_reflection_method_layout(method_obj->header.klass) && method_obj->method != nullptr)
-    {
-        RET_OK(method_obj->method);
-    }
-
-    RET_ERR(RtErr::Argument);
-}
-
-RtResult<const metadata::RtClass*> Reflection::get_reflection_method_klass(RtReflectionMethod* method_obj)
-{
-    if (method_obj == nullptr)
-    {
-        RET_ERR(RtErr::NullReference);
-    }
-
-    auto found = s_method_object_data_map.find(method_obj);
-    if (found != s_method_object_data_map.end())
-    {
-        RET_OK(found->second.klass);
-    }
-
-    if (has_legacy_reflection_method_layout(method_obj->header.klass) && method_obj->ref_type != nullptr)
-    {
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Class::get_class_from_typesig(method_obj->ref_type->type_handle));
-        RET_OK(klass);
-    }
-
-    RET_ERR(RtErr::Argument);
 }
 
 RtResult<RtArray*> Reflection::get_param_objects(const metadata::RtMethodInfo* method, const metadata::RtClass* reflection_at_klass)

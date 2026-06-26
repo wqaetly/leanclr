@@ -3,7 +3,6 @@
 #include "interp/eval_stack_op.h"
 #include "vm/class.h"
 #include "vm/customattribute.h"
-#include "vm/reflection.h"
 
 namespace leanclr
 {
@@ -21,8 +20,7 @@ RtResult<bool> SystemReflectionCustomAttribute::is_defined(vm::RtReflectionMetho
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, attr_klass,
                                             vm::Class::get_class_from_typesig(attribute_type->reflection_type.type_handle));
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method_info,
-                                            vm::Reflection::get_method_info_from_reflection_object(method));
+    const metadata::RtMethodInfo* method_info = method->method;
     return vm::CustomAttribute::has_customattribute_on_method(method_info, attr_klass);
 }
 

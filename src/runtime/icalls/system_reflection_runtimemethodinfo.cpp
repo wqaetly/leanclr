@@ -62,7 +62,7 @@ RtResult<vm::RtReflectionMethod*> SystemReflectionRuntimeMethodInfo::get_method_
 
 RtResult<vm::RtString*> SystemReflectionRuntimeMethodInfo::get_name(vm::RtReflectionMethod* method) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m, vm::Reflection::get_method_info_from_reflection_object(method));
+    const metadata::RtMethodInfo* m = method->method;
     vm::RtString* name = vm::String::create_string_from_utf8cstr(m->name);
     RET_OK(name);
 }
@@ -127,7 +127,7 @@ static RtResult<std::pair<const metadata::RtMethodInfo*, const metadata::RtClass
 
 RtResult<vm::RtReflectionMethod*> SystemReflectionRuntimeMethodInfo::get_base_method(vm::RtReflectionMethod* method, bool definition) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m, vm::Reflection::get_method_info_from_reflection_object(method));
+    const metadata::RtMethodInfo* m = method->method;
     std::pair<const metadata::RtMethodInfo*, const metadata::RtClass*> pair_result;
     UNWRAP_OR_RET_ERR_ON_FAIL(pair_result, get_base_method_impl(m, definition));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethod*, ref_method,
@@ -137,20 +137,19 @@ RtResult<vm::RtReflectionMethod*> SystemReflectionRuntimeMethodInfo::get_base_me
 
 RtResult<int32_t> SystemReflectionRuntimeMethodInfo::get_metadata_token(vm::RtReflectionMethod* method) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m, vm::Reflection::get_method_info_from_reflection_object(method));
-    RET_OK(static_cast<int32_t>(m->token));
+    RET_OK(static_cast<int32_t>(method->method->token));
 }
 
 RtResult<bool> SystemReflectionRuntimeMethodInfo::get_is_generic_method_definition(vm::RtReflectionMethod* method) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m, vm::Reflection::get_method_info_from_reflection_object(method));
+    const metadata::RtMethodInfo* m = method->method;
     const metadata::RtClass* klass = m->parent;
     RET_OK(vm::Class::is_generic(klass) || m->generic_container != nullptr);
 }
 
 RtResult<vm::RtArray*> SystemReflectionRuntimeMethodInfo::get_generic_arguments(vm::RtReflectionMethod* method) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m, vm::Reflection::get_method_info_from_reflection_object(method));
+    const metadata::RtMethodInfo* m = method->method;
     const auto& corlib = vm::Class::get_corlib_types();
     const metadata::RtClass* elem_klass = corlib.cls_systemtype;
 
@@ -190,7 +189,7 @@ RtResult<vm::RtArray*> SystemReflectionRuntimeMethodInfo::get_generic_arguments(
 
 RtResult<vm::RtReflectionMethod*> SystemReflectionRuntimeMethodInfo::get_generic_method_definition_impl(vm::RtReflectionMethod* method) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m, vm::Reflection::get_method_info_from_reflection_object(method));
+    const metadata::RtMethodInfo* m = method->method;
     const metadata::RtClass* klass = m->parent;
     if (m->generic_container != nullptr || klass->generic_container != nullptr)
     {
@@ -212,7 +211,7 @@ RtResult<vm::RtReflectionMethod*> SystemReflectionRuntimeMethodInfo::get_generic
 RtResult<vm::RtReflectionMethod*> SystemReflectionRuntimeMethodInfo::make_generic_method_impl(vm::RtReflectionMethod* method,
                                                                                               vm::RtArray* generic_args) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m, vm::Reflection::get_method_info_from_reflection_object(method));
+    const metadata::RtMethodInfo* m = method->method;
     if (m->generic_container == nullptr)
     {
         RET_ERR(RtErr::Argument);
@@ -254,7 +253,7 @@ RtResult<vm::RtReflectionMethod*> SystemReflectionRuntimeMethodInfo::make_generi
 
 RtResult<bool> SystemReflectionRuntimeMethodInfo::get_is_generic_method(vm::RtReflectionMethod* method) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m, vm::Reflection::get_method_info_from_reflection_object(method));
+    const metadata::RtMethodInfo* m = method->method;
     if (m->generic_container != nullptr)
     {
         RET_OK(true);
@@ -268,7 +267,7 @@ RtResult<bool> SystemReflectionRuntimeMethodInfo::get_is_generic_method(vm::RtRe
 RtResult<vm::RtObject*> SystemReflectionRuntimeMethodInfo::internal_invoke(vm::RtReflectionMethod* ref_method, vm::RtObject* obj, vm::RtArray* parameters,
                                                                            vm::RtObject** exc) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, vm::Reflection::get_method_info_from_reflection_object(ref_method));
+    const metadata::RtMethodInfo* method = ref_method->method;
     return vm::Reflection::invoke_method(method, obj, parameters, exc);
 }
 
@@ -289,7 +288,7 @@ RtResult<vm::RtObject*> SystemReflectionRuntimeMethodInfo::invoke(vm::RtReflecti
 RtResultVoid SystemReflectionRuntimeMethodInfo::get_pinvoke(vm::RtReflectionMethod* method, int32_t* flags, vm::RtString** entry_name,
                                                             vm::RtString** dll_name) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m, vm::Reflection::get_method_info_from_reflection_object(method));
+    const metadata::RtMethodInfo* m = method->method;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<metadata::RowImplMap>, pinvoke_info, vm::Method::get_imp_map_info(m));
 
     if (pinvoke_info.has_value())
