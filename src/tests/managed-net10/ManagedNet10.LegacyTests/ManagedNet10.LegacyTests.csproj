@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="CompareTestEntries.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
     <Compile Include="..\..\managed\Common\TestCaseBase.cs" Link="Common\TestCaseBase.cs" />
@@ -23,6 +24,11 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_or.cs" Link="Instructions\Arithmetic\TC_or.cs" />
     <Compile Include="Instructions\Arithmetic\TC_sub.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_xor.cs" Link="Instructions\Arithmetic\TC_xor.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Ceq.cs" Link="Instructions\Compare\TC_Ceq.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Cgt.cs" Link="Instructions\Compare\TC_Cgt.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Cgt_un.cs" Link="Instructions\Compare\TC_Cgt_un.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt.cs" Link="Instructions\Compare\TC_Clt.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt_un.cs" Link="Instructions\Compare\TC_Clt_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
   </ItemGroup>
 

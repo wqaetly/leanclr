@@ -1,6 +1,6 @@
 namespace ManagedNet10.LegacyTests
 {
-    internal static class Program
+    internal static partial class Program
     {
         private static void Main()
         {
@@ -11,6 +11,7 @@ namespace ManagedNet10.LegacyTests
         {
             RunActivator();
             RunArithmeticInstructions();
+            RunCompareInstructions();
         }
 
         public static void RunActivator()
