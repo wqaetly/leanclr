@@ -73,5 +73,21 @@ namespace ManagedNet10.LegacyTests
 
             return executed;
         }
+
+        public static void RunMethod(Type type, string methodName)
+        {
+            MethodInfo method = type.GetMethod(methodName, TestMethodFlags);
+            if (method == null)
+            {
+                throw new MissingMethodException(type.FullName, methodName);
+            }
+            if (method.ReturnType != typeof(void) || method.GetParameters().Length != 0)
+            {
+                throw new InvalidOperationException(type.FullName + "." + methodName + " is not a zero-argument void test method.");
+            }
+
+            object instance = method.IsStatic ? null : Activator.CreateInstance(type);
+            method.Invoke(instance, null);
+        }
     }
 }

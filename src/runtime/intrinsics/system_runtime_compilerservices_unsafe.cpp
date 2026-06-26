@@ -71,6 +71,11 @@ RtResult<intptr_t> SystemRuntimeCompilerServicesUnsafe::byte_offset(void* origin
     RET_OK(static_cast<intptr_t>(target_addr - origin_addr));
 }
 
+RtResult<bool> SystemRuntimeCompilerServicesUnsafe::are_same(void* left, void* right) noexcept
+{
+    RET_OK(left == right);
+}
+
 RtResultVoid SystemRuntimeCompilerServicesUnsafe::copy_block(const interp::RtStackObject* params) noexcept
 {
     void* destination = interp::EvalStackOp::get_param<void*>(params, 0);
@@ -188,6 +193,16 @@ static RtResultVoid byte_offset_invoker(metadata::RtManagedMethodPointer, const 
     RET_VOID_OK();
 }
 
+static RtResultVoid are_same_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                     interp::RtStackObject* ret) noexcept
+{
+    void* left = interp::EvalStackOp::get_param<void*>(params, 0);
+    void* right = interp::EvalStackOp::get_param<void*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeCompilerServicesUnsafe::are_same(left, right));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
 static RtResultVoid copy_block_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                        interp::RtStackObject*) noexcept
 {
@@ -236,6 +251,7 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_un
     {"System.Runtime.CompilerServices.Unsafe::As<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as, as_invoker},
     {"System.Runtime.CompilerServices.Unsafe::As<,>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as, as_invoker},
     {"System.Runtime.CompilerServices.Unsafe::ByteOffset<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::byte_offset, byte_offset_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::AreSame<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::are_same, are_same_invoker},
     {"System.Runtime.CompilerServices.Unsafe::CopyBlock", nullptr, copy_block_invoker},
     {"System.Runtime.CompilerServices.Unsafe::CopyBlockUnaligned", nullptr, copy_block_invoker},
     {"System.Runtime.CompilerServices.Unsafe::ReadUnaligned<>", nullptr, read_unaligned_invoker},

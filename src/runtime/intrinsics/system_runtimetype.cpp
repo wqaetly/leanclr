@@ -141,6 +141,49 @@ static bool method_matches_binding_flags(const metadata::RtMethodInfo* method, c
 
     return true;
 }
+
+static RtResult<bool> is_generic_type_by_typesig(const metadata::RtTypeSig* type_sig) noexcept
+{
+    if (type_sig == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    if (type_sig->is_by_ref())
+    {
+        RET_OK(false);
+    }
+
+    if (type_sig->ele_type == metadata::RtElementType::GenericInst)
+    {
+        RET_OK(true);
+    }
+
+    if (type_sig->ele_type != metadata::RtElementType::Class && type_sig->ele_type != metadata::RtElementType::ValueType)
+    {
+        RET_OK(false);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_OK(vm::Class::is_generic(klass));
+}
+
+static RtResult<bool> is_generic_type_definition_by_typesig(const metadata::RtTypeSig* type_sig) noexcept
+{
+    if (type_sig == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    if (type_sig->is_by_ref() || type_sig->ele_type != metadata::RtElementType::Class &&
+                                     type_sig->ele_type != metadata::RtElementType::ValueType)
+    {
+        RET_OK(false);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_OK(vm::Class::is_generic(klass));
+}
 } // namespace
 
 RtResult<vm::RtReflectionField*> SystemRuntimeType::get_field(vm::RtReflectionRuntimeType* runtime_type, vm::RtString* name,
@@ -315,6 +358,30 @@ RtResult<bool> SystemRuntimeType::get_is_actual_interface(vm::RtReflectionRuntim
     RET_OK(vm::Class::is_interface(klass));
 }
 
+RtResult<bool> SystemRuntimeType::get_is_generic_type(vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, is_generic_type_by_typesig(type_sig));
+    RET_OK(result);
+}
+
+RtResult<bool> SystemRuntimeType::get_is_generic_type_definition(vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, is_generic_type_definition_by_typesig(type_sig));
+    RET_OK(result);
+}
+
 RtResult<vm::RtObject*> SystemRuntimeType::create_instance(vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
     if (runtime_type == nullptr)
@@ -411,6 +478,29 @@ static RtResultVoid get_is_actual_interface_invoker(metadata::RtManagedMethodPoi
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.RuntimeType::get_IsGenericType()
+static RtResultVoid get_is_generic_type_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, is_generic_type, SystemRuntimeType::get_is_generic_type(runtime_type));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(is_generic_type));
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.RuntimeType::get_IsGenericTypeDefinition()
+static RtResultVoid get_is_generic_type_definition_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, is_generic_type_definition,
+                                            SystemRuntimeType::get_is_generic_type_definition(runtime_type));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(is_generic_type_definition));
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.RuntimeType::CreateInstanceOfT()
 static RtResultVoid create_instance_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                             interp::RtStackObject* ret) noexcept
@@ -453,6 +543,9 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_runtimetype[] = {
     {"System.RuntimeType::GetBaseType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
     {"System.RuntimeType::GetParentType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
     {"System.RuntimeType::get_IsActualInterface", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_actual_interface, get_is_actual_interface_invoker},
+    {"System.RuntimeType::get_IsGenericType", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_generic_type, get_is_generic_type_invoker},
+    {"System.RuntimeType::get_IsGenericTypeDefinition",
+     (vm::IntrinsicFunction)&SystemRuntimeType::get_is_generic_type_definition, get_is_generic_type_definition_invoker},
     {"System.RuntimeType::CreateInstanceOfT()", (vm::IntrinsicFunction)&SystemRuntimeType::create_instance, create_instance_invoker},
     {"System.RuntimeType::CreateInstanceDefaultCtor(System.Boolean,System.Boolean)", (vm::IntrinsicFunction)&SystemRuntimeType::create_instance,
      create_instance_default_ctor_invoker},

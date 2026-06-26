@@ -75,6 +75,10 @@ class SystemRuntimeTypeHandle
     // Resolve type from name
     static RtResult<vm::RtReflectionType*> internal_from_name(vm::RtString* name, int32_t* stack_crawl_mark, vm::RtReflectionAssembly* assembly,
                                                               bool throw_on_error, bool ignore_case, bool reflection_only) noexcept;
+
+    // Enumerate methods introduced by a runtime type
+    static RtResult<const metadata::RtMethodInfo*> get_first_introduced_method(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
+    static RtResultVoid get_next_introduced_method(const metadata::RtMethodInfo** method) noexcept;
 };
 
 } // namespace icalls

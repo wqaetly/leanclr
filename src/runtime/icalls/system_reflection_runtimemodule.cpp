@@ -21,6 +21,16 @@ RtResult<int32_t> SystemReflectionRuntimeModule::get_metadata_token(vm::RtReflec
     RET_OK(static_cast<int32_t>(module->native_handle->get_module_token()));
 }
 
+static RtResult<intptr_t> get_metadata_import(vm::RtReflectionModule* module) noexcept
+{
+    if (module == nullptr || module->native_handle == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    RET_OK(reinterpret_cast<intptr_t>(module->native_handle));
+}
+
 /// @icall: System.Reflection.RuntimeModule::get_MetadataToken(System.Reflection.Module)
 static RtResultVoid get_metadata_token_invoker_system_reflection_runtimemodule(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -28,6 +38,16 @@ static RtResultVoid get_metadata_token_invoker_system_reflection_runtimemodule(m
     auto module = EvalStackOp::get_param<vm::RtReflectionModule*>(params, 0);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, token, SystemReflectionRuntimeModule::get_metadata_token(module));
     EvalStackOp::set_return(ret, token);
+    RET_VOID_OK();
+}
+
+/// @icall: System.Reflection.MetadataImport::GetMetadataImport(System.Reflection.RuntimeModule)
+static RtResultVoid get_metadata_import_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                interp::RtStackObject* ret) noexcept
+{
+    auto module = EvalStackOp::get_param<vm::RtReflectionModule*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(intptr_t, metadata_import, get_metadata_import(module));
+    EvalStackOp::set_return(ret, metadata_import);
     RET_VOID_OK();
 }
 
@@ -533,6 +553,8 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeModule::get_internal_c
     static vm::InternalCallEntry s_entries[] = {
         {"System.Reflection.RuntimeModule::get_MetadataToken(System.Reflection.Module)",
          (vm::InternalCallFunction)&SystemReflectionRuntimeModule::get_metadata_token, get_metadata_token_invoker_system_reflection_runtimemodule},
+        {"System.Reflection.MetadataImport::GetMetadataImport(System.Reflection.RuntimeModule)", nullptr, get_metadata_import_invoker},
+        {"System.Reflection.MetadataImport::GetMetadataImport", nullptr, get_metadata_import_invoker},
         {"System.Reflection.RuntimeModule::GetMDStreamVersion(System.IntPtr)", (vm::InternalCallFunction)&SystemReflectionRuntimeModule::get_md_stream_version,
          get_md_stream_version_invoker},
         {"System.Reflection.RuntimeModule::InternalGetTypes(System.IntPtr)", (vm::InternalCallFunction)&SystemReflectionRuntimeModule::internal_get_types,

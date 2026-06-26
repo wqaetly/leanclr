@@ -5,6 +5,7 @@
 #include "metadata/metadata_cache.h"
 #include "metadata/module_def.h"
 #include "platform/rt_sys.h"
+#include "utils/rt_vector.h"
 #include "utils/string_builder.h"
 #include "vm/assembly.h"
 #include "vm/class.h"
@@ -186,6 +187,155 @@ RtResult<vm::RtArray*> get_module_types(void* qcall_module, void* native_handle)
     return vm::Assembly::get_types(module->get_assembly(), false);
 }
 
+RtResult<metadata::RtClass*> get_type_def_class_for_metadata_enum(metadata::RtModuleDef* module, int32_t parent_token) noexcept
+{
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(parent_token));
+    if (token.table_type != metadata::TableType::TypeDef || token.rid == 0)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    return module->get_class_by_type_def_rid(token.rid);
+}
+
+RtResultVoid collect_metadata_enum_tokens(metadata::RtModuleDef* module, int32_t token_type, int32_t parent_token,
+                                          utils::Vector<int32_t>& tokens) noexcept
+{
+    if (module == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    switch (metadata::RtToken::decode_table_type(static_cast<metadata::EncodedTokenId>(token_type)))
+    {
+    case metadata::TableType::Method:
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                                get_type_def_class_for_metadata_enum(module, parent_token));
+        RET_ERR_ON_FAIL(vm::Class::initialize_methods(klass));
+        for (uint16_t i = 0; i < klass->method_count; ++i)
+        {
+            tokens.push_back(static_cast<int32_t>(klass->methods[i]->token));
+        }
+        break;
+    }
+    case metadata::TableType::Field:
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                                get_type_def_class_for_metadata_enum(module, parent_token));
+        RET_ERR_ON_FAIL(vm::Class::initialize_fields(klass));
+        for (uint16_t i = 0; i < klass->field_count; ++i)
+        {
+            tokens.push_back(static_cast<int32_t>(klass->fields[i].token));
+        }
+        break;
+    }
+    case metadata::TableType::Property:
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                                get_type_def_class_for_metadata_enum(module, parent_token));
+        RET_ERR_ON_FAIL(vm::Class::initialize_properties(klass));
+        for (uint16_t i = 0; i < klass->property_count; ++i)
+        {
+            tokens.push_back(static_cast<int32_t>(klass->properties[i].token));
+        }
+        break;
+    }
+    case metadata::TableType::Event:
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                                get_type_def_class_for_metadata_enum(module, parent_token));
+        RET_ERR_ON_FAIL(vm::Class::initialize_events(klass));
+        for (uint16_t i = 0; i < klass->event_count; ++i)
+        {
+            tokens.push_back(static_cast<int32_t>(klass->events[i].token));
+        }
+        break;
+    }
+    case metadata::TableType::TypeDef:
+    {
+        metadata::RtToken parent = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(parent_token));
+        if (parent.table_type == metadata::TableType::TypeDef && parent.rid != 0)
+        {
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                                    get_type_def_class_for_metadata_enum(module, parent_token));
+            RET_ERR_ON_FAIL(vm::Class::initialize_nested_classes(klass));
+            for (uint16_t i = 0; i < klass->nested_class_count; ++i)
+            {
+                tokens.push_back(static_cast<int32_t>(klass->nested_classes[i]->token));
+            }
+        }
+        else
+        {
+            utils::Vector<metadata::RtClass*> classes;
+            RET_ERR_ON_FAIL(module->get_types(false, classes));
+            for (size_t i = 0; i < classes.size(); ++i)
+            {
+                tokens.push_back(static_cast<int32_t>(classes[i]->token));
+            }
+        }
+        break;
+    }
+    case metadata::TableType::Param:
+    case metadata::TableType::CustomAttribute:
+        break;
+    default:
+        break;
+    }
+
+    RET_VOID_OK();
+}
+
+RtResultVoid store_metadata_enum_tokens(const utils::Vector<int32_t>& tokens, int32_t* count, int32_t* result_buffer,
+                                        vm::RtArray** large_result) noexcept
+{
+    if (count == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+    if (*count < 0)
+    {
+        RET_ERR(RtErr::Argument);
+    }
+
+    int32_t result_count = static_cast<int32_t>(tokens.size());
+    int32_t small_capacity = *count;
+    *count = result_count;
+
+    if (result_count == 0)
+    {
+        RET_VOID_OK();
+    }
+
+    if (result_count <= small_capacity)
+    {
+        if (result_buffer == nullptr)
+        {
+            RET_ERR(RtErr::ArgumentNull);
+        }
+        for (int32_t i = 0; i < result_count; ++i)
+        {
+            result_buffer[i] = tokens[static_cast<size_t>(i)];
+        }
+        RET_VOID_OK();
+    }
+
+    if (large_result == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, token_array,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(vm::Class::get_corlib_types().cls_int32,
+                                                                                       result_count, "MetadataImport::Enum"));
+    for (int32_t i = 0; i < result_count; ++i)
+    {
+        vm::Array::set_array_data_at<int32_t>(token_array, i, tokens[static_cast<size_t>(i)]);
+    }
+    *large_result = token_array;
+    RET_VOID_OK();
+}
+
 RtResult<vm::RtReflectionRuntimeType*> get_runtime_type_from_type_sig(const metadata::RtTypeSig* type_sig) noexcept
 {
     if (type_sig == nullptr)
@@ -200,7 +350,7 @@ RtResult<vm::RtReflectionRuntimeType*> get_runtime_type_from_type_sig(const meta
 RtResult<vm::RtReflectionRuntimeType*> get_generic_type_definition(void* qcall_type_handle, void* native_handle) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
-                                            get_type_sig_from_qcall_type_handle(qcall_type_handle, nullptr));
+                                            get_type_sig_from_qcall_type_handle(qcall_type_handle, native_handle));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
 
     const metadata::RtClass* generic_definition_klass = nullptr;
@@ -649,6 +799,22 @@ RtResultVoid get_module_types_invoker(metadata::RtManagedMethodPointer, const me
     RET_VOID_OK();
 }
 
+RtResultVoid metadata_import_enum_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                          interp::RtStackObject*) noexcept
+{
+    auto metadata_import = interp::EvalStackOp::get_param<metadata::RtModuleDef*>(params, 0);
+    int32_t token_type = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    int32_t parent_token = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    auto count = interp::EvalStackOp::get_param<int32_t*>(params, 3);
+    auto result_buffer = interp::EvalStackOp::get_param<int32_t*>(params, 4);
+    auto large_result = interp::EvalStackOp::get_param<vm::RtArray**>(params, 5);
+
+    utils::Vector<int32_t> tokens;
+    RET_ERR_ON_FAIL(collect_metadata_enum_tokens(metadata_import, token_type, parent_token, tokens));
+    RET_ERR_ON_FAIL(store_metadata_enum_tokens(tokens, count, result_buffer, large_result));
+    RET_VOID_OK();
+}
+
 RtResultVoid create_instance_for_another_generic_parameter_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                                    const interp::RtStackObject* params, interp::RtStackObject*) noexcept
 {
@@ -802,6 +968,10 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.Reflection.RuntimeModule::GetTypes(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, get_module_types_invoker);
     vm::PInvokes::register_pinvoke("System.Reflection.RuntimeModule::GetTypes", nullptr, get_module_types_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.MetadataImport::<Enum>g____PInvoke|8_0(System.IntPtr,System.Int32,System.Int32,System.Int32*,System.Int32*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, metadata_import_enum_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.MetadataImport::<Enum>g____PInvoke|8_0", nullptr, metadata_import_enum_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::CreateInstanceForAnotherGenericParameter(System.Runtime.CompilerServices.QCallTypeHandle,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, create_instance_for_another_generic_parameter_invoker);
