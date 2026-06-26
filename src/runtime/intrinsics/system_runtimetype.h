@@ -14,6 +14,8 @@ class SystemRuntimeType
                                                         bool inherit) noexcept;
     static RtResult<vm::RtReflectionRuntimeType*> get_parent_type(vm::RtReflectionRuntimeType* runtime_type) noexcept;
     static RtResult<bool> get_is_actual_interface(vm::RtReflectionRuntimeType* runtime_type) noexcept;
+    static RtResult<vm::RtObject*> create_instance(vm::RtReflectionRuntimeType* runtime_type) noexcept;
+    static RtResultVoid call_default_struct_constructor(vm::RtReflectionRuntimeType* runtime_type, void* data) noexcept;
     static utils::Span<vm::IntrinsicEntry> get_intrinsic_entries() noexcept;
 };
 } // namespace intrinsics

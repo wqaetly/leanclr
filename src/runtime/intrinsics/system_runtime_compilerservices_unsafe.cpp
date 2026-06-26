@@ -12,6 +12,11 @@ RtResult<void*> SystemRuntimeCompilerServicesUnsafe::as_pointer(void* location) 
     RET_OK(location);
 }
 
+RtResult<void*> SystemRuntimeCompilerServicesUnsafe::as(void* source) noexcept
+{
+    RET_OK(source);
+}
+
 static RtResultVoid as_pointer_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                        interp::RtStackObject* ret) noexcept
 {
@@ -21,8 +26,18 @@ static RtResultVoid as_pointer_invoker(metadata::RtManagedMethodPointer, const m
     RET_VOID_OK();
 }
 
+static RtResultVoid as_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                               interp::RtStackObject* ret) noexcept
+{
+    void* source = interp::EvalStackOp::get_param<void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(void*, result, SystemRuntimeCompilerServicesUnsafe::as(source));
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_unsafe[] = {
     {"System.Runtime.CompilerServices.Unsafe::AsPointer<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as_pointer, as_pointer_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::As<,>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as, as_invoker},
 };
 
 utils::Span<vm::IntrinsicEntry> SystemRuntimeCompilerServicesUnsafe::get_intrinsic_entries() noexcept

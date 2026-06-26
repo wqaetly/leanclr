@@ -133,12 +133,12 @@ if ($BuildOnly) {
     return
 }
 
-$smokeDir = [System.IO.Path]::Combine($repoRoot, "out", "dotnet", "ManagedNet10.Smoke", $Configuration, "net10.0")
-if (-not (Test-Path ([System.IO.Path]::Combine($smokeDir, "$AssemblyName.dll")))) {
-    throw "$AssemblyName output not found: $smokeDir"
+$assemblyDir = [System.IO.Path]::Combine($repoRoot, "out", "dotnet", $AssemblyName, $Configuration, "net10.0")
+if (-not (Test-Path ([System.IO.Path]::Combine($assemblyDir, "$AssemblyName.dll")))) {
+    throw "$AssemblyName output not found: $assemblyDir"
 }
 
-$runArgs = @("-l", $smokeDir, "-l", $RuntimeDir)
+$runArgs = @("-l", $assemblyDir, "-l", $RuntimeDir)
 if (-not [string]::IsNullOrWhiteSpace($Entry)) {
     $runArgs += @("-e", $Entry)
 }

@@ -24,6 +24,8 @@
 #include <windows.h>
 #endif
 
+#include <cstring>
+
 using namespace leanclr;
 
 // Global library search directories
@@ -112,6 +114,12 @@ static void print_native_exception_stack_trace(vm::RtException* ex)
     }
 }
 
+static bool is_system_private_corelib_loaded()
+{
+    auto* corlib = vm::Assembly::get_corlib();
+    return corlib != nullptr && corlib->mod != nullptr && std::strcmp(corlib->mod->get_name_no_ext(), "System.Private.CoreLib") == 0;
+}
+
 static void print_error_and_exit(const std::string& err_message, RtErr err)
 {
     std::cerr << "Error: " << err_message << " (Error code: " << static_cast<int>(err) << ")" << std::endl;
@@ -144,6 +152,12 @@ static void print_error_and_exit(const std::string& err_message, RtErr err)
         sb.sure_null_terminator_but_not_append();
     }
     std::cerr << sb.get_const_chars() << std::endl << std::endl;
+
+    if (is_system_private_corelib_loaded())
+    {
+        print_native_exception_stack_trace(ex);
+        std::exit(-1);
+    }
 
     const metadata::RtPropertyInfo* prop = vm::Class::get_property_for_name(ex->klass, "StackTrace", true);
     assert(prop);

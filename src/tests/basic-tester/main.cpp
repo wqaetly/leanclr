@@ -297,13 +297,19 @@ static size_t g_gc_passed_test_methods = 0;
 static size_t g_gc_skipped_test_methods = 0;
 static std::string g_current_phase = "startup";
 static std::string g_current_test = "(none)";
+static std::string g_test_filter;
+
+static std::string get_test_full_name(const metadata::RtClass* klass, const metadata::RtMethodInfo* method)
+{
+    return std::string(klass->namespaze) + "." + klass->name + "::" + method->name;
+}
 
 static void set_current_test_context(const char* phase, const metadata::RtClass* klass, const metadata::RtMethodInfo* method)
 {
     g_current_phase = phase ? phase : "unknown";
     if (klass && method)
     {
-        g_current_test = std::string(klass->namespaze) + "." + klass->name + "::" + method->name;
+        g_current_test = get_test_full_name(klass, method);
     }
     else
     {
@@ -397,6 +403,15 @@ RtResultVoid run_tests(metadata::RtModuleDef* mod, const char* phase_name, bool 
             }
 
             method_index++;
+            if (!g_test_filter.empty())
+            {
+                std::string test_full_name = get_test_full_name(klass, method);
+                if (test_full_name.find(g_test_filter) == std::string::npos)
+                {
+                    ++skipped;
+                    continue;
+                }
+            }
             if (method_index < skip_count)
             {
                 ++skipped;
@@ -454,6 +469,13 @@ int main()
 #endif
 
     std::cout << "Startup test successful!" << std::endl;
+
+    const char* test_filter_env = std::getenv("LEANCLR_TEST_FILTER");
+    if (test_filter_env && test_filter_env[0] != '\0')
+    {
+        g_test_filter = test_filter_env;
+        std::cout << "Test filter: " << g_test_filter << std::endl;
+    }
 
     setup_default_lib_dirs();
     vm::Settings::set_file_loader(assembly_file_loader);

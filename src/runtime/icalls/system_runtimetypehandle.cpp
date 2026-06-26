@@ -183,6 +183,29 @@ RtResult<bool> SystemRuntimeTypeHandle::is_subclass_of(const metadata::RtTypeSig
     RET_OK(vm::Class::is_subclass_of_initialized(child_class, parent_class, true));
 }
 
+static RtResult<const metadata::RtTypeSig*> get_type_sig_from_runtime_type_handle(void* runtime_type_handle) noexcept
+{
+    if (runtime_type_handle == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto runtime_type_klass = vm::Class::get_corlib_types().cls_runtimetype;
+    auto direct_runtime_type = reinterpret_cast<const vm::RtReflectionRuntimeType*>(runtime_type_handle);
+    if (direct_runtime_type->reflection_type.header.klass == runtime_type_klass)
+    {
+        RET_OK(direct_runtime_type->reflection_type.type_handle);
+    }
+
+    auto runtime_type = *reinterpret_cast<const vm::RtReflectionRuntimeType* const*>(runtime_type_handle);
+    if (runtime_type == nullptr || runtime_type->reflection_type.header.klass != runtime_type_klass)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    RET_OK(runtime_type->reflection_type.type_handle);
+}
+
 RtResult<bool> SystemRuntimeTypeHandle::is_by_ref_like(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
     auto type_sig = runtime_type->reflection_type.type_handle;
@@ -424,8 +447,10 @@ static RtResultVoid get_generic_parameter_info_invoker(metadata::RtManagedMethod
 static RtResultVoid is_subclass_of_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    auto child_type_sig = EvalStackOp::get_param<const metadata::RtTypeSig*>(params, 0);
-    auto parent_type_sig = EvalStackOp::get_param<const metadata::RtTypeSig*>(params, 1);
+    auto child_type_handle = EvalStackOp::get_param<void*>(params, 0);
+    auto parent_type_handle = EvalStackOp::get_param<void*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, child_type_sig, get_type_sig_from_runtime_type_handle(child_type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, parent_type_sig, get_type_sig_from_runtime_type_handle(parent_type_handle));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeTypeHandle::is_subclass_of(child_type_sig, parent_type_sig));
     EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();

@@ -8,7 +8,10 @@
 #include "vm/class.h"
 #include "vm/customattribute.h"
 #include "vm/field.h"
+#include "vm/method.h"
+#include "vm/object.h"
 #include "vm/reflection.h"
+#include "vm/runtime.h"
 #include "vm/rt_array.h"
 #include "vm/rt_string.h"
 
@@ -212,6 +215,42 @@ RtResult<bool> SystemRuntimeType::get_is_actual_interface(vm::RtReflectionRuntim
     RET_OK(vm::Class::is_interface(klass));
 }
 
+RtResult<vm::RtObject*> SystemRuntimeType::create_instance(vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    return LEANCLR_CREATE_INSTANCE_INTERNAL(runtime_type->reflection_type.type_handle, "SystemRuntimeType::create_instance");
+}
+
+RtResultVoid SystemRuntimeType::call_default_struct_constructor(vm::RtReflectionRuntimeType* runtime_type, void* data) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+    if (data == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_methods(klass));
+    const metadata::RtMethodInfo* ctor = vm::Method::find_matched_method_in_class_by_name_and_param_count(klass, ".ctor", 0);
+    if (ctor == nullptr)
+    {
+        RET_VOID_OK();
+    }
+
+    interp::RtStackObject args[1]{};
+    args[0].ptr = data;
+    RET_ERR_ON_FAIL(vm::Runtime::invoke_stackobject_arguments_with_run_cctor(ctor, args, nullptr));
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.RuntimeType::GetField(System.String,System.Reflection.BindingFlags)
 static RtResultVoid get_field_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                       interp::RtStackObject* ret) noexcept
@@ -260,6 +299,39 @@ static RtResultVoid get_is_actual_interface_invoker(metadata::RtManagedMethodPoi
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.RuntimeType::CreateInstanceOfT()
+static RtResultVoid create_instance_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                            interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj, SystemRuntimeType::create_instance(runtime_type));
+    interp::EvalStackOp::set_return(ret, obj);
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.RuntimeType::CreateInstanceDefaultCtor(System.Boolean,System.Boolean)
+static RtResultVoid create_instance_default_ctor_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj, SystemRuntimeType::create_instance(runtime_type));
+    interp::EvalStackOp::set_return(ret, obj);
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.RuntimeType::CallDefaultStructConstructor(System.Byte&)
+static RtResultVoid call_default_struct_constructor_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                            const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+    void* data = interp::EvalStackOp::get_param<void*>(params, 1);
+
+    RET_ERR_ON_FAIL(SystemRuntimeType::call_default_struct_constructor(runtime_type, data));
+    RET_VOID_OK();
+}
+
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtimetype[] = {
     {"System.RuntimeType::GetField(System.String,System.Reflection.BindingFlags)", (vm::IntrinsicFunction)&SystemRuntimeType::get_field, get_field_invoker},
     {"System.RuntimeType::GetCustomAttributes(System.Type,System.Boolean)", (vm::IntrinsicFunction)&SystemRuntimeType::get_custom_attributes,
@@ -268,6 +340,11 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_runtimetype[] = {
     {"System.RuntimeType::GetBaseType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
     {"System.RuntimeType::GetParentType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
     {"System.RuntimeType::get_IsActualInterface", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_actual_interface, get_is_actual_interface_invoker},
+    {"System.RuntimeType::CreateInstanceOfT()", (vm::IntrinsicFunction)&SystemRuntimeType::create_instance, create_instance_invoker},
+    {"System.RuntimeType::CreateInstanceDefaultCtor(System.Boolean,System.Boolean)", (vm::IntrinsicFunction)&SystemRuntimeType::create_instance,
+     create_instance_default_ctor_invoker},
+    {"System.RuntimeType::CallDefaultStructConstructor(System.Byte&)",
+     (vm::IntrinsicFunction)&SystemRuntimeType::call_default_struct_constructor, call_default_struct_constructor_invoker},
 };
 
 utils::Span<vm::IntrinsicEntry> SystemRuntimeType::get_intrinsic_entries() noexcept

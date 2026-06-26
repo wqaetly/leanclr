@@ -6,15 +6,11 @@ namespace leanclr
 {
 namespace intrinsics
 {
-
-class SystemRuntimeCompilerServicesUnsafe
+class SystemActivator
 {
   public:
-    static RtResult<void*> as_pointer(void* location) noexcept;
-    static RtResult<void*> as(void* source) noexcept;
-
+    static RtResultVoid create_instance(const metadata::RtMethodInfo* method, interp::RtStackObject* ret) noexcept;
     static utils::Span<vm::IntrinsicEntry> get_intrinsic_entries() noexcept;
 };
-
 } // namespace intrinsics
 } // namespace leanclr

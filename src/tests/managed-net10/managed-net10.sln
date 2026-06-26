@@ -5,6 +5,8 @@ VisualStudioVersion = 17.14.36414.22
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ManagedNet10.Smoke", "ManagedNet10.Smoke\ManagedNet10.Smoke.csproj", "{4F49352D-A71F-4933-9DE5-76121163AB0E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ManagedNet10.LegacyTests", "ManagedNet10.LegacyTests\ManagedNet10.LegacyTests.csproj", "{66293373-D307-498B-93D4-72D6F31158D6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{4F49352D-A71F-4933-9DE5-76121163AB0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4F49352D-A71F-4933-9DE5-76121163AB0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4F49352D-A71F-4933-9DE5-76121163AB0E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{66293373-D307-498B-93D4-72D6F31158D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{66293373-D307-498B-93D4-72D6F31158D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{66293373-D307-498B-93D4-72D6F31158D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{66293373-D307-498B-93D4-72D6F31158D6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

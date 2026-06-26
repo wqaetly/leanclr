@@ -318,7 +318,11 @@ RtResultVoid Class::verify_integrity_of_corlib_classes()
 
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_reflection_assembly) == sizeof(RtReflectionAssembly), RtErr::BadImageFormat);
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_reflection_module) == sizeof(RtReflectionModule), RtErr::BadImageFormat);
-    RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_reflection_field) == sizeof(RtReflectionField), RtErr::BadImageFormat);
+    auto reflection_field_size = get_instance_size_with_object_header(t.cls_reflection_field);
+    if (reflection_field_size != sizeof(RtReflectionField) && reflection_field_size != sizeof(RtObject))
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_reflection_method) == sizeof(RtReflectionMethod), RtErr::BadImageFormat);
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_reflection_constructor) == sizeof(RtReflectionConstructor), RtErr::BadImageFormat);
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_reflection_property) == sizeof(RtReflectionProperty), RtErr::BadImageFormat);
