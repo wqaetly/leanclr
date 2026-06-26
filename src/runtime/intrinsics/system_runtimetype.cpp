@@ -6,8 +6,10 @@
 #include "interp/eval_stack_op.h"
 #include "utils/string_builder.h"
 #include "vm/class.h"
+#include "vm/customattribute.h"
 #include "vm/field.h"
 #include "vm/reflection.h"
+#include "vm/rt_array.h"
 #include "vm/rt_string.h"
 
 namespace leanclr
@@ -143,6 +145,73 @@ RtResult<vm::RtReflectionField*> SystemRuntimeType::get_field(vm::RtReflectionRu
     RET_OK(nullptr);
 }
 
+RtResult<vm::RtArray*> SystemRuntimeType::get_custom_attributes(vm::RtReflectionRuntimeType* runtime_type,
+                                                                vm::RtReflectionRuntimeType* attribute_type, bool inherit) noexcept
+{
+    (void)inherit;
+
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    metadata::RtClass* attr_klass = nullptr;
+    if (attribute_type != nullptr)
+    {
+        UNWRAP_OR_RET_ERR_ON_FAIL(attr_klass, vm::Class::get_class_from_typesig(attribute_type->reflection_type.type_handle));
+    }
+
+    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    if (type_sig->by_ref)
+    {
+        return LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(vm::Class::get_corlib_types().cls_attribute,
+                                                               "SystemRuntimeType::get_custom_attributes");
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    return vm::CustomAttribute::get_customattributes_on_target_token(klass->image, klass->token, attr_klass);
+}
+
+RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeType::get_parent_type(vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    if (type_sig->by_ref)
+    {
+        RET_OK(nullptr);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    if (klass->parent == nullptr)
+    {
+        RET_OK(nullptr);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, parent_type, vm::Reflection::get_klass_reflection_object(klass->parent));
+    RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(parent_type));
+}
+
+RtResult<bool> SystemRuntimeType::get_is_actual_interface(vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    if (type_sig->by_ref)
+    {
+        RET_OK(false);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_OK(vm::Class::is_interface(klass));
+}
+
 /// @intrinsic: System.RuntimeType::GetField(System.String,System.Reflection.BindingFlags)
 static RtResultVoid get_field_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                       interp::RtStackObject* ret) noexcept
@@ -156,8 +225,49 @@ static RtResultVoid get_field_invoker(metadata::RtManagedMethodPointer, const me
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.RuntimeType::GetCustomAttributes(System.Type,System.Boolean)
+static RtResultVoid get_custom_attributes_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                  interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+    auto attribute_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 1);
+    bool inherit = interp::EvalStackOp::get_param<bool>(params, 2);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, attributes, SystemRuntimeType::get_custom_attributes(runtime_type, attribute_type, inherit));
+    interp::EvalStackOp::set_return(ret, attributes);
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.RuntimeType::GetParentType()
+static RtResultVoid get_parent_type_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                            interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, parent_type, SystemRuntimeType::get_parent_type(runtime_type));
+    interp::EvalStackOp::set_return(ret, parent_type);
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.RuntimeType::get_IsActualInterface()
+static RtResultVoid get_is_actual_interface_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                    interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, is_interface, SystemRuntimeType::get_is_actual_interface(runtime_type));
+    interp::EvalStackOp::set_return(ret, is_interface);
+    RET_VOID_OK();
+}
+
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtimetype[] = {
     {"System.RuntimeType::GetField(System.String,System.Reflection.BindingFlags)", (vm::IntrinsicFunction)&SystemRuntimeType::get_field, get_field_invoker},
+    {"System.RuntimeType::GetCustomAttributes(System.Type,System.Boolean)", (vm::IntrinsicFunction)&SystemRuntimeType::get_custom_attributes,
+     get_custom_attributes_invoker},
+    {"System.RuntimeType::get_BaseType", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
+    {"System.RuntimeType::GetBaseType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
+    {"System.RuntimeType::GetParentType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
+    {"System.RuntimeType::get_IsActualInterface", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_actual_interface, get_is_actual_interface_invoker},
 };
 
 utils::Span<vm::IntrinsicEntry> SystemRuntimeType::get_intrinsic_entries() noexcept

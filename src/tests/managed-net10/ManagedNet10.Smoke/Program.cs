@@ -265,6 +265,39 @@ internal static class Program
         Require(attr?.Name == "payload", "custom attribute name failed");
     }
 
+    private static void TestAttributeCtorOnly()
+    {
+        var attr = new SmokeAttribute("payload");
+        Require(attr.Name == "payload", "custom attribute ctor failed");
+    }
+
+    private static void TestAttributeSubclassOnly()
+    {
+        Require(typeof(SmokeAttribute).IsSubclassOf(typeof(Attribute)), "attribute subclass check failed");
+    }
+
+    private static void TestTypeEqualityOnly()
+    {
+        Require(typeof(SmokeAttribute) == typeof(SmokeAttribute), "type equality failed");
+    }
+
+    private static void TestAttributeBaseTypeOnly()
+    {
+        Require(typeof(SmokeAttribute).BaseType != null, "attribute base type lookup failed");
+    }
+
+    private static void TestAttributeBaseTypeCompareOnly()
+    {
+        Require(typeof(SmokeAttribute).BaseType == typeof(Attribute), "attribute base type compare failed");
+    }
+
+    private static void TestReflectionAttributeArrayOnly()
+    {
+        var type = typeof(Payload<string>);
+        var attrs = type.GetCustomAttributes(typeof(SmokeAttribute), inherit: true);
+        Require(attrs.Length == 1, "custom attribute array lookup failed");
+    }
+
     private static void TestReflectionFieldLookupOnly()
     {
         var type = typeof(Payload<string>);
