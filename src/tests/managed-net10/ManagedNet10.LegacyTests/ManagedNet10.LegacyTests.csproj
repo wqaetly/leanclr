@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="BranchTestEntries.cs" />
     <Compile Include="CompareTestEntries.cs" />
+    <Compile Include="ConvertTestEntries.cs" />
     <Compile Include="MemoryTestEntries.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
@@ -52,6 +53,9 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Cgt_un.cs" Link="Instructions\Compare\TC_Cgt_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt.cs" Link="Instructions\Compare\TC_Clt.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt_un.cs" Link="Instructions\Compare\TC_Clt_un.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_r4.cs" Link="Instructions\Converts\TC_conv_r4.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_r8.cs" Link="Instructions\Converts\TC_conv_r8.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_r_un.cs" Link="Instructions\Converts\TC_conv_r_un.cs" />
     <Compile Include="Instructions\Memory\TC_ldc.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Memory\TC_ldloc.cs" Link="Instructions\Memory\TC_ldloc.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Memory\TC_ldnull.cs" Link="Instructions\Memory\TC_ldnull.cs" />

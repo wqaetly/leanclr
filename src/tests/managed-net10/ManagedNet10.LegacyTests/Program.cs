@@ -13,6 +13,7 @@ namespace ManagedNet10.LegacyTests
             RunArithmeticInstructions();
             RunBranchInstructions();
             RunCompareInstructions();
+            RunConvertInstructions();
             RunMemoryInstructions();
         }
 
