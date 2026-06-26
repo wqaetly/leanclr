@@ -58,6 +58,19 @@ struct RtReflectionRuntimeType
 
 using RtReflectionMonoType = RtReflectionRuntimeType;
 
+struct RtSignature : public RtObject
+{
+    RtArray* arguments;
+    RtReflectionRuntimeType* declaring_type;
+    RtReflectionRuntimeType* return_type_or_field_type;
+    RtObject* keep_alive;
+    void* sig;
+    int32_t csig;
+    int32_t managed_calling_convention_and_arg_iterator_flags;
+    int32_t size_of_arg_stack;
+    const metadata::RtMethodInfo* method;
+};
+
 // Reflection field
 struct RtReflectionField
 {

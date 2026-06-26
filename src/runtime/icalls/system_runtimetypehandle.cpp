@@ -119,6 +119,12 @@ RtResult<bool> SystemRuntimeTypeHandle::is_generic_variable(const vm::RtReflecti
     RET_OK(!type_sig->is_by_ref() && (ele_type == metadata::RtElementType::Var || ele_type == metadata::RtElementType::MVar));
 }
 
+RtResult<bool> SystemRuntimeTypeHandle::contains_generic_variables(const vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    auto type_sig = runtime_type->reflection_type.type_handle;
+    RET_OK(vm::Type::contains_generic_param(type_sig));
+}
+
 RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_base_type(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
     auto type_sig = runtime_type->reflection_type.type_handle;
@@ -413,6 +419,16 @@ static RtResultVoid is_generic_variable_invoker(metadata::RtManagedMethodPointer
     RET_VOID_OK();
 }
 
+/// @icall: System.RuntimeTypeHandle::ContainsGenericVariables
+static RtResultVoid contains_generic_variables_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeTypeHandle::contains_generic_variables(runtime_type));
+    EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
 /// @icall: System.RuntimeTypeHandle::GetBaseType
 static RtResultVoid get_base_type_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                           interp::RtStackObject* ret) noexcept
@@ -549,6 +565,8 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] 
     {"System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_array_rank, get_array_rank_invoker},
     {"System.RuntimeTypeHandle::GetElementType", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_element_type, get_element_type_invoker},
     {"System.RuntimeTypeHandle::IsGenericVariable", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_generic_variable, is_generic_variable_invoker},
+    {"System.RuntimeTypeHandle::ContainsGenericVariables", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::contains_generic_variables,
+     contains_generic_variables_invoker},
     {"System.RuntimeTypeHandle::GetBaseType", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_base_type, get_base_type_invoker},
     {"System.RuntimeTypeHandle::IsGenericTypeDefinition", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_generic_type_definition,
      is_generic_type_definition_invoker},

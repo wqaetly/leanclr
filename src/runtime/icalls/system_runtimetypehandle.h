@@ -39,6 +39,9 @@ class SystemRuntimeTypeHandle
     // Check if type is generic variable
     static RtResult<bool> is_generic_variable(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
 
+    // Check if type contains generic variables
+    static RtResult<bool> contains_generic_variables(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
+
     // Get base type
     static RtResult<vm::RtReflectionRuntimeType*> get_base_type(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
 

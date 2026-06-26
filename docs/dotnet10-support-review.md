@@ -902,6 +902,14 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - `C:\study\wqaetly\new\NKGGameFramework` 确认为第一批真实框架 workload。官方 `.NET 10` SDK 基线已验证：`dotnet build NKGGameFramework.sln -c Release --no-restore` 成功，0 警告 0 错误；`dotnet test tests\NKGGameFramework.Tests\NKGGameFramework.Tests.csproj -c Release --no-build` 通过 142 个测试。
 - 一次并行执行 `dotnet build` 与 `dotnet test` 时，OdinSerializer 中间输出 DLL 被同时写入导致文件锁；顺序执行后通过。后续 CI 或脚本应避免对同一输出目录并行 build/test。
 
+2026-06-27 已打通首批 `.NET 10` legacy 反射验证口：
+
+- `ManagedNet10.LegacyTests` 继续复用旧 managed 测试素材，但执行方式校准为接近原 `RunTests` 的反射模型：按 `[UnitTest]` 扫描 `void` 无参方法，支持实例/静态方法，类型级 `[IgnoreTest]` 直接跳过，空 fixture 不再被误报为 runtime 失败。
+- 为反射枚举和 `MethodInfo.Invoke` 补齐当前首批旧用例所需的 .NET 10 runtime 入口：`System.Signature::Init`、`System.RuntimeMethodHandle::GetMethodDef`、`System.RuntimeTypeHandle::ContainsGenericVariables`、`System.Runtime.CompilerServices.TypeHandle::GetCorElementType`。
+- `System.Signature::Init` 目前按 LeanCLR 已解析的 `RtMethodInfo` / `RtFieldInfo` 构造返回类型和参数 `RuntimeType[]`，优先满足旧用例反射执行链路；更完整的 raw signature parser 仍属于后续反射深水区。
+- 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunAll"` 通过，LeanCLR 解释执行输出 `ok!`。
+- 本机已复验 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 通过，`ManagedNet10.Smoke` 默认入口仍输出 `ok!`；`dotnet build src\tests\managed-net10\managed-net10.sln -c Release` 通过。
+
 仍未完成：
 
 - `minimal-net10` API 白名单尚未形成正式清单。

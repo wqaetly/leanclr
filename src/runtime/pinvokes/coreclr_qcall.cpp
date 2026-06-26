@@ -5,12 +5,15 @@
 #include "metadata/metadata_cache.h"
 #include "utils/string_builder.h"
 #include "vm/class.h"
+#include "vm/field.h"
 #include "vm/generic_class.h"
 #include "vm/gchandle.h"
 #include "vm/method.h"
 #include "vm/object.h"
 #include "vm/pinvoke.h"
+#include "vm/reflection.h"
 #include "vm/runtime.h"
+#include "vm/rt_array.h"
 #include "vm/rt_string.h"
 #include "vm/rt_thread.h"
 
@@ -22,6 +25,8 @@ namespace
 {
 constexpr int32_t FORMAT_NAMESPACE = 0x00000001;
 constexpr int32_t FORMAT_ASSEMBLY = 0x00000004;
+constexpr int32_t CALLING_CONVENTION_STANDARD = 0x0001;
+constexpr int32_t CALLING_CONVENTION_HAS_THIS = 0x0020;
 
 RtResult<const metadata::RtTypeSig*> get_type_sig_from_qcall_type_handle(void* qcall_type_handle, void* native_handle) noexcept
 {
@@ -119,6 +124,83 @@ RtResult<vm::RtString*> construct_type_name(void* qcall_type_handle, void* nativ
     }
 
     RET_OK(vm::String::create_string_from_utf8chars(sb.get_const_chars(), static_cast<int32_t>(sb.length())));
+}
+
+RtResult<int32_t> get_cor_element_type(void* type_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            get_type_sig_from_qcall_type_handle(type_handle, type_handle));
+    RET_OK(static_cast<int32_t>(type_sig->ele_type));
+}
+
+RtResult<vm::RtReflectionRuntimeType*> get_runtime_type_from_type_sig(const metadata::RtTypeSig* type_sig) noexcept
+{
+    if (type_sig == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, type_obj, vm::Reflection::get_type_reflection_object(type_sig));
+    RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(type_obj));
+}
+
+RtResultVoid initialize_signature_from_metadata(vm::RtSignature* signature, void* raw_sig, int32_t raw_sig_size,
+                                                const metadata::RtFieldInfo* field, const metadata::RtMethodInfo* method) noexcept
+{
+    if (signature == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    signature->sig = raw_sig;
+    signature->csig = raw_sig_size;
+    signature->method = method;
+
+    if (signature->return_type_or_field_type != nullptr)
+    {
+        RET_VOID_OK();
+    }
+
+    const metadata::RtTypeSig* return_or_field_type = nullptr;
+    const metadata::RtTypeSig* const* parameters = nullptr;
+    int32_t parameter_count = 0;
+
+    if (method != nullptr)
+    {
+        return_or_field_type = method->return_type;
+        parameters = method->parameters;
+        parameter_count = static_cast<int32_t>(method->parameter_count);
+        signature->managed_calling_convention_and_arg_iterator_flags = CALLING_CONVENTION_STANDARD;
+        if (vm::Method::is_instance(method))
+        {
+            signature->managed_calling_convention_and_arg_iterator_flags |= CALLING_CONVENTION_HAS_THIS;
+        }
+    }
+    else if (field != nullptr)
+    {
+        return_or_field_type = field->type_sig;
+    }
+    else
+    {
+        RETURN_NOT_IMPLEMENTED_ERROR();
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, return_type,
+                                            get_runtime_type_from_type_sig(return_or_field_type));
+    signature->return_type_or_field_type = return_type;
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, arguments,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(vm::Class::get_corlib_types().cls_runtimetype,
+                                                                                       parameter_count, "Signature_Init"));
+    signature->arguments = arguments;
+    for (int32_t i = 0; i < parameter_count; ++i)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, parameter_type,
+                                                get_runtime_type_from_type_sig(parameters[i]));
+        vm::Array::set_array_data_at<vm::RtReflectionRuntimeType*>(arguments, i, parameter_type);
+    }
+
+    RET_VOID_OK();
 }
 
 RtResult<metadata::RtClass*> instantiate_type_for_generic_parameters(void* qcall_type_handle, void* native_handle, void** type_handles,
@@ -247,6 +329,15 @@ RtResultVoid construct_runtime_type_name_invoker(metadata::RtManagedMethodPointe
     RET_VOID_OK();
 }
 
+RtResultVoid get_cor_element_type_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                          interp::RtStackObject* ret) noexcept
+{
+    auto type_handle = interp::EvalStackOp::get_param<void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, result, get_cor_element_type(type_handle));
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 RtResultVoid create_instance_for_another_generic_parameter_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                                    const interp::RtStackObject* params, interp::RtStackObject*) noexcept
 {
@@ -259,6 +350,20 @@ RtResultVoid create_instance_for_another_generic_parameter_invoker(metadata::RtM
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
                                             create_instance_for_generic_parameters(qcall_type_handle, native_handle, type_handles, type_handle_count));
     *ret_obj = obj;
+    RET_VOID_OK();
+}
+
+RtResultVoid signature_init_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                    interp::RtStackObject*) noexcept
+{
+    auto signature_slot = interp::EvalStackOp::get_param<vm::RtSignature**>(params, 0);
+    auto raw_sig = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t raw_sig_size = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    auto field = interp::EvalStackOp::get_param<const metadata::RtFieldInfo*>(params, 3);
+    auto method = interp::EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 4);
+
+    vm::RtSignature* signature = signature_slot != nullptr ? *signature_slot : nullptr;
+    RET_ERR_ON_FAIL(initialize_signature_from_metadata(signature, raw_sig, raw_sig_size, field, method));
     RET_VOID_OK();
 }
 
@@ -287,11 +392,18 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.RuntimeTypeHandle::ConstructName(System.Runtime.CompilerServices.QCallTypeHandle,System.TypeNameFormatFlags,System.Runtime.CompilerServices.StringHandleOnStack)",
         nullptr, construct_runtime_type_name_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::ConstructName", nullptr, construct_runtime_type_name_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.TypeHandle::GetCorElementType(System.IntPtr)", nullptr,
+                                   get_cor_element_type_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.TypeHandle::GetCorElementType", nullptr, get_cor_element_type_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::CreateInstanceForAnotherGenericParameter(System.Runtime.CompilerServices.QCallTypeHandle,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, create_instance_for_another_generic_parameter_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::CreateInstanceForAnotherGenericParameter", nullptr,
                                    create_instance_for_another_generic_parameter_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Signature::Init(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Void*,System.Int32,System.RuntimeFieldHandleInternal,System.RuntimeMethodHandleInternal)",
+        nullptr, signature_init_invoker);
+    vm::PInvokes::register_pinvoke("System.Signature::Init", nullptr, signature_init_invoker);
 }
 
 } // namespace pinvokes

@@ -11,18 +11,27 @@ namespace ManagedNet10.LegacyTests
             BindingFlags.Instance |
             BindingFlags.Static;
 
-        public static void RunTypes(params Type[] types)
+        public static int RunTypes(params Type[] types)
         {
+            int executed = 0;
             for (int i = 0; i < types.Length; i++)
             {
-                RunType(types[i]);
+                executed += RunType(types[i]);
             }
+
+            return executed;
         }
 
-        public static void RunType(Type type)
+        public static int RunType(Type type)
         {
+            if (Attribute.IsDefined(type, typeof(IgnoreTestAttribute), inherit: true))
+            {
+                return 0;
+            }
+
             object instance = null;
             MethodInfo[] methods = type.GetMethods(TestMethodFlags);
+            int executed = 0;
 
             for (int i = 0; i < methods.Length; i++)
             {
@@ -31,14 +40,21 @@ namespace ManagedNet10.LegacyTests
                 {
                     continue;
                 }
+                if (method.ReturnType != typeof(void) || method.GetParameters().Length != 0)
+                {
+                    continue;
+                }
 
-                if (instance == null)
+                if (!method.IsStatic && instance == null)
                 {
                     instance = Activator.CreateInstance(type);
                 }
 
                 method.Invoke(instance, null);
+                executed++;
             }
+
+            return executed;
         }
     }
 }
