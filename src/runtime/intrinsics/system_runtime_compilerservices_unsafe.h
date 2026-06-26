@@ -12,6 +12,11 @@ class SystemRuntimeCompilerServicesUnsafe
   public:
     static RtResult<void*> as_pointer(void* location) noexcept;
     static RtResult<void*> as(void* source) noexcept;
+    static RtResult<intptr_t> byte_offset(void* origin, void* target) noexcept;
+    static RtResultVoid copy_block(const interp::RtStackObject* params) noexcept;
+    static RtResultVoid read_unaligned(const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
+                                       interp::RtStackObject* ret) noexcept;
+    static RtResultVoid write_unaligned(const metadata::RtMethodInfo* method, const interp::RtStackObject* params) noexcept;
     static RtResultVoid add(const metadata::RtMethodInfo* method, const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept;
     static RtResultVoid add_byte_offset(const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                         interp::RtStackObject* ret) noexcept;

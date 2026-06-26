@@ -30,13 +30,22 @@ static RtResultVoid get_runtime_intrinsics_is_supported_false_invoker(metadata::
 
 static bool is_runtime_intrinsics_is_supported(const metadata::RtMethodInfo* method) noexcept
 {
-    const metadata::RtClass* klass = method->parent;
     constexpr const char* runtime_intrinsics_namespace = "System.Runtime.Intrinsics";
     constexpr size_t runtime_intrinsics_namespace_len = sizeof("System.Runtime.Intrinsics") - 1;
 
-    return method->parameter_count == 0 && method->return_type->ele_type == metadata::RtElementType::Boolean &&
-           std::strcmp(method->name, "get_IsSupported") == 0 &&
-           std::strncmp(klass->namespaze, runtime_intrinsics_namespace, runtime_intrinsics_namespace_len) == 0;
+    if (method->parameter_count != 0 || method->return_type->ele_type != metadata::RtElementType::Boolean ||
+        std::strcmp(method->name, "get_IsSupported") != 0)
+    {
+        return false;
+    }
+
+    const metadata::RtClass* klass = method->parent;
+    while (klass->declaring_class != nullptr)
+    {
+        klass = klass->declaring_class;
+    }
+
+    return std::strncmp(klass->namespaze, runtime_intrinsics_namespace, runtime_intrinsics_namespace_len) == 0;
 }
 
 // Register an intrinsic function by name

@@ -4,12 +4,14 @@
 #include "metadata/metadata_name.h"
 #include "metadata/metadata_cache.h"
 #include "metadata/module_def.h"
+#include "platform/rt_sys.h"
 #include "utils/string_builder.h"
 #include "vm/assembly.h"
 #include "vm/class.h"
 #include "vm/field.h"
 #include "vm/generic_class.h"
 #include "vm/gchandle.h"
+#include "vm/marshal.h"
 #include "vm/method.h"
 #include "vm/object.h"
 #include "vm/pinvoke.h"
@@ -29,6 +31,21 @@ constexpr int32_t FORMAT_NAMESPACE = 0x00000001;
 constexpr int32_t FORMAT_ASSEMBLY = 0x00000004;
 constexpr int32_t CALLING_CONVENTION_STANDARD = 0x0001;
 constexpr int32_t CALLING_CONVENTION_HAS_THIS = 0x0020;
+
+struct RtOsVersionInfoEx
+{
+    uint32_t dwOSVersionInfoSize;
+    uint32_t dwMajorVersion;
+    uint32_t dwMinorVersion;
+    uint32_t dwBuildNumber;
+    uint32_t dwPlatformId;
+    Utf16Char szCSDVersion[128];
+    uint16_t wServicePackMajor;
+    uint16_t wServicePackMinor;
+    uint16_t wSuiteMask;
+    uint8_t wProductType;
+    uint8_t wReserved;
+};
 
 RtResult<const metadata::RtTypeSig*> get_type_sig_from_qcall_type_handle(void* qcall_type_handle, void* native_handle) noexcept
 {
@@ -180,6 +197,31 @@ RtResult<vm::RtReflectionRuntimeType*> get_runtime_type_from_type_sig(const meta
     RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(type_obj));
 }
 
+RtResult<vm::RtReflectionRuntimeType*> get_generic_type_definition(void* qcall_type_handle, void* native_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            get_type_sig_from_qcall_type_handle(qcall_type_handle, nullptr));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+
+    const metadata::RtClass* generic_definition_klass = nullptr;
+    if (vm::Class::is_generic_inst(klass))
+    {
+        generic_definition_klass = vm::Class::get_generic_base_klass_of_generic_class(klass);
+    }
+    else if (vm::Class::is_generic(klass))
+    {
+        generic_definition_klass = klass;
+    }
+    else
+    {
+        generic_definition_klass = klass;
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, type_obj,
+                                            vm::Reflection::get_klass_reflection_object(generic_definition_klass));
+    RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(type_obj));
+}
+
 RtResultVoid initialize_signature_from_metadata(vm::RtSignature* signature, void* raw_sig, int32_t raw_sig_size,
                                                 const metadata::RtFieldInfo* field, const metadata::RtMethodInfo* method) noexcept
 {
@@ -321,6 +363,180 @@ RtResultVoid debugger_log_invoker(metadata::RtManagedMethodPointer, const metada
     RET_VOID_OK();
 }
 
+RtResultVoid metadata_updater_is_apply_update_supported_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                const interp::RtStackObject*, interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_last_error_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                             interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, vm::Marshal::get_last_win32_error());
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_set_last_error_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                             interp::RtStackObject*) noexcept
+{
+    int32_t error = interp::EvalStackOp::get_param<int32_t>(params, 0);
+    vm::Marshal::set_last_win32_error(error);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_environment_variable_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    vm::RtString* variable_name = interp::EvalStackOp::get_param<vm::RtString*>(params, 0);
+    Utf16Char* value = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+    uint32_t value_length = interp::EvalStackOp::get_param<uint32_t>(params, 2);
+
+    uint32_t result = platform::RtSys::get_environment_variable(variable_name != nullptr ? vm::String::get_chars_ptr(variable_name) : nullptr,
+                                                               value, value_length);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_locale_info_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    vm::RtString* locale_name = interp::EvalStackOp::get_param<vm::RtString*>(params, 0);
+    uint32_t lc_type = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    Utf16Char* locale_data = interp::EvalStackOp::get_param<Utf16Char*>(params, 2);
+    int32_t locale_data_length = interp::EvalStackOp::get_param<int32_t>(params, 3);
+
+    int32_t result = platform::RtSys::get_locale_info_ex(locale_name != nullptr ? vm::String::get_chars_ptr(locale_name) : nullptr,
+                                                         lc_type, locale_data, locale_data_length);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid globalization_load_icu_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                            interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid advapi32_event_register_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                             interp::RtStackObject* ret) noexcept
+{
+    (void)interp::EvalStackOp::get_param<void*>(params, 0);
+    (void)interp::EvalStackOp::get_param<void*>(params, 1);
+    (void)interp::EvalStackOp::get_param<void*>(params, 2);
+    auto registration_handle = interp::EvalStackOp::get_param<int64_t*>(params, 3);
+    if (registration_handle != nullptr)
+    {
+        *registration_handle = 1;
+    }
+    interp::EvalStackOp::set_return(ret, static_cast<uint32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid advapi32_event_unregister_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                               interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<uint32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid advapi32_event_write_transfer_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                   const interp::RtStackObject*, interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid advapi32_event_activity_id_control_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                        const interp::RtStackObject*, interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid advapi32_event_set_information_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                    interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid environment_get_processor_count_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                     interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(1));
+    RET_VOID_OK();
+}
+
+RtResultVoid ntdll_rtl_get_version_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                           interp::RtStackObject* ret) noexcept
+{
+    auto version = interp::EvalStackOp::get_param<RtOsVersionInfoEx*>(params, 0);
+    if (version == nullptr)
+    {
+        interp::EvalStackOp::set_return(ret, static_cast<int32_t>(-1));
+        RET_VOID_OK();
+    }
+
+    *version = {};
+    version->dwOSVersionInfoSize = sizeof(RtOsVersionInfoEx);
+    version->dwMajorVersion = 10;
+    version->dwMinorVersion = 0;
+    version->dwBuildNumber = 0;
+    version->dwPlatformId = 2; // VER_PLATFORM_WIN32_NT
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid eventpipe_enable_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                      interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<uint64_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid eventpipe_void_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                    interp::RtStackObject*) noexcept
+{
+    RET_VOID_OK();
+}
+
+RtResultVoid eventpipe_create_provider_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                               interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, reinterpret_cast<void*>(1));
+    RET_VOID_OK();
+}
+
+RtResultVoid eventpipe_define_event_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                            interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, reinterpret_cast<void*>(1));
+    RET_VOID_OK();
+}
+
+RtResultVoid eventpipe_get_provider_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                            interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, nullptr);
+    RET_VOID_OK();
+}
+
+RtResultVoid eventpipe_activity_id_control_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                   interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid eventpipe_bool_false_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                          interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
 RtResultVoid get_type_handle_gc_handle_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                interp::RtStackObject* ret) noexcept
 {
@@ -352,6 +568,36 @@ RtResultVoid get_frozen_stack_trace_invoker(metadata::RtManagedMethodPointer, co
     RET_VOID_OK();
 }
 
+RtResultVoid delegate_find_method_handle_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                 interp::RtStackObject*) noexcept
+{
+    auto delegate_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    auto method_info_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 1);
+    if (delegate_slot == nullptr || method_info_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto this_delegate = reinterpret_cast<vm::RtDelegate*>(*delegate_slot);
+    if (this_delegate == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    const metadata::RtMethodInfo* reflected_method = this_delegate->method;
+    if (this_delegate->target != nullptr)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, virtual_method,
+                                                vm::Method::get_virtual_method_impl(this_delegate->target, this_delegate->method));
+        reflected_method = virtual_method;
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethod*, method_info,
+                                            vm::Reflection::get_method_reflection_object(reflected_method, reflected_method->parent));
+    *method_info_slot = reinterpret_cast<vm::RtObject*>(method_info);
+    RET_VOID_OK();
+}
+
 RtResultVoid construct_runtime_type_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                  interp::RtStackObject*) noexcept
 {
@@ -371,6 +617,19 @@ RtResultVoid get_cor_element_type_invoker(metadata::RtManagedMethodPointer, cons
     auto type_handle = interp::EvalStackOp::get_param<void*>(params, 0);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, result, get_cor_element_type(type_handle));
     interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid get_generic_type_definition_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                 interp::RtStackObject*) noexcept
+{
+    auto qcall_type_handle = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto ret_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType**>(params, 2);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, generic_type_definition,
+                                            get_generic_type_definition(qcall_type_handle, native_handle));
+    *ret_type = generic_type_definition;
     RET_VOID_OK();
 }
 
@@ -429,6 +688,90 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Diagnostics.Debugger::IsManagedDebuggerAttached()", nullptr, is_managed_debugger_attached_invoker);
     vm::PInvokes::register_pinvoke("System.Diagnostics.Debugger::IsManagedDebuggerAttached", nullptr, is_managed_debugger_attached_invoker);
     vm::PInvokes::register_pinvoke("System.Diagnostics.Debugger::<LogInternal>g____PInvoke|10_0", nullptr, debugger_log_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.Metadata.MetadataUpdater::<IsApplyUpdateSupported>g____PInvoke|1_0()", nullptr,
+                                   metadata_updater_is_apply_update_supported_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.Metadata.MetadataUpdater::<IsApplyUpdateSupported>g____PInvoke|1_0", nullptr,
+                                   metadata_updater_is_apply_update_supported_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_IsApplyUpdateSupported()", nullptr, metadata_updater_is_apply_update_supported_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_IsApplyUpdateSupported", nullptr, metadata_updater_is_apply_update_supported_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLastError()", nullptr, kernel32_get_last_error_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLastError", nullptr, kernel32_get_last_error_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetLastError()", nullptr, kernel32_get_last_error_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetLastError", nullptr, kernel32_get_last_error_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::SetLastError(System.Int32)", nullptr, kernel32_set_last_error_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::SetLastError", nullptr, kernel32_set_last_error_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::SetLastError(System.Int32)", nullptr, kernel32_set_last_error_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::SetLastError", nullptr, kernel32_set_last_error_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetEnvironmentVariable(System.String,System.Char&,System.UInt32)", nullptr,
+                                   kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetEnvironmentVariable", nullptr, kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0(System.String,System.Char&,System.UInt32)",
+                                   nullptr, kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0", nullptr,
+                                   kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetEnvironmentVariable(System.String,System.Char&,System.UInt32)", nullptr,
+                                   kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetEnvironmentVariable", nullptr, kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0(System.String,System.Char&,System.UInt32)", nullptr,
+                                   kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0", nullptr,
+                                   kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
+                                   kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx", nullptr, kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0(System.String,System.UInt32,System.Char*,System.Int32)",
+                                   nullptr, kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0", nullptr,
+                                   kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetLocaleInfoEx(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
+                                   kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetLocaleInfoEx", nullptr, kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
+                                   kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0", nullptr,
+                                   kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Globalization::LoadICU()", nullptr, globalization_load_icu_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Globalization::LoadICU", nullptr, globalization_load_icu_invoker);
+    vm::PInvokes::register_pinvoke("Globalization::LoadICU()", nullptr, globalization_load_icu_invoker);
+    vm::PInvokes::register_pinvoke("Globalization::LoadICU", nullptr, globalization_load_icu_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Advapi32::EventRegister", nullptr, advapi32_event_register_invoker);
+    vm::PInvokes::register_pinvoke("Advapi32::EventRegister", nullptr, advapi32_event_register_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Advapi32::EventUnregister", nullptr, advapi32_event_unregister_invoker);
+    vm::PInvokes::register_pinvoke("Advapi32::EventUnregister", nullptr, advapi32_event_unregister_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Advapi32::EventWriteTransfer", nullptr, advapi32_event_write_transfer_invoker);
+    vm::PInvokes::register_pinvoke("Advapi32::EventWriteTransfer", nullptr, advapi32_event_write_transfer_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Advapi32::EventActivityIdControl", nullptr, advapi32_event_activity_id_control_invoker);
+    vm::PInvokes::register_pinvoke("Advapi32::EventActivityIdControl", nullptr, advapi32_event_activity_id_control_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Advapi32::EventSetInformation", nullptr, advapi32_event_set_information_invoker);
+    vm::PInvokes::register_pinvoke("Advapi32::EventSetInformation", nullptr, advapi32_event_set_information_invoker);
+    vm::PInvokes::register_pinvoke("System.Environment::GetProcessorCount()", nullptr, environment_get_processor_count_invoker);
+    vm::PInvokes::register_pinvoke("System.Environment::GetProcessorCount", nullptr, environment_get_processor_count_invoker);
+    vm::PInvokes::register_pinvoke("Interop/NtDll::<RtlGetVersion>g____PInvoke|22_0", nullptr, ntdll_rtl_get_version_invoker);
+    vm::PInvokes::register_pinvoke("NtDll::<RtlGetVersion>g____PInvoke|22_0", nullptr, ntdll_rtl_get_version_invoker);
+    vm::PInvokes::register_pinvoke("Interop/NtDll::RtlGetVersion", nullptr, ntdll_rtl_get_version_invoker);
+    vm::PInvokes::register_pinvoke("NtDll::RtlGetVersion", nullptr, ntdll_rtl_get_version_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<Enable>g____PInvoke|0_0", nullptr, eventpipe_enable_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<Disable>g____PInvoke|1_0", nullptr, eventpipe_void_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<CreateProvider>g____PInvoke|4_0", nullptr,
+                                   eventpipe_create_provider_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<DefineEvent>g____PInvoke|5_0", nullptr,
+                                   eventpipe_define_event_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<GetProvider>g____PInvoke|6_0", nullptr,
+                                   eventpipe_get_provider_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<DeleteProvider>g____PInvoke|7_0", nullptr,
+                                   eventpipe_void_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<EventActivityIdControl>g____PInvoke|8_0", nullptr,
+                                   eventpipe_activity_id_control_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<WriteEventData>g____PInvoke|9_0", nullptr,
+                                   eventpipe_void_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<GetSessionInfo>g____PInvoke|10_0", nullptr,
+                                   eventpipe_bool_false_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<GetNextEvent>g____PInvoke|11_0", nullptr,
+                                   eventpipe_bool_false_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<SignalSession>g____PInvoke|12_0", nullptr,
+                                   eventpipe_bool_false_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<WaitForSessionSignal>g____PInvoke|13_0", nullptr,
+                                   eventpipe_bool_false_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::GetGCHandle(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.InteropServices.GCHandleType)", nullptr,
         get_type_handle_gc_handle_invoker);
@@ -441,12 +784,20 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, get_frozen_stack_trace_invoker);
     vm::PInvokes::register_pinvoke("System.Exception::GetFrozenStackTrace", nullptr, get_frozen_stack_trace_invoker);
     vm::PInvokes::register_pinvoke(
+        "System.Delegate::FindMethodHandle(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, delegate_find_method_handle_invoker);
+    vm::PInvokes::register_pinvoke("System.Delegate::FindMethodHandle", nullptr, delegate_find_method_handle_invoker);
+    vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::ConstructName(System.Runtime.CompilerServices.QCallTypeHandle,System.TypeNameFormatFlags,System.Runtime.CompilerServices.StringHandleOnStack)",
         nullptr, construct_runtime_type_name_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::ConstructName", nullptr, construct_runtime_type_name_invoker);
     vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.TypeHandle::GetCorElementType(System.IntPtr)", nullptr,
                                    get_cor_element_type_invoker);
     vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.TypeHandle::GetCorElementType", nullptr, get_cor_element_type_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeTypeHandle::GetGenericTypeDefinition(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, get_generic_type_definition_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetGenericTypeDefinition", nullptr, get_generic_type_definition_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Reflection.RuntimeModule::GetTypes(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, get_module_types_invoker);

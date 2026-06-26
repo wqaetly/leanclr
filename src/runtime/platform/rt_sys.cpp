@@ -161,6 +161,40 @@ void RtSys::set_last_win32_error(int32_t error)
 #endif
 }
 
+uint32_t RtSys::get_environment_variable(const Utf16Char* variable_name, Utf16Char* value, uint32_t value_length)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    if (variable_name == nullptr)
+    {
+        ::SetLastError(ERROR_INVALID_PARAMETER);
+        return 0;
+    }
+    return static_cast<uint32_t>(::GetEnvironmentVariableW(reinterpret_cast<LPCWSTR>(variable_name), reinterpret_cast<LPWSTR>(value),
+                                                          static_cast<DWORD>(value_length)));
+#else
+    (void)variable_name;
+    (void)value;
+    (void)value_length;
+    s_last_win32_error = 203; // ERROR_ENVVAR_NOT_FOUND
+    return 0;
+#endif
+}
+
+int32_t RtSys::get_locale_info_ex(const Utf16Char* locale_name, uint32_t lc_type, Utf16Char* locale_data, int32_t locale_data_length)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return static_cast<int32_t>(::GetLocaleInfoEx(reinterpret_cast<LPCWSTR>(locale_name), static_cast<LCTYPE>(lc_type),
+                                                 reinterpret_cast<LPWSTR>(locale_data), locale_data_length));
+#else
+    (void)locale_name;
+    (void)lc_type;
+    (void)locale_data;
+    (void)locale_data_length;
+    s_last_win32_error = 120; // ERROR_CALL_NOT_IMPLEMENTED
+    return 0;
+#endif
+}
+
 int32_t RtSys::double_to_string(double value, const char* format, char* buffer, int32_t buffer_size)
 {
 #ifdef LEANCLR_PLATFORM_POSIX

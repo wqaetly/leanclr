@@ -882,6 +882,14 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtime_interopservi
      get_last_win32_error_invoker},
     {"System.Runtime.InteropServices.Marshal::SetLastWin32Error(System.Int32)",
      (vm::InternalCallFunction)&SystemRuntimeInteropServicesMarshal::set_last_win32_error, set_last_win32_error_invoker},
+    {"System.Runtime.InteropServices.Marshal::GetLastPInvokeError()", (vm::InternalCallFunction)&SystemRuntimeInteropServicesMarshal::get_last_win32_error,
+     get_last_win32_error_invoker},
+    {"System.Runtime.InteropServices.Marshal::GetLastPInvokeError", (vm::InternalCallFunction)&SystemRuntimeInteropServicesMarshal::get_last_win32_error,
+     get_last_win32_error_invoker},
+    {"System.Runtime.InteropServices.Marshal::SetLastPInvokeError(System.Int32)",
+     (vm::InternalCallFunction)&SystemRuntimeInteropServicesMarshal::set_last_win32_error, set_last_win32_error_invoker},
+    {"System.Runtime.InteropServices.Marshal::SetLastPInvokeError",
+     (vm::InternalCallFunction)&SystemRuntimeInteropServicesMarshal::set_last_win32_error, set_last_win32_error_invoker},
 
     // COM/WinRT stubs
     {"System.Runtime.InteropServices.Marshal::QueryInterfaceInternal(System.IntPtr,System.Guid&,System.IntPtr&)",

@@ -225,7 +225,7 @@ static RtResultVoid is_bitwise_equatable_invoker(metadata::RtManagedMethodPointe
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result,
                                             SystemRuntimeCompilerServicesRuntimeHelpers::is_bitwise_equatable(method));
-    interp::EvalStackOp::set_return(ret, result);
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
 }
 
@@ -238,7 +238,7 @@ static RtResultVoid is_reference_or_contains_references_invoker(metadata::RtMana
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result,
                                             SystemRuntimeCompilerServicesRuntimeHelpers::is_reference_or_contains_references(method));
-    interp::EvalStackOp::set_return(ret, result);
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
 }
 

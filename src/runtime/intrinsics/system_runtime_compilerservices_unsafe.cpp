@@ -64,6 +64,39 @@ RtResult<void*> SystemRuntimeCompilerServicesUnsafe::as(void* source) noexcept
     RET_OK(source);
 }
 
+RtResult<intptr_t> SystemRuntimeCompilerServicesUnsafe::byte_offset(void* origin, void* target) noexcept
+{
+    const uintptr_t origin_addr = reinterpret_cast<uintptr_t>(origin);
+    const uintptr_t target_addr = reinterpret_cast<uintptr_t>(target);
+    RET_OK(static_cast<intptr_t>(target_addr - origin_addr));
+}
+
+RtResultVoid SystemRuntimeCompilerServicesUnsafe::copy_block(const interp::RtStackObject* params) noexcept
+{
+    void* destination = interp::EvalStackOp::get_param<void*>(params, 0);
+    void* source = interp::EvalStackOp::get_param<void*>(params, 1);
+    uint32_t byte_count = interp::EvalStackOp::get_param<uint32_t>(params, 2);
+    std::memmove(destination, source, byte_count);
+    RET_VOID_OK();
+}
+
+RtResultVoid SystemRuntimeCompilerServicesUnsafe::read_unaligned(const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
+                                                                 interp::RtStackObject* ret) noexcept
+{
+    void* source = interp::EvalStackOp::get_param<void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(size_t, value_size, get_first_generic_arg_size(method));
+    std::memcpy(ret, source, value_size);
+    RET_VOID_OK();
+}
+
+RtResultVoid SystemRuntimeCompilerServicesUnsafe::write_unaligned(const metadata::RtMethodInfo* method, const interp::RtStackObject* params) noexcept
+{
+    void* destination = interp::EvalStackOp::get_param<void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(size_t, value_size, get_first_generic_arg_size(method));
+    std::memcpy(destination, params + 1, value_size);
+    RET_VOID_OK();
+}
+
 RtResultVoid SystemRuntimeCompilerServicesUnsafe::add(const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                                       interp::RtStackObject* ret) noexcept
 {
@@ -145,6 +178,37 @@ static RtResultVoid bit_cast_invoker(metadata::RtManagedMethodPointer, const met
     RET_VOID_OK();
 }
 
+static RtResultVoid byte_offset_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                        interp::RtStackObject* ret) noexcept
+{
+    void* origin = interp::EvalStackOp::get_param<void*>(params, 0);
+    void* target = interp::EvalStackOp::get_param<void*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(intptr_t, result, SystemRuntimeCompilerServicesUnsafe::byte_offset(origin, target));
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+static RtResultVoid copy_block_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                       interp::RtStackObject*) noexcept
+{
+    RET_ERR_ON_FAIL(SystemRuntimeCompilerServicesUnsafe::copy_block(params));
+    RET_VOID_OK();
+}
+
+static RtResultVoid read_unaligned_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* method,
+                                           const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    RET_ERR_ON_FAIL(SystemRuntimeCompilerServicesUnsafe::read_unaligned(method, params, ret));
+    RET_VOID_OK();
+}
+
+static RtResultVoid write_unaligned_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* method,
+                                            const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    RET_ERR_ON_FAIL(SystemRuntimeCompilerServicesUnsafe::write_unaligned(method, params));
+    RET_VOID_OK();
+}
+
 static RtResultVoid add_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                 interp::RtStackObject* ret) noexcept
 {
@@ -168,8 +232,14 @@ static RtResultVoid subtract_byte_offset_invoker(metadata::RtManagedMethodPointe
 
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_unsafe[] = {
     {"System.Runtime.CompilerServices.Unsafe::AsPointer<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as_pointer, as_pointer_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::AsRef<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as_pointer, as_pointer_invoker},
     {"System.Runtime.CompilerServices.Unsafe::As<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as, as_invoker},
     {"System.Runtime.CompilerServices.Unsafe::As<,>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as, as_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::ByteOffset<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::byte_offset, byte_offset_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::CopyBlock", nullptr, copy_block_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::CopyBlockUnaligned", nullptr, copy_block_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::ReadUnaligned<>", nullptr, read_unaligned_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::WriteUnaligned<>", nullptr, write_unaligned_invoker},
     {"System.Runtime.CompilerServices.Unsafe::Add<>", nullptr, add_invoker},
     {"System.Runtime.CompilerServices.Unsafe::AddByteOffset<>", nullptr, add_byte_offset_invoker},
     {"System.Runtime.CompilerServices.Unsafe::SubtractByteOffset<>", nullptr, subtract_byte_offset_invoker},
