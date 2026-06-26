@@ -26,6 +26,23 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_call_interp));
         }
 
+        public static void RunFunctionNewobjConstructors()
+        {
+            LegacyTestRunner.RunTypes(
+                typeof(Tests.Instruments.Funcs.TC_newobj_aot),
+                typeof(Tests.Instruments.Funcs.TC_newobj_interp));
+        }
+
+        public static void RunFunctionNewobjAot()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_newobj_aot));
+        }
+
+        public static void RunFunctionNewobjInterp()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_newobj_interp));
+        }
+
         public static void RunFunctionLdftn()
         {
             LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_ldftn));
