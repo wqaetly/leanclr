@@ -8109,7 +8109,7 @@ unwind_exception_handler:
                 }
                 case metadata::RtILExceptionClauseType::Filter:
                 {
-                    ip = imi->codes + clause->handler_begin_offset;
+                    ip = imi->codes + clause->filter_begin_offset;
                     setup_filter_checker(clause);
                     set_stack_value_at<vm::RtObject*>(eval_stack_base, imi->total_arg_and_local_stack_object_size, ex);
                     handled = true;

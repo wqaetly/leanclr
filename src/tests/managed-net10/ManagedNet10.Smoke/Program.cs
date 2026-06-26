@@ -115,6 +115,123 @@ internal static class Program
         }
     }
 
+    private static void TestPayloadCtorOnly()
+    {
+        var payload = new Payload<int>(21);
+        Require(payload.Value == 21, "generic payload ctor failed");
+    }
+
+    private static void TestStaticDelegateCreateOnly()
+    {
+        Func<int, int> doubleValue = static value => value * 2;
+        Require(doubleValue != null, "static delegate create failed");
+    }
+
+    private static void TestStaticDelegateInvokeOnly()
+    {
+        Func<int, int> doubleValue = static value => value * 2;
+        Require(doubleValue(21) == 42, "static delegate invoke failed");
+    }
+
+    private static void TestExceptionCtorOnly()
+    {
+        var ex = new NotSupportedException("smoke");
+        Require(ex.Message.Contains("smoke", StringComparison.Ordinal), "exception ctor failed");
+    }
+
+    private static void TestExceptionNewOnly()
+    {
+        var ex = new NotSupportedException();
+        Require(ex != null, "exception new failed");
+    }
+
+    private static void TestExceptionMessageNewOnly()
+    {
+        var ex = new NotSupportedException("smoke");
+        Require(ex != null, "exception message new failed");
+    }
+
+    private static void TestExceptionMessageReadOnly()
+    {
+        var ex = new NotSupportedException("smoke");
+        Require(ex.Message != null, "exception message read failed");
+    }
+
+    private static void TestStringContainsOrdinalOnly()
+    {
+        Require("smoke".Contains("sm", StringComparison.Ordinal), "string contains ordinal failed");
+    }
+
+    private static void TestThrowCatchOnly()
+    {
+        try
+        {
+            throw new NotSupportedException("smoke");
+        }
+        catch (NotSupportedException ex)
+        {
+            Require(ex.Message.Contains("smoke", StringComparison.Ordinal), "exception catch failed");
+        }
+    }
+
+    private static void TestNestedThrowCatchOnly()
+    {
+        try
+        {
+            ThrowNested();
+        }
+        catch (TargetInvocationException ex)
+        {
+            Require(ex.InnerException is NotSupportedException, "nested exception catch failed");
+        }
+    }
+
+    private static void TestTargetInvocationCtorOnly()
+    {
+        var inner = new NotSupportedException("smoke");
+        var ex = new TargetInvocationException(inner);
+        Require(ex != null, "target invocation ctor failed");
+    }
+
+    private static void TestTargetInvocationMessageCtorOnly()
+    {
+        var inner = new NotSupportedException("smoke");
+        var ex = new TargetInvocationException("wrapped", inner);
+        Require(ex != null, "target invocation message ctor failed");
+    }
+
+    private static void TestTargetInvocationInnerReadOnly()
+    {
+        var inner = new NotSupportedException("smoke");
+        var ex = new TargetInvocationException(inner);
+        Require(ex.InnerException is NotSupportedException, "target invocation inner read failed");
+    }
+
+    private static void TestThrowTargetInvocationCatchOnly()
+    {
+        try
+        {
+            throw new TargetInvocationException(new NotSupportedException("smoke"));
+        }
+        catch (TargetInvocationException ex)
+        {
+            Require(ex.InnerException is NotSupportedException, "target invocation throw catch failed");
+        }
+    }
+
+    private static void TestExceptionFilterOnly()
+    {
+        try
+        {
+            ThrowNested();
+            throw new InvalidOperationException("unreachable");
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is NotSupportedException)
+        {
+            Require(ex.InnerException.Message.Contains("smoke", StringComparison.Ordinal), "exception filter failed");
+        }
+    }
+
     private static void TestReflection()
     {
         var type = typeof(Payload<string>);
