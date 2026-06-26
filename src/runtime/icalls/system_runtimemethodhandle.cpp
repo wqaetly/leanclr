@@ -2,6 +2,7 @@
 
 #include "vm/class.h"
 #include "vm/method.h"
+#include "vm/rt_string.h"
 #include "vm/shim.h"
 
 namespace leanclr
@@ -138,6 +139,16 @@ RtResult<int32_t> SystemRuntimeMethodHandle::get_method_def(const metadata::RtMe
     }
 
     RET_OK(static_cast<int32_t>(method->token));
+}
+
+RtResult<vm::RtString*> SystemRuntimeMethodHandle::get_name(const metadata::RtMethodInfo* method) noexcept
+{
+    if (method == nullptr || method->name == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    RET_OK(vm::String::create_string_from_utf8cstr(method->name));
 }
 
 RtResult<const char*> SystemRuntimeMethodHandle::get_utf8_name(const metadata::RtMethodInfo* method) noexcept
@@ -318,6 +329,17 @@ static RtResultVoid get_method_def_invoker(metadata::RtManagedMethodPointer, con
     RET_VOID_OK();
 }
 
+/// @icall: System.RuntimeMethodHandle::GetName(System.RuntimeMethodHandleInternal)
+static RtResultVoid get_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                     interp::RtStackObject* ret) noexcept
+{
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtString*, name, SystemRuntimeMethodHandle::get_name(method));
+    EvalStackOp::set_return(ret, name);
+    RET_VOID_OK();
+}
+
 /// @icall: System.RuntimeMethodHandle::GetUtf8NameInternal
 static RtResultVoid get_utf8_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                           interp::RtStackObject* ret) noexcept
@@ -456,6 +478,8 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimemethodhandle[
     {"System.RuntimeMethodHandle::GetMethodTable", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_method_table, get_method_table_invoker},
     {"System.RuntimeMethodHandle::GetSlot", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_slot, get_slot_invoker},
     {"System.RuntimeMethodHandle::GetMethodDef", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_method_def, get_method_def_invoker},
+    {"System.RuntimeMethodHandle::GetName(System.RuntimeMethodHandleInternal)", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_name,
+     get_name_invoker},
     {"System.RuntimeMethodHandle::GetUtf8NameInternal", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_utf8_name, get_utf8_name_invoker},
     {"System.RuntimeMethodHandle::HasMethodInstantiation", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::has_method_instantiation,
      has_method_instantiation_invoker},

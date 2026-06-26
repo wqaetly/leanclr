@@ -345,6 +345,11 @@
     "header": "icalls/system_runtimemethodhandle.h"
   },
   {
+    "name": "System.RuntimeMethodHandle::GetName(System.RuntimeMethodHandleInternal)",
+    "func": "SystemRuntimeMethodHandle::get_name",
+    "header": "icalls/system_runtimemethodhandle.h"
+  },
+  {
     "name": "System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)",
     "func": "SystemRuntimeTypeHandle::get_array_rank",
     "header": "icalls/system_runtimetypehandle.h"

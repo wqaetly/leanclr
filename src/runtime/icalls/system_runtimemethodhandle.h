@@ -18,6 +18,7 @@ class SystemRuntimeMethodHandle
     static RtResult<const metadata::RtClass*> get_method_table(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<int32_t> get_slot(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<int32_t> get_method_def(const metadata::RtMethodInfo* method) noexcept;
+    static RtResult<vm::RtString*> get_name(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<const char*> get_utf8_name(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<bool> has_method_instantiation(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<bool> is_generic_method_definition(const metadata::RtMethodInfo* method) noexcept;
