@@ -37,6 +37,8 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdftnDefs.cs" Link="Fixtures\LdftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdvirftnDefs.cs" Link="Fixtures\LdvirftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTCtorParam.cs" Link="Fixtures\TestAOTCtorParam.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTParam.cs" Link="Fixtures\TestAOTParam.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTReturn.cs" Link="Fixtures\TestAOTReturn.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeFields.cs" Link="Fixtures\TypeFields.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields.cs" Link="Fixtures\TypeStaticFields.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields2.cs" Link="Fixtures\TypeStaticFields2.cs" />
@@ -85,6 +87,8 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInhereAotValue.cs" Link="Instructions\Funcs\ForInhereAotValue.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInterpCtorParam.cs" Link="Instructions\Funcs\ForInterpCtorParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_aot.cs" Link="Instructions\Funcs\TC_call_aot.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_aot_param.cs" Link="Instructions\Funcs\TC_call_aot_param.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_aot_return.cs" Link="Instructions\Funcs\TC_call_aot_return.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_interp.cs" Link="Instructions\Funcs\TC_call_interp.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_callvir_aot.cs" Link="Instructions\Funcs\TC_callvir_aot.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_ldftn.cs" Link="Instructions\Funcs\TC_ldftn.cs" />

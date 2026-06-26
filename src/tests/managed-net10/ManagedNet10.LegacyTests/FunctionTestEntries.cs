@@ -48,6 +48,23 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_callvir_aot));
         }
 
+        public static void RunFunctionAotParamReturn()
+        {
+            LegacyTestRunner.RunTypes(
+                typeof(Tests.Instruments.Funcs.TC_call_aot_param),
+                typeof(Tests.Instruments.Funcs.TC_call_aot_return));
+        }
+
+        public static void RunFunctionAotParam()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_call_aot_param));
+        }
+
+        public static void RunFunctionAotReturn()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_call_aot_return));
+        }
+
         public static void RunFunctionLdftn()
         {
             LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_ldftn));
