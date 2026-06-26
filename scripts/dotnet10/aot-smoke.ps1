@@ -46,6 +46,32 @@ function Get-DotNet10RuntimeDir {
     return $runtime.Path
 }
 
+function Resolve-CMakePath {
+    $cmake = Get-Command cmake -ErrorAction SilentlyContinue
+    if ($null -ne $cmake) {
+        return $cmake.Source
+    }
+
+    $candidatePaths = @()
+    if (-not [string]::IsNullOrWhiteSpace(${env:ProgramFiles(x86)})) {
+        $candidatePaths += Get-ChildItem -Path (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\2022\*\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe") -ErrorAction SilentlyContinue
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $candidatePaths += Get-ChildItem -Path (Join-Path $env:ProgramFiles "Microsoft Visual Studio\2022\*\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe") -ErrorAction SilentlyContinue
+        $standalonePath = Join-Path $env:ProgramFiles "CMake\bin\cmake.exe"
+        if (Test-Path $standalonePath) {
+            $candidatePaths += Get-Item $standalonePath
+        }
+    }
+
+    $candidate = $candidatePaths | Sort-Object FullName | Select-Object -First 1
+    if ($null -eq $candidate) {
+        throw "cmake was not found in PATH or Visual Studio 2022 Build Tools. Install CMake or pass a PATH that contains cmake."
+    }
+
+    return $candidate.FullName
+}
+
 $repoRoot = (Resolve-Path ([System.IO.Path]::Combine($PSScriptRoot, "..", ".."))).Path
 
 if ([string]::IsNullOrWhiteSpace($RuntimeDir)) {
@@ -112,10 +138,7 @@ if ($NativeRun) {
 }
 
 if ($NativeBuild) {
-    $cmake = Get-Command cmake -ErrorAction SilentlyContinue
-    if ($null -eq $cmake) {
-        throw "cmake was not found in PATH. Install CMake or add it to PATH before using -NativeBuild."
-    }
+    $cmakePath = Resolve-CMakePath
 
     if ([string]::IsNullOrWhiteSpace($NativeBuildDir)) {
         $NativeBuildDir = [System.IO.Path]::Combine($repoRoot, "out", "cmake", "tests", "net10-aot-smoke", "$Configuration-x64")
@@ -150,8 +173,8 @@ if ($NativeBuild) {
         $configureArgs += "-DCMAKE_BUILD_TYPE=$Configuration"
     }
 
-    Invoke-Checked -FilePath cmake -Arguments $configureArgs
-    Invoke-Checked -FilePath cmake -Arguments @("--build", $NativeBuildDir, "--config", $Configuration, "--target", "aot-tester", "--parallel")
+    Invoke-Checked -FilePath $cmakePath -Arguments $configureArgs
+    Invoke-Checked -FilePath $cmakePath -Arguments @("--build", $NativeBuildDir, "--config", $Configuration, "--target", "aot-tester", "--parallel")
 
     $exeName = if ($isWindowsHost) { "aot-tester.exe" } else { "aot-tester" }
     $nativeRunner = [System.IO.Path]::Combine($NativeBuildDir, "bin", $Configuration, $exeName)
