@@ -10,6 +10,16 @@ namespace leanclr
 namespace intrinsics
 {
 
+RtResult<const metadata::RtClass*> SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table(vm::RtObject* obj) noexcept
+{
+    if (obj == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    RET_OK(obj->klass);
+}
+
 RtResult<vm::RtReadOnlySpan<uint8_t>> SystemRuntimeCompilerServicesRuntimeHelpers::create_span(const metadata::RtMethodInfo* method,
                                                                                                const metadata::RtFieldInfo* field) noexcept
 {
@@ -53,6 +63,20 @@ RtResult<vm::RtReadOnlySpan<uint8_t>> SystemRuntimeCompilerServicesRuntimeHelper
     RET_OK(span);
 }
 
+/// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::GetMethodTable(System.Object)
+static RtResultVoid get_method_table_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                             const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    vm::RtObject* obj = interp::EvalStackOp::get_param<vm::RtObject*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, method_table,
+                                            SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table(obj));
+    interp::EvalStackOp::set_return(ret, method_table);
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::CreateSpan<>(System.RuntimeFieldHandle)
 static RtResultVoid create_span_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -67,6 +91,8 @@ static RtResultVoid create_span_invoker(metadata::RtManagedMethodPointer methodP
 }
 
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_runtimehelpers[] = {
+    {"System.Runtime.CompilerServices.RuntimeHelpers::GetMethodTable(System.Object)",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table, get_method_table_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::CreateSpan<>(System.RuntimeFieldHandle)",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::create_span, create_span_invoker},
 };

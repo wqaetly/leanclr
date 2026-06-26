@@ -41,6 +41,18 @@ RtResultVoid fn_interpreter_invoker(metadata::RtManagedMethodPointer method_poin
     RET_VOID_OK();
 }
 
+bool should_skip_legacy_il_internal_call(const metadata::RtMethodInfo* method) noexcept
+{
+    const metadata::RtClass* klass = method->parent;
+    if (!klass->image->is_corlib())
+    {
+        return false;
+    }
+
+    return std::strcmp(klass->namespaze, "System") == 0 && std::strcmp(klass->name, "Object") == 0 &&
+           std::strcmp(method->name, "GetType") == 0 && method->parameter_count == 0;
+}
+
 // Not implemented internal call invoker
 RtResultVoid fn_not_implemented_internal_call_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -224,10 +236,13 @@ RtResult<InvokeTypeAndMethod> Shim::get_invoker(const metadata::RtMethodInfo* me
     {
         // Try internal call first
 
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(const InternalCallRegistry*, icall_entry, InternalCalls::get_internal_call_by_method(method));
-        if (icall_entry)
+        if (!should_skip_legacy_il_internal_call(method))
         {
-            RET_OK(InvokeTypeAndMethod(RtInvokerType::InternalCall, icall_entry->invoker));
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(const InternalCallRegistry*, icall_entry, InternalCalls::get_internal_call_by_method(method));
+            if (icall_entry)
+            {
+                RET_OK(InvokeTypeAndMethod(RtInvokerType::InternalCall, icall_entry->invoker));
+            }
         }
 
         // Try intrinsic

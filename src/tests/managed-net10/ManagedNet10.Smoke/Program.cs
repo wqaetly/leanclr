@@ -23,6 +23,8 @@ internal readonly record struct Pair(int Left, int Right);
 
 internal static class Program
 {
+    private static Type? s_seenType;
+
     private static async Task Main()
     {
         TestBasics();
@@ -50,6 +52,50 @@ internal static class Program
         var pair = new Pair(19, 23);
         object boxed = pair;
         Require(boxed.GetType().Name == nameof(Pair), "boxing metadata failed");
+    }
+
+    private static void TestBoxOnly()
+    {
+        var pair = new Pair(19, 23);
+        object boxed = pair;
+        Require(boxed != null, "box object failed");
+    }
+
+    private static void TestBoxGetTypeOnly()
+    {
+        var pair = new Pair(19, 23);
+        object boxed = pair;
+        Require(boxed.GetType() != null, "boxed GetType failed");
+    }
+
+    private static void TestBoxGetTypeNoCompare()
+    {
+        var pair = new Pair(19, 23);
+        object boxed = pair;
+        boxed.GetType();
+    }
+
+    private static void TestTypeOfNoCompare()
+    {
+        _ = typeof(Pair);
+    }
+
+    private static void TestTypeOfKeepAlive()
+    {
+        s_seenType = typeof(Pair);
+        Require(s_seenType != null, "typeof keepalive failed");
+    }
+
+    private static void TestTypeOfNameOnly()
+    {
+        Require(typeof(Pair).Name == nameof(Pair), "typeof metadata name failed");
+    }
+
+    private static void TestBoxGetTypeNameOnly()
+    {
+        var pair = new Pair(19, 23);
+        object boxed = pair;
+        Require(boxed.GetType().Name == nameof(Pair), "boxed GetType name failed");
     }
 
     private static void TestGenericsDelegatesAndExceptions()

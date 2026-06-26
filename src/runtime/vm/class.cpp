@@ -1425,9 +1425,7 @@ RtResultVoid Class::setup_methods_typedef(metadata::RtClass* klass)
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtGenericContainer*, genericContainer, mod->get_generic_container(method->token));
         metadata::RtGenericContainerContext gcc{klass->generic_container, genericContainer};
 
-        auto retMethodSig = mod->read_method_sig(methodRow.signature, gcc, nullptr);
-        RET_ERR_ON_FAIL(retMethodSig);
-        const metadata::RtMethodSig& methodSig = retMethodSig.unwrap();
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtMethodSig, methodSig, mod->read_method_sig(methodRow.signature, gcc, nullptr));
         method->return_type = methodSig.return_type;
         size_t paramCount = methodSig.params.size();
         method->parameter_count = static_cast<uint16_t>(paramCount);
@@ -1777,7 +1775,9 @@ static RtResultVoid setup_methodimpl_vtable(metadata::RtClass* klass, const meta
                                                     method_impl_declaring_klass->image->get_method_by_token(decl_token, gcc, nullptr));
 
             if (!Method::is_virtual(declaration_method) || !Method::is_virtual(body_method))
-                RET_ASSERT_ERR(RtErr::BadImageFormat);
+            {
+                continue;
+            }
 
             const metadata::RtClass* declaration_klass = declaration_method->parent;
             uint16_t declaration_slot = declaration_method->slot;

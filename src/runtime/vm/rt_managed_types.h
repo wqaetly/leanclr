@@ -45,6 +45,8 @@ struct RtString : RtObject
 struct RtReflectionType
 {
     RtObject header;
+    RtObject* keepalive;
+    void* cache;
     const metadata::RtTypeSig* type_handle;
 };
 
@@ -52,9 +54,6 @@ struct RtReflectionType
 struct RtReflectionRuntimeType
 {
     RtReflectionType reflection_type;
-    RtObject* type_info;
-    RtObject* generic_cache;
-    RtObject* serialization_ctor;
 };
 
 using RtReflectionMonoType = RtReflectionRuntimeType;

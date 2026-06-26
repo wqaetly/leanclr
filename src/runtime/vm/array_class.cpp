@@ -470,8 +470,11 @@ RtResultVoid ArrayClass::setup_vtables(metadata::RtClass* klass)
         else
             RET_ASSERT_ERR(RtErr::BadImageFormat);
 
-        if (iface->vtable_count != method_list->size())
-            RET_ASSERT_ERR(RtErr::BadImageFormat);
+        if (method_list->size() == 0)
+        {
+            current_slot += iface->vtable_count;
+            continue;
+        }
 
         for (size_t j = 0; j < iface->vtable_count; ++j)
         {
@@ -490,7 +493,9 @@ RtResultVoid ArrayClass::setup_vtables(metadata::RtClass* klass)
                 }
             }
             if (!found)
-                RET_ASSERT_ERR(RtErr::BadImageFormat);
+            {
+                continue;
+            }
         }
         current_slot += iface->vtable_count;
     }

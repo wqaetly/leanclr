@@ -2,6 +2,7 @@
 
 #include "interp/eval_stack_op.h"
 #include "vm/rt_string.h"
+#include <cstring>
 
 namespace leanclr
 {
@@ -26,6 +27,24 @@ RtResult<int32_t> SystemString::get_hash_code(vm::RtString* str) noexcept
 {
     int32_t hash = str ? vm::String::get_hash_code(str) : 0;
     RET_OK(hash);
+}
+
+RtResult<bool> SystemString::equals(vm::RtString* left, vm::RtString* right) noexcept
+{
+    if (left == right)
+    {
+        RET_OK(true);
+    }
+    if (left == nullptr || right == nullptr)
+    {
+        RET_OK(false);
+    }
+    if (left->length != right->length)
+    {
+        RET_OK(false);
+    }
+
+    RET_OK(std::memcmp(vm::String::get_chars_ptr(left), vm::String::get_chars_ptr(right), static_cast<size_t>(left->length) * sizeof(Utf16Char)) == 0);
 }
 
 /// @intrinsic: System.String::get_Chars
@@ -61,11 +80,27 @@ static RtResultVoid get_hash_code_invoker(metadata::RtManagedMethodPointer metho
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.String::Equals(System.String,System.String)
+static RtResultVoid equals_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
+                                   interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    auto left = interp::EvalStackOp::get_param<vm::RtString*>(params, 0);
+    auto right = interp::EvalStackOp::get_param<vm::RtString*>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemString::equals(left, right));
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 // Intrinsic registry
 static vm::IntrinsicEntry s_intrinsic_entries_system_string[] = {
     {"System.String::get_Chars", (vm::IntrinsicFunction)&SystemString::get_chars, get_chars_invoker},
     {"System.String::get_Length", (vm::IntrinsicFunction)&SystemString::get_length, get_length_invoker_intrinsics_system_string},
     {"System.String::GetHashCode", (vm::IntrinsicFunction)&SystemString::get_hash_code, get_hash_code_invoker},
+    {"System.String::Equals(System.String,System.String)", (vm::IntrinsicFunction)&SystemString::equals, equals_invoker},
+    {"System.String::op_Equality(System.String,System.String)", (vm::IntrinsicFunction)&SystemString::equals, equals_invoker},
     // redirected to intrinsic
     {"System.String::GetLegacyNonRandomizedHashCode", (vm::IntrinsicFunction)&SystemString::get_hash_code, get_hash_code_invoker},
 };

@@ -435,6 +435,14 @@ vm::RtException* get_exception_in_last_throw_flow(InterpFrame* frame, uint32_t i
         }                                                                                      \
     }
 
+#define TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(klass)                                           \
+    {                                                                                          \
+        if (vm::Class::is_cctor_not_finished(klass) && !vm::Class::is_before_field_init(klass)) \
+        {                                                                                      \
+            HANDLE_RAISE_RUNTIME_ERROR_VOID(vm::Runtime::run_class_static_constructor(klass)); \
+        }                                                                                      \
+    }
+
 #define ENTER_INTERP_FRAME(_method, _frame_base_idx, _next_ip)                                                    \
     frame->save(_next_ip);                                                                                        \
     HANDLE_RAISE_RUNTIME_ERROR2(frame, ms.enter_frame_from_interp(_method, eval_stack_base + (_frame_base_idx))); \
@@ -3332,7 +3340,7 @@ method_start:
                 const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                 if (vm::Method::is_static(target_method))
                 {
-                    TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                    TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                 }
                 const uint8_t* next_ip = reinterpret_cast<const uint8_t*>(ir + 1);
                 ENTER_INTERP_FRAME(target_method, ir->frame_base, next_ip);
@@ -3372,7 +3380,7 @@ method_start:
                 const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                 if (vm::Method::is_static(target_method))
                 {
-                    TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                    TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                 }
                 ip = reinterpret_cast<const uint8_t*>(ir + 1);
                 RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -3385,7 +3393,7 @@ method_start:
                 const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                 if (vm::Method::is_static(target_method))
                 {
-                    TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                    TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                 }
                 ip = reinterpret_cast<const uint8_t*>(ir + 1);
                 RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -3398,7 +3406,7 @@ method_start:
                 const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                 if (vm::Method::is_static(target_method))
                 {
-                    TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                    TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                 }
                 ip = reinterpret_cast<const uint8_t*>(ir + 1);
                 RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -3411,7 +3419,7 @@ method_start:
                 const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                 if (vm::Method::is_static(target_method))
                 {
-                    TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                    TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                 }
                 ip = reinterpret_cast<const uint8_t*>(ir + 1);
                 RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -3424,7 +3432,7 @@ method_start:
                 const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                 if (vm::Method::is_static(target_method))
                 {
-                    TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                    TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                 }
                 ip = reinterpret_cast<const uint8_t*>(ir + 1);
                 RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -3491,7 +3499,7 @@ method_start:
             LEANCLR_CASE_BEGIN0(NewObjInternalCallShort)
             {
                 const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
-                TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                 vm::InternalCallInvoker invoker = vm::InternalCalls::get_internal_call_invoker_by_id_unchecked(ir->invoker_idx);
                 RtStackObject* frame_base = eval_stack_base + ir->frame_base;
                 HANDLE_RAISE_RUNTIME_ERROR_VOID(invoker(target_method->method_ptr, target_method, frame_base, frame_base));
@@ -3500,7 +3508,7 @@ method_start:
             LEANCLR_CASE_BEGIN0(NewObjIntrinsicShort)
             {
                 const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
-                TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                 vm::InternalCallInvoker invoker = vm::Intrinsics::get_intrinsic_invoker_by_id_unchecked(ir->invoker_idx);
                 RtStackObject* frame_base = eval_stack_base + ir->frame_base;
                 HANDLE_RAISE_RUNTIME_ERROR_VOID(invoker(target_method->method_ptr, target_method, frame_base, frame_base));
@@ -6186,7 +6194,7 @@ method_start:
                         const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                         if (vm::Method::is_static(target_method))
                         {
-                            TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                            TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                         }
                         const uint8_t* next_ip = reinterpret_cast<const uint8_t*>(ir + 1);
                         ENTER_INTERP_FRAME(target_method, ir->frame_base, next_ip);
@@ -6226,7 +6234,7 @@ method_start:
                         const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                         if (vm::Method::is_static(target_method))
                         {
-                            TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                            TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                         }
                         ip = reinterpret_cast<const uint8_t*>(ir + 1);
                         RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -6239,7 +6247,7 @@ method_start:
                         const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                         if (vm::Method::is_static(target_method))
                         {
-                            TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                            TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                         }
                         ip = reinterpret_cast<const uint8_t*>(ir + 1);
                         RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -6252,7 +6260,7 @@ method_start:
                         const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                         if (vm::Method::is_static(target_method))
                         {
-                            TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                            TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                         }
                         ip = reinterpret_cast<const uint8_t*>(ir + 1);
                         RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -6265,7 +6273,7 @@ method_start:
                         const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                         if (vm::Method::is_static(target_method))
                         {
-                            TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                            TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                         }
                         ip = reinterpret_cast<const uint8_t*>(ir + 1);
                         RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -6278,7 +6286,7 @@ method_start:
                         const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
                         if (vm::Method::is_static(target_method))
                         {
-                            TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                            TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                         }
                         ip = reinterpret_cast<const uint8_t*>(ir + 1);
                         RtStackObject* frame_base = eval_stack_base + ir->frame_base;
@@ -6347,7 +6355,7 @@ method_start:
                     LEANCLR_CASE_BEGIN1(NewObjInternalCall)
                     {
                         const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
-                        TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                        TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                         vm::InternalCallInvoker invoker = vm::InternalCalls::get_internal_call_invoker_by_id_unchecked(ir->invoker_idx);
                         RtStackObject* frame_base = eval_stack_base + ir->frame_base;
                         HANDLE_RAISE_RUNTIME_ERROR_VOID(invoker(target_method->method_ptr, target_method, frame_base, frame_base));
@@ -6356,7 +6364,7 @@ method_start:
                     LEANCLR_CASE_BEGIN1(NewObjIntrinsic)
                     {
                         const metadata::RtMethodInfo* target_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
-                        TRY_RUN_CLASS_STATIC_CCTOR(target_method->parent);
+                        TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                         vm::InternalCallInvoker invoker = vm::Intrinsics::get_intrinsic_invoker_by_id_unchecked(ir->invoker_idx);
                         RtStackObject* frame_base = eval_stack_base + ir->frame_base;
                         HANDLE_RAISE_RUNTIME_ERROR_VOID(invoker(target_method->method_ptr, target_method, frame_base, frame_base));
