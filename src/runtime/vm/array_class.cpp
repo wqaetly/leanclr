@@ -152,6 +152,25 @@ static RtResult<const RtMethodInfo*> build_array_generic_method(RtClass* klass, 
     RET_OK(new_method);
 }
 
+static bool is_net10_array_interface_count_method(const char* iface_name, const char* method_name)
+{
+    return std::strcmp(method_name, "get_Count") == 0 &&
+           (std::strcmp(iface_name, "ICollection`1") == 0 || std::strcmp(iface_name, "IReadOnlyCollection`1") == 0);
+}
+
+static RtResult<const RtMethodInfo*> build_net10_array_interface_count_method(RtClass* klass, const char* iface_name)
+{
+    const CorLibTypes& corlib = Class::get_corlib_types();
+
+    Utf8StringBuilder sb(128);
+    sb.append_cstr("System.Collections.Generic.");
+    sb.append_cstr(iface_name);
+    sb.append_cstr(".get_Count");
+    const char* method_name = sb.dup_zero_terminated_chars();
+
+    return build_array_method(klass, method_name, corlib.cls_int32->by_val, nullptr, 0);
+}
+
 // Initialize array interface methods from System.Array
 RtResultVoid ArrayClass::initialize_array_interface_methods()
 {
@@ -470,12 +489,6 @@ RtResultVoid ArrayClass::setup_vtables(metadata::RtClass* klass)
         else
             RET_ASSERT_ERR(RtErr::BadImageFormat);
 
-        if (method_list->size() == 0)
-        {
-            current_slot += iface->vtable_count;
-            continue;
-        }
-
         for (size_t j = 0; j < iface->vtable_count; ++j)
         {
             metadata::RtVirtualInvokeData* entry = new_vtables + current_slot + j;
@@ -491,6 +504,13 @@ RtResultVoid ArrayClass::setup_vtables(metadata::RtClass* klass)
                     found = true;
                     break;
                 }
+            }
+            if (!found && is_net10_array_interface_count_method(iface_name, method_name))
+            {
+                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, final_m,
+                                                        build_net10_array_interface_count_method(klass, iface_name));
+                entry->method_impl = final_m;
+                found = true;
             }
             if (!found)
             {

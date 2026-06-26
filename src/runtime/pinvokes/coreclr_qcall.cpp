@@ -1044,6 +1044,62 @@ RtResultVoid signature_init_invoker(metadata::RtManagedMethodPointer, const meta
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_method_handle_get_method_body_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto method = interp::EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    (void)interp::EvalStackOp::get_param<void*>(params, 1);
+    (void)interp::EvalStackOp::get_param<void*>(params, 2);
+    auto result = interp::EvalStackOp::get_param<vm::RtReflectionMethodBody**>(params, 3);
+
+    if (result == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethodBody*, body, vm::Method::create_reflection_method_body(method));
+    *result = body;
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_method_handle_invoke_method_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                         const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto target_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    auto args = interp::EvalStackOp::get_param<void**>(params, 1);
+    auto signature_slot = interp::EvalStackOp::get_param<vm::RtSignature**>(params, 2);
+    bool is_constructor = interp::EvalStackOp::get_param<int32_t>(params, 3) != 0;
+    auto result_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 4);
+
+    if (signature_slot == nullptr || *signature_slot == nullptr || result_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    vm::RtSignature* signature = *signature_slot;
+    const metadata::RtMethodInfo* method = signature->method;
+    if (method == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+    if (is_constructor || method->parameter_count != 0 || args != nullptr)
+    {
+        RET_ERR(RtErr::NotSupported);
+    }
+
+    vm::RtObject* exception = nullptr;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, result,
+                                            vm::Reflection::invoke_method(method, target_slot != nullptr ? *target_slot : nullptr, nullptr, &exception));
+    if (exception != nullptr)
+    {
+        vm::Exception::set_current_exception(reinterpret_cast<vm::RtException*>(exception));
+        RET_ERR(RtErr::ManagedException);
+    }
+
+    *result_slot = result;
+    RET_VOID_OK();
+}
+
 } // namespace
 
 void register_coreclr_qcall_pinvokes() noexcept
@@ -1190,6 +1246,15 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.Signature::Init(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Void*,System.Int32,System.RuntimeFieldHandleInternal,System.RuntimeMethodHandleInternal)",
         nullptr, signature_init_invoker);
     vm::PInvokes::register_pinvoke("System.Signature::Init", nullptr, signature_init_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeMethodHandle::GetMethodBody(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, runtime_method_handle_get_method_body_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeMethodHandle::GetMethodBody", nullptr, runtime_method_handle_get_method_body_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeMethodHandle::InvokeMethod(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Void**,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Boolean,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, runtime_method_handle_invoke_method_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeMethodHandle::InvokeMethod", nullptr, runtime_method_handle_invoke_method_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeMethodHandle_InvokeMethod", nullptr, runtime_method_handle_invoke_method_invoker);
 }
 
 } // namespace pinvokes

@@ -406,6 +406,22 @@ RtResultVoid Array::szarray_address_invoker(metadata::RtManagedMethodPointer met
     RET_VOID_OK();
 }
 
+RtResultVoid Array::szarray_interface_count_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
+                                                    const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    assert(method && params && ret);
+    assert(method->parameter_count == 0);
+
+    RtArray* arr = interp::EvalStackOp::get_param<RtArray*>(params, 0);
+    if (arr == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    interp::EvalStackOp::set_return(ret, get_array_length(arr));
+    RET_VOID_OK();
+}
+
 RtResultVoid Array::newmdarray_lengths_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {

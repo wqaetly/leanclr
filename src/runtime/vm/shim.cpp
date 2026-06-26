@@ -112,6 +112,13 @@ RtResultVoid fn_not_implemented_invoker(metadata::RtManagedMethodPointer method_
     RETURN_NOT_IMPLEMENTED_ERROR();
 }
 
+bool is_array_interface_count_method(const char* method_name) noexcept
+{
+    return std::strcmp(method_name, "get_Count") == 0 ||
+           std::strcmp(method_name, "System.Collections.Generic.ICollection`1.get_Count") == 0 ||
+           std::strcmp(method_name, "System.Collections.Generic.IReadOnlyCollection`1.get_Count") == 0;
+}
+
 // Method pointer placeholder
 void fn_not_implemented_method_pointer() noexcept
 {
@@ -153,6 +160,11 @@ static metadata::RtInvokeMethodPointer try_setup_array_or_szarray_invoke(const m
         {
             assert(param_count == 1);
             return Array::szarray_address_invoker;
+        }
+        else if (is_array_interface_count_method(method_name))
+        {
+            assert(param_count == 0);
+            return Array::szarray_interface_count_invoker;
         }
         else
         {

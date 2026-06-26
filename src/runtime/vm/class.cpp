@@ -135,9 +135,23 @@ RtResultVoid Class::init_corlib_classes(metadata::RtModuleDef* corlib)
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_event, get_class_must_exist(corlib, "System.Reflection.RuntimeEventInfo"));
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_parameter, get_class_must_exist(corlib, "System.Reflection.RuntimeParameterInfo"));
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_memberinfo, get_class_must_exist(corlib, "System.Reflection.MemberInfo"));
-    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_methodbody, get_class_must_exist(corlib, "System.Reflection.MethodBody"));
-    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_exceptionhandlingclause, get_class_must_exist(corlib, "System.Reflection.ExceptionHandlingClause"));
-    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_localvariableinfo, get_class_must_exist(corlib, "System.Reflection.LocalVariableInfo"));
+    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_methodbody, get_class_optional(corlib, "System.Reflection.RuntimeMethodBody"));
+    if (t.cls_reflection_methodbody == nullptr)
+    {
+        UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_methodbody, get_class_must_exist(corlib, "System.Reflection.MethodBody"));
+    }
+    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_exceptionhandlingclause,
+                              get_class_optional(corlib, "System.Reflection.RuntimeExceptionHandlingClause"));
+    if (t.cls_reflection_exceptionhandlingclause == nullptr)
+    {
+        UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_exceptionhandlingclause,
+                                  get_class_must_exist(corlib, "System.Reflection.ExceptionHandlingClause"));
+    }
+    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_localvariableinfo, get_class_optional(corlib, "System.Reflection.RuntimeLocalVariableInfo"));
+    if (t.cls_reflection_localvariableinfo == nullptr)
+    {
+        UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_localvariableinfo, get_class_must_exist(corlib, "System.Reflection.LocalVariableInfo"));
+    }
 
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_appdomain, get_class_must_exist(corlib, "System.AppDomain"));
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_appdomain_setup, get_class_must_exist(corlib, "System.AppDomainSetup"));
@@ -2467,7 +2481,8 @@ bool Class::is_assignable_from_generic_parameter_convariant0(const metadata::RtC
         {
             continue;
         }
-        if ((generic_param->flags & (uint16_t)metadata::RtGenericParamAttribute::VarianceMask) == 0)
+        uint16_t variance = generic_param->flags & (uint16_t)metadata::RtGenericParamAttribute::VarianceMask;
+        if (variance == 0 && !implemented_in_array)
         {
             return false;
         }
@@ -2486,6 +2501,22 @@ bool Class::is_assignable_from_generic_parameter_convariant0(const metadata::RtC
         }
         const metadata::RtClass* from_arg_class = ret_from_arg_class.unwrap();
         const metadata::RtClass* to_arg_class = ret_to_arg_class.unwrap();
+        if (variance == 0)
+        {
+            assert(implemented_in_array);
+            if (is_value_type(from_arg_class) || is_value_type(to_arg_class))
+            {
+                if (ArrayClass::get_array_variance_reduce_type(from_arg_class) != ArrayClass::get_array_variance_reduce_type(to_arg_class))
+                {
+                    return false;
+                }
+            }
+            else if (!is_assignable_from(from_arg_class, to_arg_class))
+            {
+                return false;
+            }
+            continue;
+        }
         if (is_value_type(from_arg_class) || is_value_type(to_arg_class))
         {
             if (implemented_in_array)

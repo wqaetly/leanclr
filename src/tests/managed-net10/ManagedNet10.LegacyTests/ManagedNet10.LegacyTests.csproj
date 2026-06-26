@@ -14,6 +14,7 @@
     <Compile Include="ArrayBoxingTestEntries.cs" />
     <Compile Include="CompareTestEntries.cs" />
     <Compile Include="ConvertTestEntries.cs" />
+    <Compile Include="ExceptionTestEntries.cs" />
     <Compile Include="LegacyTestRunner.cs" />
     <Compile Include="MemoryTestEntries.cs" />
     <Compile Include="ObjectMiscTestEntries.cs" />
@@ -66,6 +67,7 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt.cs" Link="Instructions\Compare\TC_Clt.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt_un.cs" Link="Instructions\Compare\TC_Clt_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\*.cs" LinkBase="Instructions\Converts" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Exceptions\*.cs" LinkBase="Instructions\Exceptions" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Memory\*.cs" LinkBase="Instructions\Memory" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Misc\*.cs" LinkBase="Instructions\Misc" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Objects\*.cs" LinkBase="Instructions\Objects" />

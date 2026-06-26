@@ -93,6 +93,7 @@ struct RtReflectionMethod
 
 using RtReflectionGenericMethod = RtReflectionMethod;
 using RtReflectionConstructor = RtReflectionMethod;
+struct RtReflectionMethodBody;
 
 // Mono method info
 struct RtMonoMethodInfo
@@ -526,32 +527,34 @@ struct RtStackFrame : public RtObject
 // Reflection exception handling clause
 struct RtReflectionExceptionHandlingClause : public RtObject
 {
-    RtReflectionType* catch_type;
-    int32_t filter_offset;
+    RtReflectionMethodBody* method_body;
     int32_t flags;
     int32_t try_offset;
     int32_t try_length;
     int32_t handler_offset;
     int32_t handler_length;
+    int32_t catch_metadata_token;
+    int32_t filter_offset;
 };
 
 // Reflection local variable info
 struct RtReflectionLocalVariableInfo : public RtObject
 {
     RtReflectionType* type_;
+    int32_t position;
     bool is_pinned;
-    uint16_t position;
 };
 
 // Reflection method body
 struct RtReflectionMethodBody : public RtObject
 {
+    RtArray* codes;
     RtArray* clauses;
     RtArray* locals;
-    RtArray* codes;
-    bool init_locals;
+    RtReflectionMethod* method_base;
     int32_t sig_token;
     int32_t max_stack;
+    bool init_locals;
 };
 
 // Reflection mono event info

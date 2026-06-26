@@ -15,6 +15,22 @@ namespace leanclr
 {
 namespace icalls
 {
+namespace
+{
+struct RtMethodBaseInvoker : public vm::RtObject
+{
+    vm::RtSignature* signature;
+    vm::RtObject* invoke_func_obj_span_args;
+    vm::RtObject* invoke_func_ref_args;
+    int32_t strategy;
+    int32_t invocation_flags;
+    vm::RtArray* invoker_arg_flags;
+    vm::RtArray* arg_types;
+    vm::RtObject* method;
+    int32_t arg_count;
+    bool needs_by_ref_strategy;
+};
+} // namespace
 
 RtResult<vm::RtReflectionMethodBody*> SystemReflectionRuntimeMethodInfo::get_method_body_internal(const metadata::RtMethodInfo* method) noexcept
 {
@@ -327,6 +343,26 @@ static RtResultVoid get_method_body_internal_invoker(metadata::RtManagedMethodPo
     RET_VOID_OK();
 }
 
+/// @icall: System.Reflection.RuntimeMethodInfo::GetMethodBody()
+static RtResultVoid get_method_body_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                            interp::RtStackObject* ret) noexcept
+{
+    auto ref_method = EvalStackOp::get_param<vm::RtReflectionMethod*>(params, 0);
+    if (ref_method == nullptr || ref_method->method == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethodBody*, body,
+                                            SystemReflectionRuntimeMethodInfo::get_method_body_internal(ref_method->method));
+    if (body != nullptr)
+    {
+        body->method_base = ref_method;
+    }
+    EvalStackOp::set_return(ret, body);
+    RET_VOID_OK();
+}
+
 /// @icall: System.Reflection.RuntimeMethodInfo::GetMethodFromHandleInternalType_native
 static RtResultVoid get_method_from_handle_internal_type_native_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -467,10 +503,43 @@ static RtResultVoid get_pinvoke_invoker(metadata::RtManagedMethodPointer methodP
     RET_VOID_OK();
 }
 
+/// @icall: System.Reflection.MethodBaseInvoker::InterpretedInvoke_Method(System.Object,System.IntPtr*)
+static RtResultVoid method_base_invoker_interpreted_invoke_method_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto invoker = EvalStackOp::get_param<RtMethodBaseInvoker*>(params, 0);
+    auto obj = EvalStackOp::get_param<vm::RtObject*>(params, 1);
+    auto args = EvalStackOp::get_param<void**>(params, 2);
+
+    if (invoker == nullptr || invoker->signature == nullptr || invoker->signature->method == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    const metadata::RtMethodInfo* target_method = invoker->signature->method;
+    if (target_method->parameter_count != 0 || invoker->arg_count != 0 || args != nullptr)
+    {
+        RET_ERR(RtErr::NotSupported);
+    }
+
+    vm::RtObject* exception = nullptr;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, result, vm::Reflection::invoke_method(target_method, obj, nullptr, &exception));
+    if (exception != nullptr)
+    {
+        vm::Exception::set_current_exception(reinterpret_cast<vm::RtException*>(exception));
+        RET_ERR(RtErr::ManagedException);
+    }
+
+    EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 // Internal call registry
 static vm::InternalCallEntry s_internal_call_entries_system_reflection_runtimemethodinfo[] = {
     {"System.Reflection.RuntimeMethodInfo::GetMethodBodyInternal(System.IntPtr)",
      (vm::InternalCallFunction)&SystemReflectionRuntimeMethodInfo::get_method_body_internal, get_method_body_internal_invoker},
+    {"System.Reflection.RuntimeMethodInfo::GetMethodBody()", nullptr, get_method_body_invoker},
+    {"System.Reflection.RuntimeMethodInfo::GetMethodBody", nullptr, get_method_body_invoker},
     {"System.Reflection.RuntimeMethodInfo::GetMethodFromHandleInternalType_native",
      (vm::InternalCallFunction)&SystemReflectionRuntimeMethodInfo::get_method_from_handle_internal_type_native,
      get_method_from_handle_internal_type_native_invoker},
@@ -496,6 +565,9 @@ static vm::InternalCallEntry s_internal_call_entries_system_reflection_runtimeme
      (vm::InternalCallFunction)&SystemReflectionRuntimeMethodInfo::invoke, invoke_invoker},
     {"System.Reflection.RuntimeMethodInfo::GetPInvoke(System.Reflection.PInvokeAttributes&,System.String&,System.String&)",
      (vm::InternalCallFunction)&SystemReflectionRuntimeMethodInfo::get_pinvoke, get_pinvoke_invoker},
+    {"System.Reflection.MethodBaseInvoker::InterpretedInvoke_Method(System.Object,System.IntPtr*)", nullptr,
+     method_base_invoker_interpreted_invoke_method_invoker},
+    {"System.Reflection.MethodBaseInvoker::InterpretedInvoke_Method", nullptr, method_base_invoker_interpreted_invoke_method_invoker},
 };
 
 utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeMethodInfo::get_internal_call_entries() noexcept

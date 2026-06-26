@@ -808,20 +808,21 @@ RtResult<std::optional<RtMethodBody>> Method::get_method_body(const RtMethodInfo
 static RtResult<RtReflectionExceptionHandlingClause*> create_reflection_exceptionhandlingclause(RtModuleDef* mod,
                                                                                                 const metadata::RtGenericContainerContext& gcc,
                                                                                                 const metadata::RtGenericContext* gc,
+                                                                                                RtReflectionMethodBody* method_body,
                                                                                                 const metadata::RtExceptionClause& clause)
 {
     metadata::RtClass* cls_exceptionhandlingclause = Class::get_corlib_types().cls_reflection_exceptionhandlingclause;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, clause_obj_base, LEANCLR_NEWOBJ_INTERNAL(cls_exceptionhandlingclause, "Method::create_reflection_exceptionhandlingclause"));
     RtReflectionExceptionHandlingClause* clause_obj = static_cast<RtReflectionExceptionHandlingClause*>(clause_obj_base);
 
+    clause_obj->method_body = method_body;
     if (clause.flags == metadata::RtILExceptionClauseType::Exception)
     {
         if (clause.class_token_or_filter_offset != 0)
         {
             metadata::RtToken token = metadata::RtToken::decode(clause.class_token_or_filter_offset);
-            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, catch_klass, mod->get_class_by_type_def_ref_spec_token(token, gcc, gc));
-            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, catch_type, Reflection::get_klass_reflection_object(catch_klass));
-            clause_obj->catch_type = catch_type;
+            RET_ERR_ON_FAIL(mod->get_class_by_type_def_ref_spec_token(token, gcc, gc));
+            clause_obj->catch_metadata_token = static_cast<int32_t>(clause.class_token_or_filter_offset);
         }
     }
     else if (clause.flags == metadata::RtILExceptionClauseType::Filter)
@@ -886,7 +887,7 @@ RtResult<RtReflectionMethodBody*> Method::create_reflection_method_body(const Rt
     {
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
             RtReflectionExceptionHandlingClause*, ex_clause_obj,
-            create_reflection_exceptionhandlingclause(mod, generic_container_context, generic_context, raw_exception_clauses[i]));
+            create_reflection_exceptionhandlingclause(mod, generic_container_context, generic_context, method_body_obj, raw_exception_clauses[i]));
         Array::set_array_data_at<RtObject*>(clause_arr, static_cast<int32_t>(i), ex_clause_obj);
     }
     method_body_obj->clauses = clause_arr;

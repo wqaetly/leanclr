@@ -247,6 +247,12 @@ RtResult<vm::RtObject*> SystemRuntimeMethodHandle::get_loader_allocator(const me
     RET_OK(nullptr);
 }
 
+static RtResult<vm::RtReflectionMethodBody*> get_method_body(const void* method_arg) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
+    return vm::Method::create_reflection_method_body(method);
+}
+
 /// @icall: System.RuntimeMethodHandle::GetFunctionPointer(System.IntPtr)
 static RtResultVoid get_function_pointer_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                  interp::RtStackObject* ret) noexcept
@@ -431,6 +437,16 @@ static RtResultVoid get_loader_allocator_invoker(metadata::RtManagedMethodPointe
     RET_VOID_OK();
 }
 
+/// @icall: System.RuntimeMethodHandle::GetMethodBody(System.IRuntimeMethodInfo,System.RuntimeType)
+static RtResultVoid get_method_body_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                            interp::RtStackObject* ret) noexcept
+{
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethodBody*, body, get_method_body(method_arg));
+    EvalStackOp::set_return(ret, body);
+    RET_VOID_OK();
+}
+
 static vm::InternalCallEntry s_internal_call_entries_system_runtimemethodhandle[] = {
     {"System.RuntimeMethodHandle::GetFunctionPointer(System.IntPtr)", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_function_pointer,
      get_function_pointer_invoker},
@@ -458,6 +474,8 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimemethodhandle[
     {"System.RuntimeMethodHandle::GetResolver", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_resolver, get_resolver_invoker},
     {"System.RuntimeMethodHandle::GetLoaderAllocatorInternal", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_loader_allocator,
      get_loader_allocator_invoker},
+    {"System.RuntimeMethodHandle::GetMethodBody(System.IRuntimeMethodInfo,System.RuntimeType)", nullptr, get_method_body_invoker},
+    {"System.RuntimeMethodHandle::GetMethodBody", nullptr, get_method_body_invoker},
 };
 
 utils::Span<vm::InternalCallEntry> SystemRuntimeMethodHandle::get_internal_call_entries() noexcept
