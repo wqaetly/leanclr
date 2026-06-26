@@ -10,6 +10,26 @@ namespace icalls
 {
 namespace
 {
+struct RtRuntimeMethodInfoStub : public vm::RtObject
+{
+    vm::RtObject* keep_alive;
+    vm::RtObject* a;
+    vm::RtObject* b;
+    vm::RtObject* c;
+    vm::RtObject* d;
+    vm::RtObject* e;
+    vm::RtObject* f;
+    vm::RtObject* g;
+    vm::RtObject* h;
+    const metadata::RtMethodInfo* value;
+};
+
+bool is_type_named(const metadata::RtClass* klass, const char* namespaze, const char* name) noexcept
+{
+    return klass != nullptr && klass->namespaze != nullptr && klass->name != nullptr && std::strcmp(klass->namespaze, namespaze) == 0 &&
+           std::strcmp(klass->name, name) == 0;
+}
+
 RtResult<const metadata::RtMethodInfo*> get_method_from_handle_arg(const void* method_arg) noexcept
 {
     if (method_arg == nullptr)
@@ -27,6 +47,15 @@ RtResult<const metadata::RtMethodInfo*> get_method_from_handle_arg(const void* m
             RET_ERR(RtErr::ArgumentNull);
         }
         RET_OK(ref_method->method);
+    }
+    if (is_type_named(obj->klass, "System", "RuntimeMethodInfoStub"))
+    {
+        auto stub = reinterpret_cast<const RtRuntimeMethodInfoStub*>(method_arg);
+        if (stub->value == nullptr)
+        {
+            RET_ERR(RtErr::ArgumentNull);
+        }
+        RET_OK(stub->value);
     }
 
     RET_OK(reinterpret_cast<const metadata::RtMethodInfo*>(method_arg));
@@ -151,14 +180,14 @@ RtResult<int32_t> SystemRuntimeMethodHandle::get_generic_parameter_count(const m
     RET_OK(static_cast<int32_t>(vm::Method::get_generic_param_count(method)));
 }
 
-RtResult<bool> SystemRuntimeMethodHandle::is_typical_method_definition(const vm::RtReflectionMethod* method) noexcept
+RtResult<bool> SystemRuntimeMethodHandle::is_typical_method_definition(const metadata::RtMethodInfo* method) noexcept
 {
-    if (method == nullptr || method->method == nullptr)
+    if (method == nullptr)
     {
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    RET_OK(method->method->generic_method == nullptr);
+    RET_OK(method->generic_method == nullptr);
 }
 
 RtResult<const metadata::RtMethodInfo*> SystemRuntimeMethodHandle::get_stub_if_needed(
@@ -332,7 +361,7 @@ static RtResultVoid is_typical_method_definition_invoker(metadata::RtManagedMeth
                                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
     auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const vm::RtReflectionMethod*, method, get_reflection_method_from_arg(method_arg));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeMethodHandle::is_typical_method_definition(method));
     EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();

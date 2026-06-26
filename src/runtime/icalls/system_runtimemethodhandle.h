@@ -22,7 +22,7 @@ class SystemRuntimeMethodHandle
     static RtResult<bool> has_method_instantiation(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<bool> is_generic_method_definition(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<int32_t> get_generic_parameter_count(const metadata::RtMethodInfo* method) noexcept;
-    static RtResult<bool> is_typical_method_definition(const vm::RtReflectionMethod* method) noexcept;
+    static RtResult<bool> is_typical_method_definition(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<const metadata::RtMethodInfo*> get_stub_if_needed(const metadata::RtMethodInfo* method,
                                                                       const vm::RtReflectionRuntimeType* declaring_type) noexcept;
     static RtResult<const metadata::RtMethodInfo*> get_method_from_canonical(const metadata::RtMethodInfo* method,

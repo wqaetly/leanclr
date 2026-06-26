@@ -1,6 +1,7 @@
 #include "coreclr_qcall.h"
 
 #include "interp/eval_stack_op.h"
+#include "interp/machine_state.h"
 #include "metadata/metadata_name.h"
 #include "metadata/metadata_cache.h"
 #include "metadata/module_def.h"
@@ -46,6 +47,38 @@ struct RtOsVersionInfoEx
     uint16_t wSuiteMask;
     uint8_t wProductType;
     uint8_t wReserved;
+};
+
+struct RtStackFrameHelper : public vm::RtObject
+{
+    vm::RtArray* rgi_offset;
+    vm::RtArray* rgi_il_offset;
+    vm::RtObject* dynamic_methods;
+    vm::RtArray* rg_method_handle;
+    vm::RtArray* rg_assembly_path;
+    vm::RtArray* rg_assembly;
+    vm::RtArray* rg_loaded_pe_address;
+    vm::RtArray* rgi_loaded_pe_size;
+    vm::RtArray* rgi_is_file_layout;
+    vm::RtArray* rg_in_memory_pdb_address;
+    vm::RtArray* rgi_in_memory_pdb_size;
+    vm::RtArray* rgi_method_token;
+    vm::RtArray* rg_filename;
+    vm::RtArray* rgi_line_number;
+    vm::RtArray* rgi_column_number;
+    vm::RtArray* rgi_last_frame_from_foreign_exception_stack_trace;
+    int32_t frame_count;
+};
+
+struct StackFrameData
+{
+    const metadata::RtMethodInfo* method;
+    int32_t native_offset;
+    int32_t il_offset;
+    vm::RtString* file_name;
+    int32_t line_number;
+    int32_t column_number;
+    bool is_last_frame_from_foreign_exception_stack_trace;
 };
 
 RtResult<const metadata::RtTypeSig*> get_type_sig_from_qcall_type_handle(void* qcall_type_handle, void* native_handle) noexcept
@@ -493,6 +526,144 @@ RtResult<vm::RtObject*> create_instance_for_generic_parameters(void* qcall_type_
     RET_OK(obj);
 }
 
+bool is_diagnostics_stack_frame(const interp::InterpFrame* frame) noexcept
+{
+    const metadata::RtMethodInfo* method = frame->method;
+    return method != nullptr && method->parent != nullptr && method->parent->namespaze != nullptr &&
+           std::strcmp(method->parent->namespaze, "System.Diagnostics") == 0;
+}
+
+RtResultVoid collect_current_thread_stack_frames(bool need_file_info, utils::Vector<StackFrameData>& result) noexcept
+{
+    auto& ms = interp::MachineState::get_global_machine_state();
+    auto frames = ms.get_active_frames();
+
+    utils::Vector<StackFrameData> collected;
+    for (size_t i = 0; i < frames.size(); ++i)
+    {
+        const interp::InterpFrame* frame = &frames[i];
+        if (is_diagnostics_stack_frame(frame))
+        {
+            continue;
+        }
+
+        const metadata::RtMethodInfo* method = frame->method;
+        StackFrameData data{method, -1, -1, nullptr, 0, 0, false};
+        if (method != nullptr && method->interp_data != nullptr && frame->ip != nullptr)
+        {
+            data.il_offset = static_cast<int32_t>(frame->ip - method->interp_data->codes);
+            metadata::PdbImage* pdb_image = method->parent->image->get_pdb_image();
+            if (need_file_info && pdb_image != nullptr)
+            {
+                const char* pdb_file_name = nullptr;
+                pdb_image->get_debug_info_for_method(method, data.il_offset, &data.il_offset, &pdb_file_name, &data.line_number, &data.column_number);
+                data.file_name = pdb_file_name != nullptr ? vm::String::create_string_from_utf8cstr(pdb_file_name) : nullptr;
+            }
+        }
+        collected.push_back(data);
+    }
+
+    for (size_t i = collected.size(); i > 0; --i)
+    {
+        result.push_back(collected[i - 1]);
+    }
+
+    RET_VOID_OK();
+}
+
+RtResultVoid collect_exception_stack_frames(vm::RtException* exception, utils::Vector<StackFrameData>& result) noexcept
+{
+    if (exception == nullptr || exception->trace_ips == nullptr)
+    {
+        RET_VOID_OK();
+    }
+
+    int32_t frame_count = vm::Array::get_array_length(exception->trace_ips);
+    for (int32_t i = 0; i < frame_count; ++i)
+    {
+        auto stack_frame = reinterpret_cast<vm::RtStackFrame*>(vm::Array::get_array_data_at<vm::RtObject*>(exception->trace_ips, i));
+        if (stack_frame == nullptr)
+        {
+            continue;
+        }
+
+        const metadata::RtMethodInfo* method = stack_frame->method != nullptr ? stack_frame->method->method : nullptr;
+        result.push_back(StackFrameData{method, stack_frame->native_offset, stack_frame->il_offset, stack_frame->filename,
+                                        stack_frame->line, stack_frame->column, false});
+    }
+
+    RET_VOID_OK();
+}
+
+RtResultVoid populate_stack_frame_helper(RtStackFrameHelper* helper, const utils::Vector<StackFrameData>& frames) noexcept
+{
+    if (helper == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    const int32_t frame_count = static_cast<int32_t>(frames.size());
+    const vm::CorLibTypes& corlib_types = vm::Class::get_corlib_types();
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, offsets,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_int32, frame_count,
+                                                                                       "StackTrace_GetStackFramesInternal"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, il_offsets,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_int32, frame_count,
+                                                                                       "StackTrace_GetStackFramesInternal"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, method_handles,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_intptr, frame_count,
+                                                                                       "StackTrace_GetStackFramesInternal"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, method_tokens,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_int32, frame_count,
+                                                                                       "StackTrace_GetStackFramesInternal"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, file_names,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_string, frame_count,
+                                                                                       "StackTrace_GetStackFramesInternal"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, line_numbers,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_int32, frame_count,
+                                                                                       "StackTrace_GetStackFramesInternal"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, column_numbers,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_int32, frame_count,
+                                                                                       "StackTrace_GetStackFramesInternal"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, foreign_exception_frames,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_boolean, frame_count,
+                                                                                       "StackTrace_GetStackFramesInternal"));
+
+    for (int32_t i = 0; i < frame_count; ++i)
+    {
+        const StackFrameData& frame = frames[static_cast<size_t>(i)];
+        vm::Array::set_array_data_at<int32_t>(offsets, i, frame.native_offset);
+        vm::Array::set_array_data_at<int32_t>(il_offsets, i, frame.il_offset);
+        vm::Array::set_array_data_at<void*>(method_handles, i, const_cast<metadata::RtMethodInfo*>(frame.method));
+        vm::Array::set_array_data_at<int32_t>(method_tokens, i, 0);
+        vm::Array::set_array_data_at<vm::RtString*>(file_names, i, frame.file_name);
+        vm::Array::set_array_data_at<int32_t>(line_numbers, i, frame.line_number);
+        vm::Array::set_array_data_at<int32_t>(column_numbers, i, frame.column_number);
+        vm::Array::set_array_data_at<bool>(foreign_exception_frames, i, frame.is_last_frame_from_foreign_exception_stack_trace);
+    }
+
+    helper->rgi_offset = offsets;
+    helper->rgi_il_offset = il_offsets;
+    helper->dynamic_methods = nullptr;
+    helper->rg_method_handle = method_handles;
+    helper->rg_assembly_path = nullptr;
+    helper->rg_assembly = nullptr;
+    helper->rg_loaded_pe_address = nullptr;
+    helper->rgi_loaded_pe_size = nullptr;
+    helper->rgi_is_file_layout = nullptr;
+    helper->rg_in_memory_pdb_address = nullptr;
+    helper->rgi_in_memory_pdb_size = nullptr;
+    helper->rgi_method_token = method_tokens;
+    helper->rg_filename = file_names;
+    helper->rgi_line_number = line_numbers;
+    helper->rgi_column_number = column_numbers;
+    helper->rgi_last_frame_from_foreign_exception_stack_trace = foreign_exception_frames;
+    helper->frame_count = frame_count;
+
+    RET_VOID_OK();
+}
+
 RtResultVoid get_current_thread_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                         interp::RtStackObject*) noexcept
 {
@@ -715,6 +886,35 @@ RtResultVoid get_frozen_stack_trace_invoker(metadata::RtManagedMethodPointer, co
     (void)interp::EvalStackOp::get_param<void*>(params, 0);
     auto stack_trace_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 1);
     *stack_trace_slot = nullptr;
+    RET_VOID_OK();
+}
+
+RtResultVoid get_stack_frames_internal_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                               const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto helper_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    bool need_file_info = interp::EvalStackOp::get_param<int32_t>(params, 1) != 0;
+    auto exception_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 2);
+
+    if (helper_slot == nullptr || *helper_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto helper = reinterpret_cast<RtStackFrameHelper*>(*helper_slot);
+    vm::RtException* exception = exception_slot != nullptr ? reinterpret_cast<vm::RtException*>(*exception_slot) : nullptr;
+
+    utils::Vector<StackFrameData> frames;
+    if (exception != nullptr)
+    {
+        RET_ERR_ON_FAIL(collect_exception_stack_frames(exception, frames));
+    }
+    else
+    {
+        RET_ERR_ON_FAIL(collect_current_thread_stack_frames(need_file_info, frames));
+    }
+
+    RET_ERR_ON_FAIL(populate_stack_frame_helper(helper, frames));
     RET_VOID_OK();
 }
 
@@ -949,6 +1149,15 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.Exception::GetFrozenStackTrace(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, get_frozen_stack_trace_invoker);
     vm::PInvokes::register_pinvoke("System.Exception::GetFrozenStackTrace", nullptr, get_frozen_stack_trace_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Diagnostics.StackTrace::<GetStackFramesInternal>g____PInvoke|0_0(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, get_stack_frames_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.StackTrace::<GetStackFramesInternal>g____PInvoke|0_0", nullptr,
+                                   get_stack_frames_internal_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Diagnostics.StackTrace::GetStackFramesInternal(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Boolean,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, get_stack_frames_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Diagnostics.StackTrace::GetStackFramesInternal", nullptr, get_stack_frames_internal_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Delegate::FindMethodHandle(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, delegate_find_method_handle_invoker);

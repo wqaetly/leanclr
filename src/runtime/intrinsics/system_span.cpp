@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "system_span.h"
 #include "system_readonlyspan.h"
 #include "interp/interp_defs.h"
@@ -28,6 +30,16 @@ RtResult<vm::RtReadOnlySpan<uint8_t>> SystemSpan::newobj_pointer_length(void* po
 
     vm::RtReadOnlySpan<uint8_t> span{reinterpret_cast<const uint8_t*>(pointer), length};
     RET_OK(span);
+}
+
+RtResult<int32_t> SystemSpan::index_of_null_byte(const uint8_t* pointer) noexcept
+{
+    if (pointer == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    RET_OK(static_cast<int32_t>(std::strlen(reinterpret_cast<const char*>(pointer))));
 }
 
 // ========== Invoker Functions ==========
@@ -66,11 +78,23 @@ static RtResultVoid newobj_pointer_length_invoker(metadata::RtManagedMethodPoint
     RET_VOID_OK();
 }
 
+static RtResultVoid index_of_null_byte_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                               interp::RtStackObject* ret) noexcept
+{
+    auto pointer = interp::EvalStackOp::get_param<const uint8_t*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, length, SystemSpan::index_of_null_byte(pointer));
+    interp::EvalStackOp::set_return(ret, length);
+    RET_VOID_OK();
+}
+
 // ========== Intrinsic Entries ==========
 
 static vm::IntrinsicEntry s_intrinsic_entries_system_span[] = {
     {"System.Span`1::get_Item", (vm::IntrinsicFunction)&SystemSpan::get_item, get_item_invoker},
     {"System.ReadOnlySpan`1::get_Item", (vm::IntrinsicFunction)&SystemSpan::get_item, get_item_invoker},
+    {"System.SpanHelpers::IndexOfNullByte(System.Byte*)", (vm::IntrinsicFunction)&SystemSpan::index_of_null_byte,
+     index_of_null_byte_invoker},
+    {"System.SpanHelpers::IndexOfNullByte", (vm::IntrinsicFunction)&SystemSpan::index_of_null_byte, index_of_null_byte_invoker},
 };
 
 static vm::NewobjIntrinsicEntry s_newobj_intrinsic_entries_system_span[] = {
