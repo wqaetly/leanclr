@@ -83,6 +83,7 @@ namespace ManagedNet10.LegacyTests
             RunArithmeticMul();
             RunArithmeticBitwise();
             RunArithmeticNeg();
+            RunArithmeticShift();
         }
 
         public static void RunArithmeticAddSmallIntegers()
@@ -281,6 +282,38 @@ namespace ManagedNet10.LegacyTests
             test.double_1();
             test.double_inf();
             test.double_NaN();
+        }
+
+        public static void RunArithmeticShift()
+        {
+            RunArithmeticShl();
+            RunArithmeticShr();
+            RunArithmeticShrUn();
+        }
+
+        public static void RunArithmeticShl()
+        {
+            var test = new Tests.Instruments.Ariths.TC_shl();
+            test.int_int();
+            test.long_int();
+        }
+
+        public static void RunArithmeticShr()
+        {
+            var test = new Tests.Instruments.Ariths.TC_shr();
+            test.int_1();
+            test.int_2();
+            test.long_1();
+            test.long_2();
+        }
+
+        public static void RunArithmeticShrUn()
+        {
+            var test = new Tests.Instruments.Ariths.TC_shr_un();
+            test.uint_1();
+            test.uint_2();
+            test.ulong_1();
+            test.ulong_2();
         }
     }
 }
