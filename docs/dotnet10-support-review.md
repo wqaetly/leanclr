@@ -10,13 +10,15 @@ LeanCLR 当前已经能在本机 .NET 10 SDK 下构建 `net8.0` 的 LeanAOT 与�
 
 要真正支持 .NET 10，主线工作不是简单把所有 `TargetFramework` 从 `net8.0` 改成 `net10.0`，而是建立 CoreCLR/.NET 10 BCL 输入、内部调用覆盖、测试工程和 CI 门禁。当前仓库主要仍围绕 Mono 4.5 BCL 与 `mscorlib` 模型组织，运行时和 AOT 工具里有多处对 `mscorlib`、`System`、`System.Core`、Mono icall 名称和旧式 `.NET Framework 4.8` 测试项目的假设。
 
+当前实施决策：`.NET 10` 第一阶段只处理解释执行，不把 AOT 作为近期验收目标。AOT 相关脚本和已完成验证继续保留为历史记录与后续阶段输入，但下一轮修复应优先让 `coreclr-net10` 在解释器路径中完成 corlib 初始化、入口调用、基础 BCL 和 NKG 核心 smoke。
+
 优先级最高的事情：
 
 1. 明确定义 `.NET 10 支持` 的范围：仅运行用户 `net10.0` 程序集，还是承载 `System.Private.CoreLib` / `Microsoft.NETCore.App` 的 .NET 10 BCL 子集。
 2. 为 CoreCLR/.NET 10 增加独立 BCL profile，不要覆盖现有 Mono/Unity profile。
 3. 生成并对比 .NET 10 BCL 的 internal call / intrinsic / PInvoke 需求清单。
-4. 新增 `net10.0` 托管测试资产，保留现有 Mono 4.5 测试资产。
-5. 恢复 CI，并在 CI 中同时跑 SDK 工具链、旧 Mono 测试和新增 .NET 10 测试。
+4. 新增 `net10.0` 托管测试资产和解释执行 smoke，保留现有 Mono 4.5 测试资产。
+5. 恢复 CI，并在 CI 中同时跑 SDK 工具链、旧 Mono 测试和新增 .NET 10 解释执行测试；AOT 门禁后置。
 
 ## 官方基线
 
@@ -40,7 +42,7 @@ LeanCLR 当前已经能在本机 .NET 10 SDK 下构建 `net8.0` 的 LeanAOT 与�
 | 区域 | 现状 | .NET 10 影响 |
 | --- | --- | --- |
 | `src/runtime` | C++11 LeanCLR runtime，CMake 构建 | 运行时是否支持 .NET 10 BCL 的核心区域 |
-| `src/leanaot` | SDK 风格 `net8.0`，LeanAOT 代码生成工具 | 可在 .NET 10 SDK 下构建，但 runtime API catalog 仍偏 Mono/Unity BCL |
+| `src/leanaot` | SDK 风格 `net8.0`，LeanAOT 代码生成工具 | 可在 .NET 10 SDK 下构建；本阶段只复用 metadata/profile/catalog 基础设施，不把 AOT 代码生成作为验收目标 |
 | `src/tools/exportextern` | SDK 风格 `net8.0`，依赖 `dnlib` | 可用于导出 .NET 10 BCL 入口清单 |
 | `src/tools/pgo2aot` | SDK 风格 `net8.0`，带 `RollForward=LatestMajor` | 工具可在 .NET 10 runtime 上 roll forward |
 | `src/libraries/mono-4.5` | 内置 Mono 4.5 BCL 及 targets | 当前测试和部分 runtime 假设的主要 BCL 来源 |
@@ -74,6 +76,175 @@ SDK 风格项目：
 - `ExportExtern` 和 `Pgo2Aot` 当前无更新包。
 - `managed.sln` 的 `dotnet list package` 被旧式项目阻断，CLI 报这些项目不适用于该命令。
 
+## 原理速览
+
+这一节用于把后文反复出现的 VM、BCL、profile、icall、intrinsic、AOT 等名词串起来。LeanCLR 要跑一个 C# 程序，首先要加载程序集、理解元数据、创建运行时对象、调度方法调用，并在托管代码碰到运行时专属能力时跳到 C++ runtime。AOT 是后续优化和发布形态，本阶段先验证解释执行路径。
+
+### 关键名词
+
+| 名词 | 在 LeanCLR 里的意思 | 为什么 .NET 10 适配会碰到它 |
+| --- | --- | --- |
+| VM / runtime | 负责加载程序集、维护类型系统、对象布局、GC、异常、线程、反射和方法调用的 C++ 运行时 | `.NET 10` BCL 会依赖新的类型布局、元数据形态和 runtime API |
+| BCL | Base Class Library，`System.*`、`System.Private.CoreLib`、`System.Runtime` 等基础类库 | LeanCLR 必须匹配所选 BCL 的内部调用和行为契约 |
+| corlib | 核心库，保存 `System.Object`、`System.String`、`System.Array`、`System.Type` 等最核心类型 | Mono profile 是 `mscorlib`，CoreCLR/.NET 10 是 `System.Private.CoreLib` |
+| profile | 一组 BCL 与 runtime API 兼容目标，例如 `mono45`、`unity`、`coreclr-net10` | 不同 profile 的 corlib 名称、icall 名称、签名和语义都可能不同 |
+| assembly | `.dll` 或 `.exe` 托管程序集，里面有 IL、metadata、资源和引用关系 | `.NET 10` runtime pack 带来新的程序集拆分和引用关系 |
+| metadata | 程序集里的类型、字段、方法、泛型、特性、接口实现等描述信息 | 反射、泛型、AOT 生成和方法解析都依赖 metadata |
+| IL | C# 编译后的中间语言指令 | 解释器和 AOT 都要支持实际 workload 触发的 IL 指令 |
+| AOT | Ahead-of-Time，把 IL 提前生成 C++/native 调用路径 | 本阶段后置；等解释执行证明 BCL/runtime contract 正确后再处理 codegen |
+| icall | internal call，托管方法没有 IL 方法体，真正实现写在 C++ runtime 里 | BCL 中大量底层方法靠 icall 访问对象头、数组布局、线程、GC、反射等 |
+| intrinsic | 由 AOT/VM 特殊识别并直接生成更高效或更底层实现的方法 | `Span<T>`、`Interlocked`、`Volatile`、部分 `Math` 和数组操作常走 intrinsic |
+| P/Invoke | 托管代码调用外部 native 动态库函数 | CoreCLR BCL、平台 PAL、宿主 bridge 都可能使用 P/Invoke 边界 |
+| smoke test | 很小的端到端验证入口 | 用来把巨大兼容目标拆成可定位、可验收的小切片 |
+
+### 托管程序在 LeanCLR 中的执行流程
+
+下面是最简化的运行路径。真正的实现会有更多缓存、泛型实例化、异常处理和 AOT fallback，但本阶段只把解释执行路径作为验收主线：
+
+```mermaid
+flowchart TD
+    A["C# source"] --> B["dotnet build 生成程序集"]
+    B --> C["LeanCLR 加载用户程序集"]
+    C --> D["解析程序集引用和 BCL"]
+    D --> E["加载 corlib 核心类型"]
+    E --> F["读取 metadata: 类型/字段/方法/泛型/特性"]
+    F --> G{"方法如何执行"}
+    G --> H["解释执行 IL"]
+    G --> I["LeanAOT 生成的 C++/native 路径（后续阶段）"]
+    H --> J["对象/数组/string/异常/线程/反射等 runtime 服务"]
+    I --> J
+    J --> K{"遇到 runtime 专属方法"}
+    K --> L["icall / intrinsic / PInvoke"]
+    L --> M["C++ runtime 或宿主 native API"]
+    M --> N["返回托管世界继续执行"]
+```
+
+如果 corlib 仍按 `mscorlib` 假设启动，而实际输入是 `.NET 10` 的 `System.Private.CoreLib`，上图会在“加载 corlib 核心类型”和“读取 metadata”附近出问题。当前 `ManagedNet10.Smoke` 的完整入口失败，就是这类问题正在被逐步定位到 boxing metadata、反射、delegate/exception 和 async 等子路径。
+
+### 为什么 `TargetFramework=net10.0` 不等于支持 .NET 10
+
+`net10.0` 只是告诉 SDK 如何编译托管程序集。LeanCLR 真正要承载 `.NET 10`，还要能加载和执行 `.NET 10` BCL 本身。
+
+```mermaid
+flowchart LR
+    A["项目 TargetFramework=net10.0"] --> B["SDK 编译通过"]
+    B --> C{"LeanCLR 是否能运行"}
+    C --> D["能解析 .NET 10 runtime pack"]
+    C --> E["能把 System.Private.CoreLib 当 corlib"]
+    C --> F["能支持 CoreCLR metadata/IL 形态"]
+    C --> G["能覆盖 BCL 需要的 icall/intrinsic/PInvoke"]
+    C --> H["能跑解释执行 smoke 和实际 workload"]
+    D --> I["这些都成立才接近 .NET 10 支持"]
+    E --> I
+    F --> I
+    G --> I
+    H --> I
+```
+
+因此本仓库里 `src/leanaot` 能用 .NET 10 SDK 构建，只能说明工具链可运行；它不能证明 LeanCLR runtime 已经兼容 `System.Private.CoreLib` 或 `Microsoft.NETCore.App`。
+
+### icall 的工作方式
+
+icall 是 BCL 和 runtime 之间的一条直接通道。托管侧通常长这样：
+
+```csharp
+[MethodImpl(MethodImplOptions.InternalCall)]
+private static extern RuntimeType InternalGetType(object obj);
+```
+
+这类方法没有 IL 方法体。运行时遇到调用时，会用“类型名 + 方法名 + 签名”去 icall 表里找 C++ 实现：
+
+```cpp
+{"System.Type::internal_from_handle", (vm::InternalCallFunction)&SystemType::internal_from_handle}
+```
+
+流程可以理解为：
+
+```mermaid
+sequenceDiagram
+    participant Managed as "托管 BCL 方法"
+    participant VM as "LeanCLR 调用解析"
+    participant Table as "icall 表"
+    participant Native as "C++ runtime 实现"
+
+    Managed->>VM: 调用 InternalCall 方法
+    VM->>Table: 按完整签名查找入口
+    alt 找到入口
+        Table-->>VM: 返回函数指针和 invoker
+        VM->>Native: 转换参数并调用 C++ 实现
+        Native-->>VM: 返回结果或异常
+        VM-->>Managed: 回到托管调用点
+    else 没找到入口或签名不匹配
+        VM-->>Managed: 抛出诊断异常或运行失败
+    end
+```
+
+这也是为什么 `.NET 10` 适配不能直接复用 Mono/Unity 的所有 icall。不同 BCL 可能会改方法名、签名、所在类型、对象布局和异常语义。`coreclr-net10` 需要独立 catalog，并用 `.NET 10` runtime assemblies 实际导出的 extern 清单持续对比。
+
+### profile、BCL 和 runtime API catalog 的关系
+
+profile 是本次改造里最重要的隔离边界。它决定当前 AOT 和 runtime 以哪一套 BCL 为目标。
+
+```mermaid
+flowchart TD
+    A["选择 runtime API profile"] --> B{"profile"}
+    B --> C["mono45"]
+    B --> D["unity"]
+    B --> E["coreclr-net10"]
+
+    C --> C1["corlib: mscorlib"]
+    C --> C2["BCL: src/libraries/mono-4.5"]
+    C --> C3["icalls/intrinsics: mono45 catalog"]
+
+    D --> D1["corlib: Unity IL2CPP BCL 对应核心库"]
+    D --> D2["BCL: Unity profile"]
+    D --> D3["icalls/intrinsics: Unity 兼容 catalog"]
+
+    E --> E1["corlib: System.Private.CoreLib"]
+    E --> E2["BCL: Microsoft.NETCore.App runtime pack"]
+    E --> E3["icalls/intrinsics: coreclr-net10 catalog"]
+```
+
+正确的方向是 profile 化隔离，而不是把 `.NET 10` 缺口直接混进现有 `mono45` 表。否则很容易修好 CoreCLR 路径，却破坏已经稳定的 Mono/Unity 路径。
+
+### AOT 后置时 runtime API 表仍有用
+
+虽然当前计划先不处理 AOT，runtime API 表仍然有价值：它定义了当前 profile 下哪些 BCL 方法必须由 runtime 提供。解释器遇到这些方法时同样需要能解析到 runtime helper；后续 LeanAOT 生成代码时也会复用同一套 catalog。
+
+```mermaid
+flowchart TD
+    A["输入程序集和 BCL"] --> B["dnlib 读取 metadata/IL"]
+    B --> C["按 profile 加载 runtime-apis/*.json"]
+    C --> D{"遇到方法调用"}
+    D --> E["解释执行: 进入 IL interpreter"]
+    D --> F["icall: 调用 runtime helper"]
+    D --> G["intrinsic: 解释器或 runtime 特殊处理"]
+    D --> H["P/Invoke: 进入 native 边界"]
+    E --> I["本阶段验收解释路径"]
+    F --> I
+    G --> I
+    H --> I
+    I --> J["AOT codegen 后续复用同一 catalog"]
+```
+
+如果 runtime API 表缺条目，解释执行会在调用 BCL 内部方法时找不到 runtime 入口；如果表里有条目但 C++ runtime 行为不符合当前 BCL，解释路径也会失败。AOT 后续只是把同一批语义再搬到 codegen 路径。
+
+### Unity/Godot bridge 和 BCL 兼容不是同一件事
+
+`.NET 10` BCL 兼容解决的是 `System.*` 和 `Microsoft.NETCore.App` 能不能运行。Unity/Godot 接入解决的是游戏引擎对象和主线程 API 怎么暴露给 LeanCLR。两者边界应分开：
+
+```mermaid
+flowchart LR
+    A["LeanCLR 托管业务代码"] --> B[".NET 10 / profile BCL"]
+    A --> C["引擎抽象接口: asset/scene/game-loop/audio/ui"]
+    C --> D["LeanCLR bridge ABI"]
+    D --> E["宿主侧 handle registry"]
+    E --> F["Unity/Godot 主线程 dispatcher"]
+    F --> G["真实 UnityEngine / Godot API"]
+```
+
+第一阶段不建议让 LeanCLR 直接加载完整 `UnityEngine.dll` 或 Godot 托管 API。更稳妥的做法是：LeanCLR 只运行引擎无关核心和必要 BCL，宿主进程通过 bridge 提供资源、场景、主线程调度和异步结果回传。
+
 ## 本机验证记录
 
 本机环境：
@@ -82,8 +253,8 @@ SDK 风格项目：
 - .NET SDK：`10.0.301`
 - MSBuild：`18.6.4`
 - Runtime：`Microsoft.NETCore.App 10.0.9`
-- `global.json`：不存在
-- CMake：不在 PATH
+- `global.json`：已固定 SDK `10.0.301`，`rollForward=latestFeature`
+- CMake：`4.3.3`，验证时通过 `C:\Program Files\CMake\bin` 加入 PATH
 
 命令结果：
 
@@ -91,47 +262,107 @@ SDK 风格项目：
 | --- | --- | --- |
 | `dotnet --info` | 成功 | 只有 .NET 10 SDK/runtime |
 | `dotnet build src\leanaot\LeanAOT.sln -c Debug` | 成功 | 0 warning / 0 error，输出到 `out/dotnet/*/Debug/net8.0` |
-| `dotnet build src\tools\exportextern\ExportExtern.csproj -c Debug` | 成功 | 1 个 nullable warning：`Program.cs(83,32) CS8600` |
+| `dotnet build src\tools\exportextern\ExportExtern.csproj -c Release` | 成功 | 0 warning / 0 error |
 | `dotnet build src\tools\pgo2aot\Pgo2Aot.csproj -c Debug` | 成功 | 0 warning / 0 error |
-| `dotnet build src\tests\managed\managed.sln -c Debug` | 失败 | `MSB3644`，缺少 `.NETFramework,Version=v4.8` reference assemblies |
-| `cmake --version` | 失败 | `cmake` 不在 PATH，原生 runtime/test runner 无法构建 |
+| `scripts\runtime\build.bat Debug x64` | 成功 | CMake + VS Build Tools 构建 `leanclr.lib` |
+| `scripts\test\build-all.bat Debug x64` | 成功 | CMake basic tester + 旧式 managed tests 全部构建 |
+| `scripts\test\run.bat Debug x64` | 成功 | 5164 个 unit tests、164 个 GC tests 全部通过 |
+| `scripts\dotnet10\aot-smoke.ps1 -Configuration Release` | 成功 | `ManagedNet10.Smoke` 使用 `coreclr-net10` profile 生成 C++ |
+| `scripts\dotnet10\aot-smoke.ps1 -Configuration Release -NativeBuild` | 成功 | 生成 C++ 后用 CMake/VS 2022 编译并链接 `aot-tester.exe` |
+| `aot-tester.exe ... -e ManagedNet10.Smoke.Program::TestPairArithmetic ManagedNet10.Smoke` | 成功 | record struct 基础算术子入口通过 |
+| `aot-tester.exe ... -e ManagedNet10.Smoke.Program::TestThreadingSubset ManagedNet10.Smoke` | 成功 | `Interlocked.Increment`、`Volatile.Read/Write` 子入口通过 |
+| `aot-tester.exe ... -e ManagedNet10.Smoke.Program::TestSpanStackalloc ManagedNet10.Smoke` | 成功 | `Span<T>(void*, int)` + `Span<T>.get_Item` / `set_Item` stackalloc 路径通过 |
+| `aot-tester.exe ... -e ManagedNet10.Smoke.Program::TestSpanStackallocInitializer ManagedNet10.Smoke` | 成功 | `RuntimeHelpers.CreateSpan<T>(RuntimeFieldHandle)` + RVA 初始化路径通过 |
+| `aot-tester.exe ... -e ManagedNet10.Smoke.Program::TestSpan ManagedNet10.Smoke` | 成功 | Span 两个子场景合并入口通过 |
+| `aot-tester.exe ... -e ManagedNet10.Smoke.Program::TestBoxingMetadata ManagedNet10.Smoke` | 失败 | `object boxed = pair; boxed.GetType().Name` 路径仍抛 `System.BadImageFormatException` |
+| `aot-tester.exe ... -e ManagedNet10.Smoke.Program::TestGenericsDelegatesAndExceptions ManagedNet10.Smoke` | 失败 | 泛型 record class、delegate、异常包装/过滤路径仍未通过 |
+| `aot-tester.exe ... -e ManagedNet10.Smoke.Program::TestReflection ManagedNet10.Smoke` | 失败 | `GetCustomAttribute`、private field lookup/read 路径仍未通过 |
+| `aot-tester.exe ... -e ManagedNet10.Smoke.Program::TestAsync ManagedNet10.Smoke` | 失败 | `Task.Yield` / `Task.FromResult` async 路径仍未通过 |
+| `aot-tester.exe -l <net10 smoke dir> -l <dotnet10 runtime dir> ManagedNet10.Smoke` | 失败 | runtime 初始化已通过；入口方法调用阶段抛出 `System.BadImageFormatException`，runner 随后异常退出 |
+| `cmake --version` | 成功 | CMake `4.3.3` |
 
 这些结果说明：
 
 - SDK 工具链目前可用 .NET 10 SDK 构建现有 `net8.0` 项目。
-- 旧式托管测试需要 .NET Framework 4.8 Developer Pack 或测试工程现代化。
-- 原生构建和测试 runner 需要安装/定位 CMake。
+- 旧式托管测试需要 .NET Framework 4.8 Developer Pack；本机已安装后可通过 VS MSBuild 构建。
+- 原生构建和测试 runner 需要安装/定位 CMake；本机已用 CMake `4.3.3` 验证。
+- .NET 10 native smoke 已经不再卡在 runtime 初始化；拆分子入口后，基础值类型算术、线程同步最小子集和 Span stackalloc/RVA initializer 已可执行，下一批阻断点集中在 boxing metadata、反射、delegate/exception 和 async。
+
+### 复现当前 .NET 10 smoke 状态
+
+先重新生成托管 smoke、LeanAOT C++ 和 native runner：
+
+```powershell
+dotnet build src\leanaot\LeanAOT.sln -c Release
+dotnet build src\tests\managed-net10\managed-net10.sln -c Release
+powershell -ExecutionPolicy Bypass -File scripts\dotnet10\aot-smoke.ps1 -Configuration Release -NativeBuild
+```
+
+本机验证使用的路径：
+
+```powershell
+$runner = "out\cmake\tests\net10-aot-smoke\Release-x64\bin\Release\aot-tester.exe"
+$smokeDir = "out\dotnet\ManagedNet10.Smoke\Release\net10.0"
+$runtimeDir = "C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.9"
+```
+
+当前应通过的 native 子入口：
+
+```powershell
+& $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestPairArithmetic" ManagedNet10.Smoke
+& $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestThreadingSubset" ManagedNet10.Smoke
+& $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestSpanStackalloc" ManagedNet10.Smoke
+& $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestSpanStackallocInitializer" ManagedNet10.Smoke
+& $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestSpan" ManagedNet10.Smoke
+```
+
+当前预期失败的 native 入口：
+
+```powershell
+& $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestBoxingMetadata" ManagedNet10.Smoke
+& $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestGenericsDelegatesAndExceptions" ManagedNet10.Smoke
+& $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestReflection" ManagedNet10.Smoke
+& $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestAsync" ManagedNet10.Smoke
+& $runner -l $smokeDir -l $runtimeDir ManagedNet10.Smoke
+```
+
+如果本机 runtime patch 不是 `10.0.9`，把 `$runtimeDir` 替换为 `dotnet --list-runtimes` 中最新的 `Microsoft.NETCore.App 10.x` 目录。预期失败命令当前不是回归；它们是下一轮修复和验收的基线。
 
 ## 关键风险
 
-### 1. BCL 模型仍偏 `mscorlib`
+### 1. BCL 模型已开始 profile 化，但 runtime contract 仍偏 `mscorlib`
 
-当前运行时把 corlib 名字固定为 `mscorlib`：
+第一批改造已经解除了一部分硬编码：
 
-- `src/runtime/const_strs.h`：`STR_CORLIB_NAME = "mscorlib"`
-- `src/runtime/metadata/module_def.cpp`：用 `moduleDef->is_corlib()` 记录全局 corlib module
-- `src/leanaot/LeanAOT.Core/MetaUtil.cs`：`IsCorlibOrSystemOrSystemCore` 只识别 `mscorlib`、`System`、`System.Core`
-- `src/leanaot/LeanAOT.ToCpp/RuntimeApiCatalog.cs`：`_coreLibModules = { "mscorlib", "System", "System.Core", "LeanCLR" }`
+- `src/leanaot/LeanAOT/runtime-apis/mono45` 和 `coreclr-net10` 已拆成独立 profile。
+- `RuntimeApiCatalog` 已从 `profile.json` 读取 core library module 集合。
+- LeanAOT CLI 已支持 `--leanaot-runtime-api-profile` 和 `LEANCLR_RUNTIME_API_PROFILE`。
+- runtime 侧 corlib 识别已允许 `System.Private.CoreLib`，并在 `Assembly::load_corlib()` 中优先尝试加载它。
 
-.NET 10 的核心库体系以 `System.Private.CoreLib` / `System.Runtime` / `Microsoft.NETCore.App` 为中心。若不抽象 BCL profile，AOT catalog 和 runtime corlib 判断会错过大量 .NET 10 类型和内部方法。
+剩余风险在于 runtime 内部类型契约仍大量按 Mono-era `mscorlib` 假设组织。例如 `System.Runtime.Remoting.Contexts.Context`、`System.Threading.InternalThread` 等类型在 .NET 10 `System.Private.CoreLib` 中不存在，Mono 4.5 的对象布局完整性校验也不能直接套用到 CoreCLR BCL。第一轮降级后 native run 已能通过 `Runtime::initialize()`，并且部分子入口已经可执行；完整入口仍在 `TestBasics()` 的 boxing metadata 路径附近抛出 `System.BadImageFormatException`。
 
-建议：
+下一步重点：
 
-- 增加 `BclProfile` 或类似概念：`mono45`、`unity`、`coreclr-net10`。
-- `STR_CORLIB_NAME` 不应全局固定为 `mscorlib`；至少要允许 `System.Private.CoreLib`。
-- `RuntimeApiCatalog` 的 core module 集合应来自 profile 配置，而不是硬编码。
+- 将 runtime 的 corlib required-type 表按 profile 拆分，避免 `coreclr-net10` 继续要求 Mono 专用类型。
+- 区分“LeanCLR VM 必需类型”和“某个 BCL profile 的兼容类型”。
+- 对 .NET 10 不存在的类型建立 adapter、替代路径或明确的 NotSupported 诊断。
 
 ### 2. Runtime API 表需要按 .NET 10 重建
 
-当前 LeanAOT runtime API JSON：
+当前 LeanAOT runtime API JSON 已拆为 profile。`mono45` 保留原有表，`coreclr-net10` 从现有实现里筛出与 .NET 10 extern 精确匹配的保守基线：
 
 | 文件 | 条目数 |
 | --- | ---: |
-| `src/leanaot/LeanAOT/icalls.json` | 550 |
-| `src/leanaot/LeanAOT/intrinsics.json` | 45 |
-| `src/leanaot/LeanAOT/icalls_newobj.json` | 8 |
-| `src/leanaot/LeanAOT/intrinsics_newobj.json` | 1 |
-| `src/leanaot/LeanAOT/pinvokes.json` | 1 |
+| `src/leanaot/LeanAOT/runtime-apis/mono45/icalls.json` | 550 |
+| `src/leanaot/LeanAOT/runtime-apis/mono45/intrinsics.json` | 45 |
+| `src/leanaot/LeanAOT/runtime-apis/mono45/icalls_newobj.json` | 8 |
+| `src/leanaot/LeanAOT/runtime-apis/mono45/intrinsics_newobj.json` | 1 |
+| `src/leanaot/LeanAOT/runtime-apis/mono45/pinvokes.json` | 1 |
+| `src/leanaot/LeanAOT/runtime-apis/coreclr-net10/icalls.json` | 95 |
+| `src/leanaot/LeanAOT/runtime-apis/coreclr-net10/intrinsics.json` | 38 |
+| `src/leanaot/LeanAOT/runtime-apis/coreclr-net10/icalls_newobj.json` | 8 |
+| `src/leanaot/LeanAOT/runtime-apis/coreclr-net10/intrinsics_newobj.json` | 0 |
+| `src/leanaot/LeanAOT/runtime-apis/coreclr-net10/pinvokes.json` | 0 |
 
 C++ icall 覆盖集中在：
 
@@ -144,7 +375,7 @@ C++ icall 覆盖集中在：
 - `system_runtimetype.cpp`：23 个
 - `system_threading_interlocked.cpp`：22 个
 
-这些名称混合了 Mono、CoreCLR PAL/Interop、Unity 兼容需求。支持 .NET 10 时需要从 .NET 10 runtime assemblies 实际导出：
+这些名称混合了 Mono、CoreCLR PAL/Interop、Unity 兼容需求。第一批 .NET 10 extern 导出已经跑通，但 diff 显示仍有大量缺口。支持 .NET 10 时需要持续从 .NET 10 runtime assemblies 实际导出并分批补齐：
 
 - `InternalCall`
 - runtime implemented methods
@@ -152,7 +383,7 @@ C++ icall 覆盖集中在：
 - intrinsic 候选
 - `System.Private.CoreLib` 与其他 runtime assemblies 的引用关系
 
-建议产物：
+已建立和后续需要维护的产物：
 
 - `artifacts/dotnet10-externs/*.txt`：从 .NET 10 BCL 导出的需求清单。
 - `src/leanaot/LeanAOT/runtime-apis/coreclr-net10/*.json`：独立于现有 Mono/Unity 的 API catalog。
@@ -160,47 +391,47 @@ C++ icall 覆盖集中在：
 
 ### 3. 现有托管测试不能证明 .NET 10 BCL
 
-当前测试项目主要通过旧式 `.NET Framework v4.8` 项目引用 `src/libraries/mono-4.5`。这对 Mono 4.5 兼容测试是合理的，但无法覆盖：
+当前旧测试项目主要通过旧式 `.NET Framework v4.8` 项目引用 `src/libraries/mono-4.5`。这对 Mono 4.5 兼容测试是合理的，但无法覆盖完整 .NET 10 BCL。第一批改造已经新增 `src/tests/managed-net10/managed-net10.sln`，用于覆盖最小 `net10.0` 编译和 SDK runtime 执行。
 
-- `net10.0` 编译输出。
+仍未覆盖：
+
 - `System.Private.CoreLib` 元数据。
 - .NET 10 BCL 内部方法签名。
-- C# 14 / .NET 10 SDK 可能产生的现代 IL 和属性形态。
+- LeanCLR runtime 实际执行 `System.Private.CoreLib`。
+- 更完整的 C# 14 / .NET 10 SDK 现代 IL 和属性形态。
 
-建议：
+下一步重点：
 
-- 新增 `src/tests/managed-net10/managed-net10.sln`，使用 SDK 风格 `net10.0`。
 - 保留 `src/tests/managed` 作为 Mono profile 测试，不要直接替换。
 - 抽出共享测试基础设施，避免 `Common` 被 `.NET Framework v4.8` 锁死。
 - 新增 `CoversIcall`/coverage 报告对 `coreclr-net10` profile 独立统计。
 
-### 4. CI 当前不可用
+### 4. CI 已恢复手动基线，但还不是完整发布门禁
 
-`.github/workflows/ci.yml`：
+`.github/workflows/ci.yml` 已移除 job 顶层 `if: false`，并拆出：
 
-- push/pull_request 触发被注释。
-- job 顶层 `if: false`。
-- 只安装 `cmake g++`，没有固定 .NET SDK，也没有 .NET Framework reference assemblies。
+- `sdk-tools-and-net10`：固定 .NET 10 SDK，构建 SDK 工具，导出 .NET 10 extern，运行 net10 smoke；已存在的 LeanAOT C++ 生成 smoke 保留为后续 AOT 参考，不作为第一阶段门禁。
+- `native-linux`：构建 Linux native basic tester。
+- `legacy-managed-windows`：用 MSBuild 构建旧式 managed tests。
 
-建议：
+剩余风险：
 
-- 先恢复手动 workflow 的实际执行，移除 `if: false`。
-- 增加 Windows job：覆盖 `.NET Framework 4.8` 旧测试和 Visual Studio/CMake x64。
-- 增加 Linux job：覆盖 CMake runtime/basic tester。
-- 增加 .NET 10 SDK 固定安装：`actions/setup-dotnet` 使用 `10.0.x`。
-- 后续再打开 PR/push 触发。
+- 仍只启用 `workflow_dispatch`，push/pull_request 触发尚未恢复。
+- Windows job 只构建旧式 managed tests，尚未跑完整 `scripts\test\run.bat`。
+- .NET 10 AOT native run 当前预期失败，且 AOT 已后置；第一阶段 CI 应新增解释执行 smoke 作为绿色门禁。
 
-### 5. AOT 代码生成器仍有现代 IL 缺口
+### 5. 解释器仍需验证现代 IL / metadata 形态
 
-静态扫描发现 LeanAOT 仍有一些直接抛出的不支持路径：
+现代 C# / .NET 10 workload 会触发一些尚未完整验证的 IL、metadata 和调用解析路径。由于当前阶段不处理 AOT，这些风险先收敛到解释器和 runtime method resolution：
 
 - `arglist`、`endfilter`、`leave`、`endfinally` 未实现。
 - `jmp`、部分 prefix instruction 未支持。
-- 静态 RVA field、const field address、字符串常量 field 等路径会抛 `NotSupportedException`。
+- 静态 RVA field、const field address、字符串常量 field 等通用路径仍不完整；`RuntimeHelpers.CreateSpan<T>(RuntimeFieldHandle)` 的 RVA 初始化 smoke 已有定向支持。
+- CoreCLR 对 ECMA-335 的扩展仍需要单独验证，尤其是接口 `static abstract` / `static virtual` 成员对应的 metadata、method resolution、interface method implementation 和解释器调用路径。
 - P/Invoke marshal 支持面有限，部分 `NativeType`、calling convention、array/string builder 场景不支持。
-- `System.Span<T>` 相关 intrinsic 当前只有很小覆盖。
+- `System.Span<T>` 相关 intrinsic 已覆盖最小 stackalloc/RVA initializer smoke，但仍只是 `Span<T>(void*, int)`、`RuntimeHelpers.CreateSpan<T>` 和已登记 intrinsic 查找修正的窄路径，不等于完整 Span/Memory 支持。
 
-这些缺口不一定全部阻断 .NET 10，但必须通过 .NET 10 BCL 和用户程序集的实际 AOT smoke test 来排序。
+这些缺口不一定全部阻断 .NET 10，但接口静态虚函数应从泛泛的“现代 IL”里前移为 CoreCLR profile 的前置能力；其余缺口通过 .NET 10 BCL 和用户程序集的实际解释执行 smoke test 来排序。
 
 ### 6. 线程和同步语义需要明确支持边界
 
@@ -260,22 +491,32 @@ Unity/Godot host
 - runtime handle、reflection、custom attribute、generic instantiation、Activator 等 CoreCLR BCL 常用服务。
 - async/await、UniTask、timer、continuation、cancellation 的单线程 frame scheduler 或宿主调度器映射。
 - Odin 等反射型序列化库所需的 private member access 和 attribute/metadata 能力。
-- AOT 对现代 C# / .NET 10 输出 IL、metadata 和 attribute 形态的覆盖。
+- 解释器对现代 C# / .NET 10 输出 IL、metadata 和 attribute 形态的覆盖；AOT 覆盖后置。
 - `net10.0` 托管测试资产和 `coreclr-net10` coverage 报告。
 
 ### 4. 当前 `coreclr` 分支状态判断
 
-当前分支不能说没有任何 CoreCLR 方向工作：README 已明确 `coreclr` 分支目标，runtime 和 AOT 中也存在部分 CoreCLR 语义兼容点，SDK 工具链可在 .NET 10 SDK 下构建。
+当前分支已经具备第一批 CoreCLR/.NET 10 基础设施：README 已明确 `coreclr` 分支目标，SDK 工具链可在 .NET 10 SDK 下构建，runtime API catalog 已 profile 化，`coreclr-net10` extern diff 和最小 `net10.0` smoke 已建立。
 
 但以“能承载 `.NET 10` BCL 和 NKGGameFramework”为标准，当前还没有完成可验证的 .NET Core BCL 适配。主要证据：
 
-- runtime 仍固定 `STR_CORLIB_NAME = "mscorlib"`。
-- LeanAOT `RuntimeApiCatalog` 仍只把 `mscorlib`、`System`、`System.Core`、`LeanCLR` 视为 core library。
+- runtime 虽已能把 `System.Private.CoreLib` 识别为 corlib，且 native run 已通过 `Runtime::initialize()`，但完整入口调用阶段仍抛 `System.BadImageFormatException`；拆分子入口后已确认基础值类型算术、线程同步最小子集和 Span 子场景可执行，下一步应优先修 boxing metadata / `Object.GetType()` / `RuntimeType.Name` 等 CoreCLR metadata 路径。
+- `coreclr-net10` runtime API catalog 仍只是保守基线，diff 仍显示数千个 .NET 10 extern signature 尚未覆盖。
 - `src/libraries/LeanCLR` 仍是 `.NET Framework v4.8` 旧式项目，引用 `mono-4.5/mscorlib.dll`。
-- 现有托管测试主要是 `.NET Framework v4.8` + `mono-4.5`，不能证明 `System.Private.CoreLib` 或 `net10.0` 用户程序集可运行。
-- 源码中尚未形成 `System.Private.CoreLib` profile、.NET 10 extern diff、net10 smoke test 和独立 coverage 门禁。
+- 旧式托管测试主要是 `.NET Framework v4.8` + `mono-4.5`；新增 `net10.0` smoke 现在能证明 LeanCLR 可执行少量 `System.Private.CoreLib` 子路径，但还不能证明完整 Microsoft.NETCore.App profile 可用。
+- NKGGameFramework、Unity/Godot bridge、现代 IL 全量覆盖和完整 CoreCLR assembly resolver 尚未纳入验收。
 
 ## 建议实施计划
+
+### 作者反馈后的计划收敛
+
+在“先不处理 AOT，只先处理解释执行”的决策下，`coreclr` 分支近期方向收敛为三条主线：
+
+1. **Corlib 名与 corlib contract 改造**：让 `System.Private.CoreLib` 成为 `coreclr-net10` profile 的真实 corlib，清理 runtime 中把 `mscorlib` / Mono-era 类型当全局必需条件的假设。
+2. **解释器路径支持 CoreCLR metadata / method resolution**：优先让接口默认方法、接口静态虚函数、泛型约束、boxing metadata、delegate 和 exception 等在解释执行中可解析、可调用、可诊断。
+3. **补齐解释路径需要的 .NET 10 BCL icalls / intrinsics**：继续用 `coreclr-net10` extern diff 驱动实现顺序，但只按解释执行 smoke 和实际 workload 分批补齐，不把 AOT lowering 作为当前完成条件。
+
+因此当前计划应从“全面迁移 .NET 10 生态”进一步收敛为“先让最小 .NET 10 corlib + CoreCLR metadata 扩展 + BCL runtime API 在解释执行中跑通”。AOT、Unity/Godot bridge、Hosting/Web Debug 和历史资产清理都应排在解释执行端到端跑通之后。
 
 ### 阶段 0：定义支持范围
 
@@ -283,10 +524,11 @@ Unity/Godot host
 
 - 支持目标是 `net10.0` 用户程序集、.NET 10 BCL 子集，还是完整 CoreCLR BCL。
 - 是否支持单线程-only。
-- 是否支持 AOT、解释执行，或两者。
+- 当前阶段明确只支持解释执行；AOT 作为后续阶段，不进入第一阶段验收口。
 - 支持平台优先级：Windows x64、Linux x64、wasm、移动端。
 - 明确 `coreclr` 分支是引擎无关 runtime 主线，Unity/Godot 通过宿主插件和 bridge 接入。
 - 明确 VM 核心复用边界，禁止把 .NET 10 支持误拆成重写 metadata/type system/interpreter/GC。
+- 明确近期三主线：corlib 改造、解释器 metadata/method resolution、解释路径需要的 .NET 10 BCL icalls/intrinsics。
 
 ### 阶段 1：构建与 CI 基线
 
@@ -324,7 +566,8 @@ Unity/Godot host
 - 新增 SDK 风格 `net10.0` smoke tests。
 - 覆盖基础类型、泛型、异常、反射、数组、delegate、string、span、threading subset、P/Invoke subset。
 - 增加 `coreclr-net10` 的 icall coverage 标注。
-- AOT smoke test 至少跑一个最小 `net10.0` 程序集。
+- 新增解释执行 smoke runner 或脚本，能直接加载 `net10.0` 程序集和 .NET 10 runtime pack。
+- AOT smoke 只作为已有历史验证和后续阶段目标，不作为第一阶段门禁。
 
 ### 阶段 5：实现高优先级 runtime API
 
@@ -333,14 +576,30 @@ Unity/Godot host
 - 按 diff 报告优先补齐 `System.Private.CoreLib` 直接启动路径。
 - 优先模块：string、array、object、runtime handles、reflection、marshal、interop、threading 基础、environment、math。
 - 对暂不支持 API 输出明确 NotSupported/NotImplemented 诊断。
+- 每个新增 icall/intrinsic 都先由解释执行 smoke 或 `coreclr-net10` extern diff 证明需求来源，不为 AOT 预补大而全入口。
 
-### 阶段 6：AOT 与现代 IL 兼容
+### 阶段 6：解释器与现代 IL 兼容
 
 任务：
 
 - 用 .NET 10 SDK 编译 fixture，统计实际出现的 IL opcode、metadata table、custom attributes。
-- 针对现代 C# 输出补齐 AOT codegen 缺口。
-- 对 `LibraryImport`、`UnmanagedCallersOnly`、function pointer、byref-like、InlineArray 等建立测试。
+- 先补解释器需要的 IL opcode、method resolution、interface dispatch、generic sharing/instantiation、exception handling 和 delegate invoke 路径。
+- 对 `LibraryImport`、`UnmanagedCallersOnly`、function pointer、byref-like、InlineArray 等建立解释执行测试或明确 NotSupported 诊断。
+- AOT codegen 缺口暂不纳入本阶段，只在解释路径跑通后重新排序。
+
+### 当前下一轮最小验收切片
+
+当前不要把“完整 .NET 10 BCL”作为下一步唯一验收口，也不要再用 AOT native run 作为第一阶段主门禁。更合适的推进顺序是用解释执行 smoke 子入口和新增小 fixture，把三条线压成可独立通过的切片：
+
+| 主线 | 最小验证入口 | 通过证据 | 说明 |
+| --- | --- | --- | --- |
+| 解释执行 runner 基线 | 新增或改造 runner：可指定程序集目录、`.NET 10` runtime pack 目录、入口方法 | 能加载 `ManagedNet10.Smoke`，完成 `Runtime::initialize()`，并进入指定入口 | 先补工具入口，否则每次都被 AOT 生成/编译流程干扰定位 |
+| corlib contract / boxing metadata | 解释执行 `ManagedNet10.Smoke.Program::TestBoxingMetadata` | 输出 `ok!`，进程退出码 `0`，随后 `TestBasics` 也通过 | 当前最小 blocker；证明 boxed value type 的 `Object.GetType()`、`RuntimeType.Name` 和 CoreCLR `System.Private.CoreLib` metadata 路径可用 |
+| CoreCLR method resolution | 新增 `TestStaticAbstractInterfaceMember` 子入口，先用自定义接口 `static abstract` 成员，再扩展到 generic math | 解释执行子入口输出 `ok!`，或给出明确 NotSupported 诊断 | 先验证 metadata loader、MethodImpl/interface method resolution 和解释器调用路径，不处理 AOT call emission |
+| .NET 10 BCL icalls / intrinsics | 解释执行 `TestReflection`、`TestGenericsDelegatesAndExceptions`、`TestAsync` 分别通过 | 每个子入口单独 `ok!`，并记录新增 icall/intrinsic 到 `coreclr-net10` profile | 用失败子入口驱动实现顺序；每补一个 API，都要能解释它来自哪个 smoke 或 extern diff |
+| 完整解释 smoke | 解释执行 `ManagedNet10.Smoke` 完整入口 | 完整入口输出 `ok!`，不再抛 `System.BadImageFormatException` 或崩溃退出 | 只有所有子入口通过后，完整解释 smoke 才适合作为第一阶段 CI 绿色门禁 |
+
+每完成一个切片，都应同步更新三处：本机验证记录、近期任务清单、实施记录。不要只把失败点从一个子入口推到另一个子入口就标记 `.NET 10 支持` 完成。
 
 ### 阶段 7：发布与文档
 
@@ -369,7 +628,7 @@ Unity/Godot host
 建议清理顺序：
 
 1. 给当前 Mono profile 打 tag 或保留维护分支，确保历史行为可追溯。
-2. 增加 `coreclr-net10` profile，并让最小启动、基础 BCL、AOT smoke test 跑绿。
+2. 增加 `coreclr-net10` profile，并让最小启动、基础 BCL、解释执行 smoke test 跑绿。
 3. 建立 `.NET 10` icall/intrinsic coverage 报告，确认被删入口没有被新 profile 依赖。
 4. 迁移或替换旧托管测试，移除 `.NET Framework v4.8` reference assemblies 依赖。
 5. 删除 `mono-4.5` BCL 资产和相关脚本分支。
@@ -397,11 +656,11 @@ Unity/Godot host
 
 - `coreclr-net10` BCL profile：支持 `System.Private.CoreLib`、`System.Runtime`、`Microsoft.NETCore.App` 相关 runtime assemblies，而不是继续假设 `mscorlib`。
 - 程序集解析器：能从 NKG 输出目录、NuGet 缓存、`externals/odin-serializer` 输出、`.NET 10` runtime pack 中解析依赖程序集。
-- 现代 C# / .NET metadata 支持：record、record struct、`init`、`required`、collection expression、nullable attribute、custom attribute、泛型约束和接口默认方法等都要能被加载、AOT 和反射识别。
+- 现代 C# / .NET metadata 支持：record、record struct、`init`、`required`、collection expression、nullable attribute、custom attribute、泛型约束和接口默认方法等都要能被加载、解释执行和反射识别。
 - 基础反射能力：`Activator`、字段/属性/方法枚举、attribute 查询、泛型类型构造、private field 访问、`MetadataToken` 等。Odin 和调试链路都会用到这些能力。
 - UniTask/async 支持：async state machine、struct awaiter、continuation 调度、cancellation、timer/next-frame 等能力需要落到 LeanCLR 的单线程 frame scheduler 或宿主调度器上。
 - Odin 序列化支持：如果完全支持 Odin runtime reflection 成本过高，需要为 LeanCLR 增加预生成 serializer 或限制序列化策略的 profile。
-- AOT codegen 覆盖：NKG 代码大量使用泛型集合、record/value type、delegate、interface dispatch、异常、`TimeSpan`、`Dictionary`/`List`/`HashSet` 等，需要以实际 NKG 程序集作为 smoke test 排缺口。
+- 解释器覆盖：NKG 代码大量使用泛型集合、record/value type、delegate、interface dispatch、异常、`TimeSpan`、`Dictionary`/`List`/`HashSet` 等，需要先以实际 NKG 程序集作为解释执行 smoke test 排缺口。
 
 ### Unity/Godot Bridge 改造
 
@@ -440,19 +699,92 @@ Unity/Godot host
 
 ## 近期任务清单
 
-1. 定稿架构边界：`coreclr` 是引擎无关 `.NET 10` runtime 主线；Unity/Godot 只作为宿主插件和 bridge 接入。
-2. 定稿复用边界：保留 LeanCLR VM 核心，集中改造 BCL profile、runtime contract、AOT 兼容、测试和 bridge。
-3. 恢复 CI 基线：移除 `.github/workflows/ci.yml` 的 `if: false`，固定 .NET 10 SDK，补齐 CMake。
-4. 决定是否加入 `global.json`，建议 pin 到当前验证过的 `10.0.301` 或 CI 统一的 `10.0.x`。
-5. 安装 .NET Framework 4.8 Developer Pack 或改造旧测试引用，解决 `managed.sln` 的 `MSB3644`。
-6. 给 `ExportExtern` 增加一组 .NET 10 BCL 导出脚本。
-7. 输出 `coreclr-net10` 的 extern diff 报告。
-8. 将 `RuntimeApiCatalog` 和 corlib/module 判断 profile 化，拆出 `mono45`、`unity`、`coreclr-net10`。
-9. 增加 `System.Private.CoreLib` / `.NET 10` runtime pack 的 assembly resolver。
-10. 新增最小 `net10.0` 测试解决方案。
-11. 新增 NKGGameFramework 核心 smoke test，不包含 Hosting、Unity、Godot。
-12. 根据 diff 优先补齐启动路径 icall。
-13. 为 AOT modern IL 增加 smoke test。
-14. 设计 Unity/Godot host bridge ABI、opaque handle registry 和主线程 dispatcher。
-15. 更新 README/文档站能力矩阵。
-16. 若确认全切 `.NET 10`，按“历史资产清理”小节逐步删除或归档 mono-4.5 资产、旧式测试和 `mscorlib`/`Mono.*` 遗留。
+- [x] 定稿架构边界：`coreclr` 是引擎无关 `.NET 10` runtime 主线；Unity/Godot 只作为宿主插件和 bridge 接入。
+- [x] 定稿复用边界：保留 LeanCLR VM 核心，集中改造 BCL profile、runtime contract、解释执行兼容、测试和 bridge；AOT 后置。
+- [x] 恢复 CI 手动基线：移除 `.github/workflows/ci.yml` 的 `if: false`，固定 .NET 10 SDK，补齐 Linux native 和 Windows legacy managed job。
+- [x] 加入 `global.json`，pin 到当前验证过的 `10.0.301`，并允许 latest feature roll-forward。
+- [x] 安装并验证 .NET Framework 4.8 Developer Pack，本机 `managed.sln` 已可构建。
+- [x] 给 `ExportExtern` 增加一组 .NET 10 BCL 导出脚本。
+- [x] 输出 `coreclr-net10` 的 extern diff 报告。
+- [x] 将 `RuntimeApiCatalog` 和 corlib/module 判断 profile 化，拆出 `mono45`、`coreclr-net10`。
+- [x] 新增最小 `net10.0` 测试解决方案。
+- [x] 新增最小 `net10.0` LeanAOT C++ 生成 smoke test。
+- [x] 将 `ManagedNet10.Smoke` 拆成可由 native runner 单独调用的子入口，便于定位 .NET 10 BCL 阻断点。
+- [x] 补齐最小 Span stackalloc / RVA initializer smoke 所需的 codegen intrinsic 与 intrinsic 查找路径。
+- [ ] 新增或改造解释执行 runner：支持指定用户程序集目录、`.NET 10` runtime pack 目录和入口方法，避免第一阶段依赖 AOT 生成/编译流程。
+- [ ] 在解释执行 runner 中修复 `TestBoxingMetadata`，让 boxed value type 的 `Object.GetType()` / `RuntimeType.Name` 子路径在 `System.Private.CoreLib` 下通过。
+- [ ] 完成 `coreclr-net10` corlib contract 改造：解除 `System.Private.CoreLib` 初始化阶段的 Mono-era 类型阻断，并把 `mscorlib` / `System.Private.CoreLib` 差异显式 profile 化。
+- [ ] 新增并跑通接口静态虚函数 fixture：先覆盖自定义 `static abstract` interface member，再扩展到 `net10.0` generic math smoke。
+- [ ] 实现接口静态虚函数解释执行支持：覆盖 metadata loader、method resolution、interface method implementation 和解释器调用路径；AOT 调用生成后置。
+- [ ] 根据 `coreclr-net10` extern diff 优先补齐启动路径 icalls / intrinsics，让最小 `ManagedNet10.Smoke` 能在 LeanCLR 解释执行 runner 中端到端执行。
+- [ ] 增加完整 `System.Private.CoreLib` / `.NET 10` runtime pack assembly resolver。
+- [ ] 为其它现代 IL / metadata 缺口增加解释执行 smoke test，并按实际 .NET 10/NKG workload 排序。
+- [ ] 更新 README/文档站能力矩阵。
+- [ ] 新增 NKGGameFramework 核心 smoke test，不包含 Hosting、Unity、Godot。
+- [ ] 设计 Unity/Godot host bridge ABI、opaque handle registry 和主线程 dispatcher。
+- [ ] 若确认全切 `.NET 10`，按“历史资产清理”小节逐步删除或归档 mono-4.5 资产、旧式测试和 `mscorlib`/`Mono.*` 遗留。
+
+## 实施记录
+
+### 代码审查入口
+
+这批改动横跨构建、runtime、profile 和 smoke fixture。review 时建议按下面入口核对，而不是只看最终文档结论：
+
+| 方向 | 主要文件/目录 | 审查重点 |
+| --- | --- | --- |
+| CI 与工具链基线 | `.github/workflows/ci.yml`、`global.json`、`scripts\test\build-all.bat` | .NET 10 SDK pin、手动 CI job 是否恢复、旧 Mono profile 构建是否仍保留 |
+| .NET 10 extern / runtime API profile | `scripts\dotnet10\*`、`src\tools\exportextern\*`、`src\generator\check_runtime_api_signatures.py`、`src\leanaot\LeanAOT\runtime-apis\*` | `mono45` 与 `coreclr-net10` 是否隔离，extern diff 是否能复跑，newobj JSON 是否纳入 diff |
+| Profile/catalog 选择 | `src\leanaot\LeanAOT\Program.cs`、`src\leanaot\LeanAOT.ToCpp\RuntimeApiCatalog.cs`、`GlobalServices.cs`、`TypeNameService.cs`、`src\leanaot\LeanAOT.Core\MetaUtil.cs` | `--leanaot-runtime-api-profile` / `LEANCLR_RUNTIME_API_PROFILE` 是否只影响所选 profile 的 catalog，不破坏 Mono 默认路径 |
+| CoreCLR corlib bootstrap | `src\runtime\const_strs.h`、`src\runtime\metadata\module_def.cpp`、`src\runtime\vm\assembly.cpp`、`class.cpp`、`runtime.cpp`、`rt_string.cpp`、`rt_thread.cpp`、`appdomain.cpp` | `System.Private.CoreLib` 识别、facade 避免误注册、Mono-era required type/layout 校验是否按 profile 降级 |
+| 解释执行 runner 与 runtime API | `src\runtime\*`、`src\tests\managed-net10\*`、runner 相关入口 | 子入口是否足够小，解释执行 runner 是否能指定入口方法，icall/intrinsic 缺口是否能定位到具体 smoke |
+| 后续 AOT 参考记录 | `src\leanaot\LeanAOT.ToCpp\MethodWriterBase.cs`、`MethodWriterBase.CallIntrinsic.cs`、`src\runtime\codegen\leanclr_common.h`、`src\runtime\vm\intrinsics.cpp` | 已有 AOT 诊断和 Span codegen 改动保留为后续阶段参考，不作为当前解释执行验收口 |
+| 旧 profile 回归保护 | `src\tests\managed\CorlibTests\InternalCall\TC_System_Console.cs`、`src\tests\managed\ILTests\ILTests.csproj` | 旧式 `.NET Framework v4.8` / Mono 4.5 测试仍作为回归基线，不被 .NET 10 profile 改造顺手删除 |
+
+2026-06-26 计划口径更新：
+
+- `.NET 10` 第一阶段只处理解释执行，不把 AOT native run 作为近期验收目标。
+- 已完成的 LeanAOT C++ 生成、native build、Span codegen intrinsic 和 AOT 诊断改动保留为历史验证记录；后续是否继续推进 AOT，等解释执行 smoke 端到端通过后再重新排序。
+- 下一轮优先新增或改造解释执行 runner，让 `ManagedNet10.Smoke` 可以按入口方法直接在解释器路径运行，并以 boxing metadata、静态虚接口函数、reflection、delegate/exception、async 为首批切片。
+
+2026-06-26 已落地第一批基础设施改造：
+
+- 增加 `global.json`，固定已验证的 .NET 10 SDK 线为 `10.0.301`，并允许 latest feature roll-forward。
+- 恢复 GitHub Actions 手动 CI 基线，拆分为 SDK/.NET 10、Linux native 和 Windows legacy managed 三类 job。
+- 将 LeanAOT runtime API catalog 拆出 profile 目录：`mono45` 保留现有表，`coreclr-net10` 建立独立空表和核心模块配置。
+- LeanAOT CLI 增加 `--leanaot-runtime-api-profile`，并支持 `LEANCLR_RUNTIME_API_PROFILE` 环境变量。
+- `MetaUtil`、`RuntimeApiCatalog` 和 AOT 调用点改为按 profile 判断 core library module。
+- runtime 侧 corlib 判断增加 `System.Private.CoreLib`，`Assembly::load_corlib` 优先加载 `System.Private.CoreLib` 并回退 `mscorlib`，同时避免把 .NET Core runtime pack 中引用 `System.Private.CoreLib` 的 `mscorlib` facade 注册成真正 corlib。
+- `ExportExtern` 增加 `RollForward=LatestMajor`，可在仅安装 .NET 10 runtime 的环境中运行。
+- 新增 `scripts/dotnet10/export-bcl-externs.ps1` / `.bat`，可从本机或 CI 的 .NET 10 runtime pack 导出 extern 清单到 `artifacts/dotnet10-externs`。
+- `check_runtime_api_signatures.py` 增加 `--profile`、`--runtime-api-dir`、`--externs-dir` 和 `--diff-report`，支持输出 `coreclr-net10` 的 missing/extra/signature_changed/renamed 报告。
+- 新增 `src/tests/managed-net10/managed-net10.sln`，包含 SDK 风格 `net10.0` smoke 程序，覆盖基础类型、泛型、异常、反射、Span、Interlocked/Volatile 和 async。
+- `coreclr-net10` runtime API catalog 已从 `mono45` 现有实现中筛出可与 .NET 10 extern 精确匹配的保守基线：95 个 icall、38 个 intrinsic、8 个 string newobj 入口。
+- .NET 10 extern 导出脚本已在本机跑通，当前导出 `System.Private.CoreLib` 3690 个方法、`System.Console` 33 个方法；diff 报告纳入 newobj JSON 后为 `4191 missing_from_runtime_api`、`0 extra_runtime_api`。
+- 修正 LeanAOT CLI 对带点程序集 short name 的解析，避免 `ManagedNet10.Smoke` 被误截断为 `ManagedNet10`。
+- 新增 `scripts/dotnet10/aot-smoke.ps1` / `.bat`，用 .NET 10 runtime pack 和 `coreclr-net10` profile 对 `ManagedNet10.Smoke` 执行 LeanAOT C++ 生成 smoke，并将该步骤接入 GitHub Actions。脚本额外支持 `-NativeBuild` / `-NativeRun`，本机已验证生成 C++ 可以通过 CMake/VS 2022 编译链接为 `aot-tester.exe`。
+- 安装并验证 CMake `4.3.3`、VS 2022 Build Tools 和 .NET Framework 4.8 Developer Pack 后，`scripts\runtime\build.bat Debug x64`、`scripts\test\build-all.bat Debug x64`、`scripts\test\run.bat Debug x64` 全部通过。
+- 修正 `Console.TreatControlCAsInput` 测试在重定向 runner 下的预期：Mono 的 `NullConsoleDriver` 设计上不会保存该属性，真实 console driver 仍验证可切换行为。
+
+2026-06-26 已按作者反馈收敛后继续推进：
+
+- 将审查计划收敛为三条主线：corlib 名与 contract 改造、CoreCLR 静态虚函数扩展、.NET 10 BCL icalls/intrinsics。
+- `System.Runtime.Remoting.Contexts.Context` 和 `System.Threading.InternalThread` 改为 coreclr 下可缺失的 optional corlib 类型，避免 .NET 10 `System.Private.CoreLib` 初始化阶段继续按 Mono 类型表失败。
+- coreclr corlib 下跳过 Mono 4.5 私有对象布局完整性断言；这些断言仍保留给 `mscorlib` profile。
+- `String::initialize()` 不再依赖 `verify_integrity_of_corlib_classes()` 的批量初始化副作用，显式初始化 `System.String` 的 fields/methods。
+- coreclr corlib 下跳过 Mono `String::Ctor` 重定向 helper，并避免 `String.Empty` 初始化自校验提前触发 .NET 10 `String` cctor。
+- coreclr corlib 下暂不在 runtime 启动时预创建 `Environment.GetCommandLineArgs()` 数组；该 API 后续按 .NET 10 BCL icall/runtime API 缺口补齐。
+- 本机 `scripts\dotnet10\aot-smoke.ps1 -Configuration Release -NativeBuild -NativeRun` 已从 `Runtime::initialize()` 返回 `TypeLoad` 推进到 runtime 初始化完成，当前失败点变为入口方法调用阶段的 `System.BadImageFormatException`。
+- `ManagedNet10.Smoke` 拆出 `TestPairArithmetic`、`TestBoxingMetadata`、`TestSpanStackalloc`、`TestSpanStackallocInitializer` 等子入口，native runner 可用 `-e ManagedNet10.Smoke.Program::<method>` 单独定位阻断点。
+- AOT 生成代码新增 `___ret_ip` 保存，`LEANCLR_CODEGEN_THROW_RUNTIME_ERROR` 现在可接收失败 IL offset，避免所有 runtime error 都丢失到方法尾部。
+- `System.Span<T>` / `System.ReadOnlySpan<T>` 的 `void* + int` 构造函数增加 codegen intrinsic，直接写入 span pointer 和 length 字段。
+- `System.Runtime.CompilerServices.RuntimeHelpers.CreateSpan<T>(RuntimeFieldHandle)` 增加 codegen intrinsic，通过 `get_field_rva_data()` 和新增 `get_field_size()` 读取 RVA 静态数据并构造 `ReadOnlySpan<T>`。
+- runtime intrinsic 查找增加 closed generic declaring type 到 open generic declaring type 的 fallback，使 `System.Span<int>.get_Item` 这类闭泛型方法可命中 `System.Span\`1::get_Item` 已登记 intrinsic。
+- 本机 native 子入口验证已通过 `TestPairArithmetic`、`TestThreadingSubset`、`TestSpanStackalloc`、`TestSpanStackallocInitializer` 和 `TestSpan`；`TestBoxingMetadata`、`TestGenericsDelegatesAndExceptions`、`TestReflection`、`TestAsync` 以及完整入口仍失败。
+
+仍未完成：
+
+- `coreclr-net10` 仍只是可复用实现的保守基线，不等于完整 .NET 10 BCL 支持；剩余 4191 个 extern signature 需要按启动路径和实际 workload 分批补齐。
+- `.NET 10` smoke 当前验证了 SDK 编译/运行、LeanAOT C++ 生成、生成 C++ 的 native 编译/链接、LeanCLR runtime 初始化通过，以及少量 `System.Private.CoreLib` 子路径可执行；LeanCLR 执行完整 `ManagedNet10.Smoke` / Microsoft.NETCore.App 仍未端到端跑通，当前完整 native run 在入口方法调用阶段抛 `System.BadImageFormatException`。
+- 接口静态虚函数尚未实现，也还没有加入 generic math / static abstract interface member smoke。
+- boxing metadata、`Object.GetType()`、`RuntimeType.Name`、反射、delegate/exception 和 async 是下一轮解释执行 smoke 的优先排查点；native/AOT smoke 后置。
+- NKGGameFramework、Unity/Godot bridge、现代 IL 和完整 CoreCLR assembly resolver 仍属于后续阶段。

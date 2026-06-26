@@ -1,0 +1,9 @@
+{
+  "name": "mono45",
+  "coreLibraryModules": [
+    "mscorlib",
+    "System",
+    "System.Core",
+    "LeanCLR"
+  ]
+}

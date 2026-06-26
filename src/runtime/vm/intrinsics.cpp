@@ -34,6 +34,25 @@ const IntrinsicRegistry* Intrinsics::get_intrinsic(const char* name)
     return nullptr;
 }
 
+static RtResultVoid append_open_declaring_type_method_name(utils::Utf8StringBuilder& sb, const metadata::RtMethodInfo* method)
+{
+    RET_ERR_ON_FAIL(metadata::MetadataName::append_klass_full_name_without_generic_params(
+        sb, method->parent, metadata::TypeNameFormat::InternalName));
+    sb.append_cstr("::");
+    sb.append_cstr(method->name);
+
+    uint16_t generic_param_count = Method::get_generic_param_count(method);
+    if (generic_param_count > 0)
+    {
+        sb.append_char('<');
+        sb.append_chars(',', generic_param_count - 1);
+        sb.append_char('>');
+    }
+
+    sb.sure_null_terminator_but_not_append();
+    RET_VOID_OK();
+}
+
 // Get intrinsic by method info (builds full method name with params)
 RtResult<const IntrinsicRegistry*> Intrinsics::get_intrinsic_by_method(const metadata::RtMethodInfo* method)
 {
@@ -49,6 +68,14 @@ RtResult<const IntrinsicRegistry*> Intrinsics::get_intrinsic_by_method(const met
     {
         sb.clear();
         RET_ERR_ON_FAIL(metadata::MetadataName::append_method_full_name_without_params(sb, method, metadata::TypeNameFormat::InternalName));
+        auto it = g_intrinsicMap.find(sb.get_const_chars());
+        if (it != g_intrinsicMap.end())
+            RET_OK(&it->second);
+    }
+
+    {
+        sb.clear();
+        RET_ERR_ON_FAIL(append_open_declaring_type_method_name(sb, method));
         auto it = g_intrinsicMap.find(sb.get_const_chars());
         if (it != g_intrinsicMap.end())
             RET_OK(&it->second);

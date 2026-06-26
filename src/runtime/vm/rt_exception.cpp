@@ -130,6 +130,7 @@ RtException* Exception::raise_error_as_exception(RtErr err, interp::InterpFrame*
 
 RtException* Exception::raise_aot_error_as_exception(RtErr err, const metadata::RtMethodInfo* methodInfo, int32_t ip)
 {
+    (void)methodInfo;
     return raise_error_as_exception(err, nullptr, reinterpret_cast<const void*>(static_cast<intptr_t>(ip)));
 }
 

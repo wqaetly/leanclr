@@ -36,6 +36,44 @@ static uint32_t allocate_image_id()
 static utils::Vector<RtModuleDef*> g_loadedModuleDefs;
 static RtModuleDef* g_corlibModule = nullptr;
 
+static bool is_corlib_name(const char* name)
+{
+    return strcmp(name, STR_CORLIB_NAME) == 0 || strcmp(name, STR_SYSTEM_PRIVATE_CORELIB_NAME) == 0;
+}
+
+static bool is_coreclr_mscorlib_facade(const char* name, const CliImage& cliImage)
+{
+    if (strcmp(name, STR_CORLIB_NAME) != 0)
+    {
+        return false;
+    }
+
+    uint32_t assemblyRefCount = cliImage.get_table_row_num(TableType::AssemblyRef);
+    for (uint32_t i = 1; i <= assemblyRefCount; ++i)
+    {
+        auto optRow = cliImage.read_assembly_ref(i);
+        if (!optRow)
+        {
+            return false;
+        }
+
+        uint32_t nameIndex = optRow.value().name;
+        const CliHeap& stringHeap = cliImage.get_string_heap();
+        if (nameIndex >= stringHeap.size)
+        {
+            return false;
+        }
+
+        const char* refName = reinterpret_cast<const char*>(stringHeap.data + nameIndex);
+        if (strcmp(refName, STR_SYSTEM_PRIVATE_CORELIB_NAME) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static void visit_reflection_object_roots(gc::GcVisitObjectRoot visit, void* userdata)
 {
     for (RtModuleDef* mod : g_loadedModuleDefs)
@@ -192,7 +230,7 @@ RtResultVoid RtModuleDef::load()
     _nameNoExt = _assemblyName.name;
     _name = utils::StringUtil::concat(_assemblyName.name, ".dll");
 
-    _corLib = strcmp(_nameNoExt, STR_CORLIB_NAME) == 0;
+    _corLib = is_corlib_name(_nameNoExt) && !is_coreclr_mscorlib_facade(_nameNoExt, _cliImage);
 
     uint32_t assemblyRefCount = _cliImage.get_table_row_num(TableType::AssemblyRef);
     if (assemblyRefCount > 0)

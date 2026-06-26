@@ -20,7 +20,12 @@ if errorlevel 1 (
 
 echo build managed tests
 pushd "%REPO_ROOT%\src\tests\managed"
-call dotnet build -c %CONFIG%
+set "VS_MSBUILD=%ProgramFiles(x86)%\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+if exist "%VS_MSBUILD%" (
+    call "%VS_MSBUILD%" managed.sln /restore /p:Configuration=%CONFIG% /m
+) else (
+    call dotnet build -c %CONFIG%
+)
 if errorlevel 1 (
     echo ERROR: managed tests build failed.
     popd

@@ -35,6 +35,11 @@ RtResult<metadata::RtClass*> get_class_must_exist(metadata::RtModuleDef* corlib,
     return corlib->get_class_by_name(full_name, false, true);
 }
 
+RtResult<metadata::RtClass*> get_class_optional(metadata::RtModuleDef* corlib, const char* full_name)
+{
+    return corlib->get_class_by_name(full_name, false, false);
+}
+
 CorLibTypes g_corlibTypes{};
 
 RtResultVoid Class::init_corlib_classes(metadata::RtModuleDef* corlib)
@@ -132,9 +137,9 @@ RtResultVoid Class::init_corlib_classes(metadata::RtModuleDef* corlib)
 
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_appdomain, get_class_must_exist(corlib, "System.AppDomain"));
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_appdomain_setup, get_class_must_exist(corlib, "System.AppDomainSetup"));
-    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_appcontext, get_class_must_exist(corlib, "System.Runtime.Remoting.Contexts.Context"));
+    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_appcontext, get_class_optional(corlib, "System.Runtime.Remoting.Contexts.Context"));
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_thread, get_class_must_exist(corlib, "System.Threading.Thread"));
-    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_internal_thread, get_class_must_exist(corlib, "System.Threading.InternalThread"));
+    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_internal_thread, get_class_optional(corlib, "System.Threading.InternalThread"));
 
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_marshal_as, get_class_must_exist(corlib, "System.Runtime.InteropServices.MarshalAsAttribute"));
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_byreflike, get_class_must_exist(corlib, "System.Runtime.CompilerServices.IsByRefLikeAttribute"));
@@ -183,6 +188,13 @@ RtResultVoid Class::initialize()
 RtResultVoid Class::verify_integrity_of_corlib_classes()
 {
     const CorLibTypes& t = get_corlib_types();
+    metadata::RtModuleDef* corlib = metadata::RtModuleDef::get_corlib_module();
+    if (corlib != nullptr && std::strcmp(corlib->get_name_no_ext(), STR_SYSTEM_PRIVATE_CORELIB_NAME) == 0)
+    {
+        RET_ERR_ON_FALSE(sizeof(RtObject) == RT_OBJECT_HEADER_SIZE, RtErr::BadImageFormat);
+        RET_VOID_OK();
+    }
+
     metadata::RtClass* const corlib_type_arr[] = {
         t.cls_void,
         t.cls_boolean,
@@ -283,10 +295,15 @@ RtResultVoid Class::verify_integrity_of_corlib_classes()
 
     for (metadata::RtClass* cls : corlib_type_arr)
     {
+        if (cls == nullptr)
+        {
+            continue;
+        }
         RET_ERR_ON_FAIL(initialize_all(cls));
     }
 
     RET_ERR_ON_FALSE(sizeof(RtObject) == RT_OBJECT_HEADER_SIZE, RtErr::BadImageFormat);
+
     RET_ERR_ON_FALSE(RT_TYPED_REFERENCE_SIZE == PTR_SIZE * 3, RtErr::BadImageFormat);
     RET_ERR_ON_FALSE(get_instance_size_without_object_header(t.cls_typedreference) == RT_TYPED_REFERENCE_SIZE, RtErr::BadImageFormat);
 
@@ -309,7 +326,10 @@ RtResultVoid Class::verify_integrity_of_corlib_classes()
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_reflection_localvariableinfo) == sizeof(RtReflectionLocalVariableInfo), RtErr::BadImageFormat);
 
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_appdomain) == sizeof(RtAppDomain), RtErr::BadImageFormat);
-    RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_appcontext) == sizeof(RtAppContext), RtErr::BadImageFormat);
+    if (t.cls_appcontext != nullptr)
+    {
+        RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_appcontext) == sizeof(RtAppContext), RtErr::BadImageFormat);
+    }
 
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_cultureinfo) == sizeof(RtCultureInfo), RtErr::BadImageFormat);
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_culturedata) == sizeof(RtCultureData), RtErr::BadImageFormat);

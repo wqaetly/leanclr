@@ -231,6 +231,7 @@
     do                                              \
     {                                               \
         ___ret_err = err;                           \
+        ___ret_ip = 0;                              \
         LEANCLR_CODEGEN_GOTO_HANDLE_RETURN_ERROR(); \
     } while (0)
 
@@ -244,6 +245,7 @@
     do                                                                \
     {                                                                 \
         ___ret_err = err;                                             \
+        ___ret_ip = ip;                                               \
         LEANCLR_CODEGEN_GOTO_HANDLE_RETURN_ERROR();                   \
     } while (0)
 
@@ -253,6 +255,7 @@
         if (LEANCLR_CODEGEN_UNLIKELY(!(checkVar)))                                                      \
         {                                                                                               \
             ___ret_err = leanclr::RtErr::NullReference;                                                 \
+            ___ret_ip = ip;                                                                             \
             LEANCLR_CODEGEN_GOTO_HANDLE_RETURN_ERROR();                                                 \
         }                                                                                               \
     } while (0)
@@ -264,6 +267,7 @@
         if (LEANCLR_CODEGEN_UNLIKELY(__result.is_err()))             \
         {                                                            \
             ___ret_err = __result.unwrap_err();                      \
+            ___ret_ip = ip;                                          \
             LEANCLR_CODEGEN_GOTO_HANDLE_RETURN_ERROR();              \
         }                                                            \
     } while (0)
@@ -275,6 +279,7 @@
         if (LEANCLR_CODEGEN_UNLIKELY(__result.is_err()))                               \
         {                                                                              \
             ___ret_err = __result.unwrap_err();                                        \
+            ___ret_ip = ip;                                                            \
             LEANCLR_CODEGEN_GOTO_HANDLE_RETURN_ERROR();                                \
         }                                                                              \
         retVar = (decltype(retVar))__result.unwrap();                                  \
@@ -288,6 +293,7 @@
         if (LEANCLR_CODEGEN_UNLIKELY(__result.is_err()))                                              \
         {                                                                                             \
             ___ret_err = __result.unwrap_err();                                                       \
+            ___ret_ip = ip;                                                                           \
             LEANCLR_CODEGEN_GOTO_HANDLE_RETURN_ERROR();                                               \
         }                                                                                             \
         retVar = __result.unwrap();                                                                   \
@@ -301,6 +307,7 @@
         if (LEANCLR_CODEGEN_UNLIKELY(__result.is_err()))                                                  \
         {                                                                                                 \
             ___ret_err = __result.unwrap_err();                                                           \
+            ___ret_ip = ip;                                                                               \
             LEANCLR_CODEGEN_GOTO_HANDLE_RETURN_ERROR();                                                   \
         }                                                                                                 \
         retVar = (retType)__result.unwrap();                                                              \
@@ -564,6 +571,11 @@ inline RtResult<vm::RtMulticastDelegate*> new_delegate(const metadata::RtClass* 
 inline RtResult<const uint8_t*> get_field_rva_data(const metadata::RtFieldInfo* field) noexcept
 {
     return vm::Field::get_field_rva_data(field);
+}
+
+inline RtResult<size_t> get_field_size(const metadata::RtFieldInfo* field) noexcept
+{
+    return vm::Field::get_field_size(field);
 }
 
 inline uint32_t get_field_offset_includes_object_header(const metadata::RtFieldInfo* field) noexcept

@@ -134,9 +134,28 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument(
+        "--profile",
+        choices=("mono45", "unity", "coreclr-net10"),
+        help="Runtime API profile. mono45 uses src/libraries/mono-4.5 externs; coreclr-net10 uses artifacts/dotnet10-externs.",
+    )
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        help="Repository root. Defaults to the parent of src/.",
+    )
+    parser.add_argument(
+        "--runtime-api-dir",
+        type=Path,
+        help="Directory containing icalls.json and intrinsics.json. If omitted with --profile, uses src/leanaot/LeanAOT/runtime-apis/<profile>.",
+    )
+    parser.add_argument(
+        "--externs-dir",
+        type=Path,
+        help="Directory containing *_externs.txt files. If supplied, all matching files are merged.",
+    )
+    parser.add_argument(
         "--externs",
         action="append",
-        required=True,
         type=Path,
         metavar="FILE",
         help="externs.txt path; repeat to merge multiple files (e.g. win + linux mscorlib).",
@@ -157,13 +176,150 @@ def parse_args() -> argparse.Namespace:
         metavar="FILE",
         help="intrinsics.json path; repeat for multiple files.",
     )
+    parser.add_argument(
+        "--diff-report",
+        type=Path,
+        help="Write a JSON diff report with missing_from_runtime_api, extra_runtime_api, signature_changed, and renamed sections.",
+    )
+    parser.add_argument(
+        "--fail-on-missing-externs",
+        action="store_true",
+        help="Return failure when extern signatures are not covered by runtime API JSON. By default the report is informational.",
+    )
     return parser.parse_args()
+
+
+def default_repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def collect_extern_paths(args: argparse.Namespace, repo_root: Path) -> list[Path]:
+    extern_paths = list(args.externs or [])
+
+    externs_dir = args.externs_dir
+    if args.profile and not extern_paths and externs_dir is None:
+        if args.profile in ("mono45", "unity"):
+            mono45_dir = repo_root / "src" / "libraries" / "mono-4.5"
+            extern_paths.extend(
+                [
+                    mono45_dir / "mscorlib_externs.txt",
+                    mono45_dir / "System_externs.txt",
+                    mono45_dir / "System.Core_externs.txt",
+                ]
+            )
+        elif args.profile == "coreclr-net10":
+            externs_dir = repo_root / "artifacts" / "dotnet10-externs"
+
+    if externs_dir is not None:
+        if not externs_dir.is_dir():
+            raise FileNotFoundError(f"externs directory not found: {externs_dir}")
+        extern_paths.extend(sorted(externs_dir.glob("*_externs.txt")))
+
+    return extern_paths
+
+
+def resolve_runtime_api_dir(args: argparse.Namespace, repo_root: Path) -> Path | None:
+    if args.runtime_api_dir:
+        return args.runtime_api_dir
+
+    if not args.profile:
+        return None
+
+    profile_dir = repo_root / "src" / "leanaot" / "LeanAOT" / "runtime-apis" / args.profile
+    if profile_dir.is_dir():
+        return profile_dir
+
+    if args.profile in ("mono45", "unity"):
+        return repo_root / "src" / "leanaot" / "LeanAOT"
+
+    return profile_dir
+
+
+def collect_runtime_api_lookup_keys(json_paths: list[tuple[str, Path]]) -> set[str]:
+    lookup_keys: set[str] = set()
+    for _kind, path in json_paths:
+        if not path.is_file():
+            continue
+        for entry in load_json_entries(path):
+            name = entry.get("name")
+            if isinstance(name, str) and name.strip():
+                lookup_keys.update(canonical_lookup_keys(name))
+    return lookup_keys
+
+
+def collect_diff_report_runtime_api_paths(
+    json_paths: list[tuple[str, Path]], runtime_api_dir: Path | None
+) -> list[tuple[str, Path]]:
+    report_paths = list(json_paths)
+    seen = {path.resolve() for _kind, path in report_paths}
+
+    if runtime_api_dir is None:
+        return report_paths
+
+    for kind, file_name in (
+        ("icalls_newobj", "icalls_newobj.json"),
+        ("intrinsics_newobj", "intrinsics_newobj.json"),
+    ):
+        path = (runtime_api_dir / file_name).resolve()
+        if path.is_file() and path not in seen:
+            report_paths.append((kind, path))
+            seen.add(path)
+
+    return report_paths
+
+
+def write_diff_report(
+    report_path: Path,
+    extern_paths: list[Path],
+    json_paths: list[tuple[str, Path]],
+    signatures: set[str],
+    extra_runtime_api: list[dict],
+) -> list[str]:
+    runtime_api_keys = collect_runtime_api_lookup_keys(json_paths)
+    missing_from_runtime_api = sorted(signature for signature in signatures if signature not in runtime_api_keys)
+
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report = {
+        "externFiles": [str(path) for path in extern_paths],
+        "runtimeApiFiles": [{"kind": kind, "path": str(path)} for kind, path in json_paths],
+        "counts": {
+            "externSignatures": len(signatures),
+            "runtimeApiLookupKeys": len(runtime_api_keys),
+            "missingFromRuntimeApi": len(missing_from_runtime_api),
+            "extraRuntimeApi": len(extra_runtime_api),
+            "signatureChanged": 0,
+            "renamed": 0,
+        },
+        "missingFromRuntimeApi": missing_from_runtime_api,
+        "extraRuntimeApi": extra_runtime_api,
+        "signatureChanged": [],
+        "renamed": [],
+    }
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return missing_from_runtime_api
 
 
 def main() -> int:
     args = parse_args()
+    repo_root = (args.repo_root or default_repo_root()).resolve()
+    runtime_api_dir = resolve_runtime_api_dir(args, repo_root)
 
-    extern_paths = [p.resolve() for p in args.externs]
+    try:
+        extern_paths = [p.resolve() for p in collect_extern_paths(args, repo_root)]
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if runtime_api_dir is not None:
+        if not args.icalls:
+            args.icalls.append(runtime_api_dir / "icalls.json")
+        if not args.intrinsics:
+            args.intrinsics.append(runtime_api_dir / "intrinsics.json")
+
+    if not extern_paths:
+        print("error: specify at least one --externs file, --externs-dir, or --profile", file=sys.stderr)
+        return 2
+
     for path in extern_paths:
         if not path.is_file():
             print(f"error: externs file not found: {path}", file=sys.stderr)
@@ -195,6 +351,23 @@ def main() -> int:
             + (f" ({whitelisted_count} whitelisted)" if whitelisted_count else "")
         )
         all_missing.extend(missing)
+
+    missing_from_runtime_api: list[str] = []
+    if args.diff_report:
+        diff_report_json_paths = collect_diff_report_runtime_api_paths(json_paths, runtime_api_dir)
+        missing_from_runtime_api = write_diff_report(
+            args.diff_report.resolve(), extern_paths, diff_report_json_paths, signatures, all_missing
+        )
+        print(
+            f"Wrote diff report to {args.diff_report}: "
+            f"{len(missing_from_runtime_api)} missing_from_runtime_api, {len(all_missing)} extra_runtime_api"
+        )
+
+    if args.fail_on_missing_externs and missing_from_runtime_api:
+        print("\nExtern signatures missing from runtime API JSON:")
+        for signature in missing_from_runtime_api:
+            print(f"  {signature}")
+        return 1
 
     if all_missing:
         print("\nMissing entries:")

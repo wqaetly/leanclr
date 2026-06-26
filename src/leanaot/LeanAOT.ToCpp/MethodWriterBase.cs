@@ -241,6 +241,11 @@ namespace LeanAOT.ToCpp
             return "___ret_err";
         }
 
+        private string GetRetErrorIpVariableName()
+        {
+            return "___ret_ip";
+        }
+
         private string GetHanleReturnValueLabelName()
         {
             return "___label_handle_return_value";
@@ -335,6 +340,7 @@ namespace LeanAOT.ToCpp
             if (__curMethodVar != null)
             {
                 _headWriter.AddLine($"{ConstStrings.RtErrTypeName} {GetRetErrorVariableName()} = {{}};");
+                _headWriter.AddLine($"int32_t {GetRetErrorIpVariableName()} = 0;");
             }
 
 
@@ -353,7 +359,7 @@ namespace LeanAOT.ToCpp
             {
                 _tailWriter.AddLine($"{GetHandleReturnErrorLabelName()}:");
                 _tailWriter.AddLine($"assert({GetRetErrorVariableName()} != {ConstStrings.RtErrTypeName}::None);");
-                _tailWriter.AddLine($"LEANCLR_CODEGEN_THROW_RUNTIME_ERROR({GetRetErrorVariableName()}, {CurMethodVar.GetFullReferenceVariableName()}, 0);");
+                _tailWriter.AddLine($"LEANCLR_CODEGEN_THROW_RUNTIME_ERROR({GetRetErrorVariableName()}, {CurMethodVar.GetFullReferenceVariableName()}, {GetRetErrorIpVariableName()});");
             }
             _tailWriter.DecreaseIndent();
         }
@@ -2201,7 +2207,7 @@ namespace LeanAOT.ToCpp
                 // for interface, we should check value type at runtime since it can be implemented by value type
                 return true;
             }
-            if (!MetaUtil.IsCorlibOrSystemOrSystemCore(declaringTypeDef.Module))
+            if (!GlobalServices.Inst.IsCoreLibraryModule(declaringTypeDef.Module))
             {
                 return false;
             }

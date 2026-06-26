@@ -40,11 +40,13 @@ void Thread::setup_internal_thread(RtThread* thread)
 {
     assert(thread != nullptr);
 
-    // Get internal thread class from corlib
     auto internal_thread_class = Class::get_corlib_types().cls_internal_thread;
-    assert(internal_thread_class != nullptr);
+    if (internal_thread_class == nullptr)
+    {
+        thread->internal_thread = nullptr;
+        return;
+    }
 
-    // Create internal thread object
     auto internal_thread_obj = static_cast<RtInternalThread*>(LEANCLR_NEWOBJ_INTERNAL(internal_thread_class, "Thread::setup_internal_thread").unwrap());
 
     internal_thread_obj->state = RtThreadState::Running;
@@ -73,7 +75,10 @@ RtThread* Thread::attach_current_thread(RtAppDomain* app_domain)
 void Thread::detach(RtThread* thread)
 {
     assert(thread != nullptr && thread == g_current_thread);
-    free_internal_thread(thread->internal_thread);
+    if (thread->internal_thread != nullptr)
+    {
+        free_internal_thread(thread->internal_thread);
+    }
     g_current_thread = nullptr;
 }
 
@@ -88,8 +93,11 @@ RtThread** Thread::get_all_attached_threads(size_t* size)
 RtResultVoid Thread::construct_internal_thread(RtThread* thread)
 {
     auto internal_thread_class = Class::get_corlib_types().cls_internal_thread;
+    if (internal_thread_class == nullptr)
+    {
+        RET_ERR(RtErr::NotSupported);
+    }
 
-    // Create internal thread object
     auto internal_thread_obj = static_cast<RtInternalThread*>(LEANCLR_NEWOBJ_INTERNAL(internal_thread_class, "Thread::construct_internal_thread").unwrap());
 
     // Allocate native thread handle
@@ -106,6 +114,11 @@ RtResultVoid Thread::construct_internal_thread(RtThread* thread)
 
 RtResultVoid Thread::free_internal_thread(vm::RtInternalThread* this_thread)
 {
+    if (this_thread == nullptr)
+    {
+        RET_VOID_OK();
+    }
+
     // Free name string (UTF-16) if allocated
     if (this_thread->name_chars != nullptr)
     {
@@ -200,6 +213,11 @@ static int32_t get_next_thread_id()
 bool Thread::start_thread(RtThread* thread, vm::RtMulticastDelegate* start)
 {
     RtInternalThread* internal_thread = thread->internal_thread;
+    if (internal_thread == nullptr)
+    {
+        return false;
+    }
+
     if ((int32_t)get_state(internal_thread) & (int32_t)RtThreadState::Aborted)
     {
         return internal_thread->handle != nullptr;

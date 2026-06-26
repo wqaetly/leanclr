@@ -127,6 +127,9 @@ internal class Program
         [Option("leanaot-may-throw-exception-in-icall", Required = false, HelpText = "LeanAOT-only: enable may throw exception in icall (default off).")]
         public bool LeanAotMayThrowExceptionInIcall { get; set; }
 
+        [Option("leanaot-runtime-api-profile", Required = false, HelpText = "LeanAOT-only: runtime API profile to load, e.g. mono45 or coreclr-net10. Defaults to LEANCLR_RUNTIME_API_PROFILE or mono45.")]
+        public string LeanAotRuntimeApiProfile { get; set; }
+
         [Option("leanaot-unity-version", Required = false, HelpText = "LeanAOT-only: Unity editor version string (e.g. 6000.0.4f1).")]
         public string LeanAotUnityVersion { get; set; }
 
@@ -157,7 +160,6 @@ internal class Program
     static void Main(string[] args)
     {
         SetupApp();
-        var runtimeApiCatalog = LoadRuntimeApiCatalogFromCurrentDirectory();
 
         int exitCode = 0;
         var helpWriter = new StringWriter();
@@ -205,7 +207,13 @@ internal class Program
 
                 try
                 {
+                    var runtimeApiCatalog = LoadRuntimeApiCatalogFromCurrentDirectory(options.LeanAotRuntimeApiProfile);
                     Run(dllSearchPaths, aotAssemblyNames, outputCodeDir, options, runtimeApiCatalog);
+                }
+                catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is ArgumentException)
+                {
+                    s_logger.Error(ex, "Failed to load runtime API catalog.");
+                    exitCode = 1;
                 }
                 catch (AotRuleFileException ex)
                 {
@@ -221,13 +229,18 @@ internal class Program
         Environment.ExitCode = exitCode;
     }
 
-    private static RuntimeApiCatalog LoadRuntimeApiCatalogFromCurrentDirectory()
+    private static RuntimeApiCatalog LoadRuntimeApiCatalogFromCurrentDirectory(string requestedProfile)
     {
         var baseDir = AppContext.BaseDirectory;
-        var catalog = RuntimeApiCatalog.LoadFromDirectory(baseDir);
+        var profile = string.IsNullOrWhiteSpace(requestedProfile)
+            ? Environment.GetEnvironmentVariable("LEANCLR_RUNTIME_API_PROFILE")
+            : requestedProfile;
+        var catalog = RuntimeApiCatalog.LoadFromDirectory(baseDir, string.IsNullOrWhiteSpace(profile) ? "mono45" : profile.Trim());
         s_logger.Info(
-            "Loaded runtime API configs from {0}: icalls={1}, intrinsics={2}, icalls_newobj={3}, intrinsics_newobj={4}, static_linked_pinvoke_dlls={5}, static_linked_pinvoke_methods={6}",
-            baseDir,
+            "Loaded runtime API profile {0} from {1}: core_modules={2}, icalls={3}, intrinsics={4}, icalls_newobj={5}, intrinsics_newobj={6}, static_linked_pinvoke_dlls={7}, static_linked_pinvoke_methods={8}",
+            catalog.ProfileName,
+            catalog.SourceDirectory,
+            catalog.CoreLibraryModuleCount,
             catalog.IcallCount,
             catalog.IntrinsicCount,
             catalog.IcallNewobjCount,
@@ -282,7 +295,7 @@ internal class Program
             if (string.IsNullOrWhiteSpace(raw))
                 continue;
             var trimmed = raw.Trim();
-            var name = Path.GetFileNameWithoutExtension(trimmed);
+            var name = GetAssemblyShortName(trimmed);
             if (!aotAssemblyNames.Contains(name, StringComparer.OrdinalIgnoreCase))
                 aotAssemblyNames.Add(name);
             var dir = Path.GetDirectoryName(trimmed);
@@ -343,6 +356,17 @@ internal class Program
         }
 
         return true;
+    }
+
+    private static string GetAssemblyShortName(string assemblyInput)
+    {
+        var fileName = Path.GetFileName(assemblyInput);
+        if (fileName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.GetFileNameWithoutExtension(fileName);
+        }
+
+        return fileName;
     }
 
     /// <summary>

@@ -18,6 +18,7 @@
 #include "environment.h"
 #include "settings.h"
 #include "gc.h"
+#include "const_strs.h"
 
 #include "metadata/metadata_cache.h"
 #include "metadata/module_def.h"
@@ -26,6 +27,8 @@
 #include "alloc/metadata_allocation.h"
 #include "interp/machine_state.h"
 #include "utils/rt_vector.h"
+
+#include <cstring>
 
 namespace leanclr
 {
@@ -393,9 +396,12 @@ RtResultVoid Runtime::initialize()
     int32_t argc;
     const char** argv;
     Settings::get_command_line_arguments(argc, argv);
-    RET_ERR_ON_FAIL(Environment::init_cmdline_args(argv, argc));
-
     metadata::RtModuleDef* corlib_mod = Assembly::get_corlib()->mod;
+    if (std::strcmp(corlib_mod->get_name_no_ext(), STR_SYSTEM_PRIVATE_CORELIB_NAME) != 0)
+    {
+        RET_ERR_ON_FAIL(Environment::init_cmdline_args(argv, argc));
+    }
+
     auto corlib_aot_module_data = corlib_mod->get_aot_module_data();
     if (corlib_aot_module_data != nullptr && corlib_aot_module_data->deferred_initializer)
     {

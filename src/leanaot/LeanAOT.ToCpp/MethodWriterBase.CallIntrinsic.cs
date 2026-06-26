@@ -43,7 +43,7 @@ namespace LeanAOT.ToCpp
                 return false;
             }
 
-            if (!MetaUtil.IsCorlibOrSystemOrSystemCore(methodDef.Module))
+            if (!GlobalServices.Inst.IsCoreLibraryModule(methodDef.Module))
             {
                 return false;
             }
@@ -86,6 +86,11 @@ namespace LeanAOT.ToCpp
             default:
                 break;
             }
+
+            if (TryEmitRuntimeHelpersCreateSpan(inst, methodDef, args, retVar))
+            {
+                return true;
+            }
             
             
             var runtimeApiCatalog = GlobalServices.Inst.RuntimeApiCatalog;
@@ -96,6 +101,32 @@ namespace LeanAOT.ToCpp
             }
 
             return false;
+        }
+
+        private bool TryEmitRuntimeHelpersCreateSpan(Instruction inst, MethodDef methodDef, List<EvalVariable> args, EvalVariable retVar)
+        {
+            if (methodDef.DeclaringType.FullName != "System.Runtime.CompilerServices.RuntimeHelpers" || methodDef.Name != "CreateSpan")
+            {
+                return false;
+            }
+
+            if (args.Count != 1)
+            {
+                throw new Exception($"Unexpected RuntimeHelpers.CreateSpan argument count: {methodDef.FullName}");
+            }
+
+            string retVarName = GetEvalVariableName(retVar);
+            string fieldVarName = $"{retVarName}_field";
+            string rvaDataVarName = $"{retVarName}_rva_data";
+            string fieldSizeVarName = $"{retVarName}_field_size";
+
+            _bodyWriter.AddLine($"{retVarName} = {{}};");
+            _bodyWriter.AddLine($"{ConstStrings.FieldInfoPtrTypeName} {fieldVarName} = {GetEvalVariableExprWithCast(args[0], ConstStrings.FieldInfoPtrTypeName)};");
+            _bodyWriter.AddLine($"{VmFunctionNames.GOTO_DECLARING_ASSIGN_OR_THROW}(const uint8_t*, {rvaDataVarName}, leanclr::codegen::get_field_rva_data({fieldVarName}), {CurMethodVar.GetFullReferenceVariableName()}, {GetCurrentIpOffset(inst)});");
+            _bodyWriter.AddLine($"{VmFunctionNames.GOTO_DECLARING_ASSIGN_OR_THROW}(size_t, {fieldSizeVarName}, leanclr::codegen::get_field_size({fieldVarName}), {CurMethodVar.GetFullReferenceVariableName()}, {GetCurrentIpOffset(inst)});");
+            _bodyWriter.AddLine($"{retVarName}.__field_0 = (decltype({retVarName}.__field_0)){rvaDataVarName};");
+            _bodyWriter.AddLine($"{retVarName}.__field_1 = static_cast<int32_t>({fieldSizeVarName} / sizeof(*{retVarName}.__field_0));");
+            return true;
         }
 
 
@@ -136,7 +167,7 @@ namespace LeanAOT.ToCpp
             {
                 return false;
             }
-            if (!MetaUtil.IsCorlibOrSystemOrSystemCore(methodDef.Module))
+            if (!GlobalServices.Inst.IsCoreLibraryModule(methodDef.Module))
             {
                 return false;
             }
@@ -187,9 +218,14 @@ namespace LeanAOT.ToCpp
                 }
                 return false;
             }
-            if (!MetaUtil.IsCorlibOrSystemOrSystemCore(methodDef.Module))
+            if (!GlobalServices.Inst.IsCoreLibraryModule(methodDef.Module))
             {
                 return false;
+            }
+
+            if (TryEmitSpanPointerLengthConstructor(methodDef, args, retVar))
+            {
+                return true;
             }
 
             string icallsHeader = "icalls/system_string.h";
@@ -250,6 +286,26 @@ namespace LeanAOT.ToCpp
             _forwardDeclaration.AddInclude(icallsHeader);
             EmitDeclaringAssignOrThrow(inst, retVar, $"leanclr::icalls::{icallsFuncName}({argsStr})");
             EmitAssumeNotNull(retVar);
+            return true;
+        }
+
+        private bool TryEmitSpanPointerLengthConstructor(MethodDef methodDef, List<EvalVariable> args, EvalVariable retVar)
+        {
+            if (methodDef.FullName != "System.Void System.Span`1::.ctor(System.Void*,System.Int32)" &&
+                methodDef.FullName != "System.Void System.ReadOnlySpan`1::.ctor(System.Void*,System.Int32)")
+            {
+                return false;
+            }
+
+            if (args.Count != 2)
+            {
+                throw new Exception($"Unexpected Span pointer constructor argument count: {methodDef.FullName}");
+            }
+
+            string retVarName = GetEvalVariableName(retVar);
+            _bodyWriter.AddLine($"{GetTypeName(retVar)} {retVarName} = {{}};");
+            _bodyWriter.AddLine($"{retVarName}.__field_0 = (decltype({retVarName}.__field_0)){GetEvalVariableExprWithCast(args[0], "void*")};");
+            _bodyWriter.AddLine($"{retVarName}.__field_1 = {GetEvalVariableExprWithCast(args[1], "int32_t")};");
             return true;
         }
 
