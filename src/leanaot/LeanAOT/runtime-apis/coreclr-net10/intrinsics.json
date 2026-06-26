@@ -1,5 +1,15 @@
 [
   {
+    "name": "System.Array::Copy(System.Array,System.Array,System.Int32)",
+    "func": "SystemArray::copy",
+    "header": "intrinsics/system_array.h"
+  },
+  {
+    "name": "System.Array::Copy(System.Array,System.Int32,System.Array,System.Int32,System.Int32)",
+    "func": "SystemArray::copy",
+    "header": "intrinsics/system_array.h"
+  },
+  {
     "name": "System.MathF::Round(System.Single)",
     "func": "SystemMathF::round",
     "header": "intrinsics/system_mathf.h"

@@ -1,6 +1,9 @@
 #include "system_array.h"
 
+#include <cstring>
+
 #include "interp/eval_stack_op.h"
+#include "vm/class.h"
 #include "vm/rt_array.h"
 
 namespace leanclr
@@ -39,6 +42,68 @@ RtResultVoid SystemArray::set_generic_value_impl(vm::RtArray* arr, int32_t index
     const uint8_t* src_ptr = static_cast<const uint8_t*>(value);
     std::memcpy(dest_ptr, src_ptr, ele_size);
     RET_VOID_OK();
+}
+
+RtResultVoid SystemArray::copy(vm::RtArray* source_array, int32_t source_index, vm::RtArray* destination_array, int32_t destination_index,
+                               int32_t length) noexcept
+{
+    if (source_array == nullptr || destination_array == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+    if (length < 0 || source_index < 0 || destination_index < 0)
+    {
+        RET_ERR(RtErr::ArgumentOutOfRange);
+    }
+
+    const uint32_t source_length = static_cast<uint32_t>(vm::Array::get_array_length(source_array));
+    const uint32_t destination_length = static_cast<uint32_t>(vm::Array::get_array_length(destination_array));
+    const uint32_t source_index_u = static_cast<uint32_t>(source_index);
+    const uint32_t destination_index_u = static_cast<uint32_t>(destination_index);
+    const uint32_t length_u = static_cast<uint32_t>(length);
+
+    if (source_index_u > source_length || destination_index_u > destination_length || length_u > source_length - source_index_u ||
+        length_u > destination_length - destination_index_u)
+    {
+        RET_ERR(RtErr::Argument);
+    }
+    if (length == 0)
+    {
+        RET_VOID_OK();
+    }
+
+    const metadata::RtClass* source_class = source_array->klass;
+    const metadata::RtClass* destination_class = destination_array->klass;
+    const metadata::RtClass* source_element_class = vm::Array::get_array_element_class(source_array);
+    const metadata::RtClass* destination_element_class = vm::Array::get_array_element_class(destination_array);
+
+    if (source_class != destination_class)
+    {
+        if (vm::Class::is_value_type(source_element_class) || vm::Class::is_value_type(destination_element_class) ||
+            !vm::Class::is_assignable_from(source_element_class, destination_element_class))
+        {
+            RET_ERR(RtErr::ArrayTypeMismatch);
+        }
+    }
+
+    const size_t source_element_size = vm::Array::get_array_element_size(source_array);
+    const size_t destination_element_size = vm::Array::get_array_element_size(destination_array);
+    if (source_element_size != destination_element_size)
+    {
+        RET_ERR(RtErr::ArrayTypeMismatch);
+    }
+
+    const uint8_t* source = static_cast<const uint8_t*>(vm::Array::get_array_data_start_as_ptr_void(source_array)) +
+                            static_cast<size_t>(source_index) * source_element_size;
+    uint8_t* destination = static_cast<uint8_t*>(vm::Array::get_array_data_start_as_ptr_void(destination_array)) +
+                           static_cast<size_t>(destination_index) * destination_element_size;
+    std::memmove(destination, source, static_cast<size_t>(length) * source_element_size);
+    RET_VOID_OK();
+}
+
+RtResultVoid SystemArray::copy(vm::RtArray* source_array, vm::RtArray* destination_array, int32_t length) noexcept
+{
+    return copy(source_array, 0, destination_array, 0, length);
 }
 
 /// @intrinsic: System.Array::get_Length
@@ -87,12 +152,51 @@ static RtResultVoid set_generic_value_impl_invoker(metadata::RtManagedMethodPoin
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.Array::Copy(System.Array,System.Int32,System.Array,System.Int32,System.Int32)
+static RtResultVoid copy_indexed_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    (void)ret;
+
+    vm::RtArray* source_array = interp::EvalStackOp::get_param<vm::RtArray*>(params, 0);
+    int32_t source_index = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    vm::RtArray* destination_array = interp::EvalStackOp::get_param<vm::RtArray*>(params, 2);
+    int32_t destination_index = interp::EvalStackOp::get_param<int32_t>(params, 3);
+    int32_t length = interp::EvalStackOp::get_param<int32_t>(params, 4);
+
+    RET_ERR_ON_FAIL(SystemArray::copy(source_array, source_index, destination_array, destination_index, length));
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.Array::Copy(System.Array,System.Array,System.Int32)
+static RtResultVoid copy_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    (void)ret;
+
+    vm::RtArray* source_array = interp::EvalStackOp::get_param<vm::RtArray*>(params, 0);
+    vm::RtArray* destination_array = interp::EvalStackOp::get_param<vm::RtArray*>(params, 1);
+    int32_t length = interp::EvalStackOp::get_param<int32_t>(params, 2);
+
+    RET_ERR_ON_FAIL(SystemArray::copy(source_array, destination_array, length));
+    RET_VOID_OK();
+}
+
 // Intrinsic registry
 static vm::IntrinsicEntry s_intrinsic_entries_system_array[] = {
     {"System.Array::get_Length", (vm::IntrinsicFunction)&SystemArray::get_length, get_length_invoker_intrinsics_system_array},
     {"System.Array::get_LongLength", (vm::IntrinsicFunction)&SystemArray::get_long_length, get_long_length_invoker},
     {"System.Array::GetGenericValueImpl<>", (vm::IntrinsicFunction)&SystemArray::get_generic_value_impl, get_generic_value_impl_invoker},
     {"System.Array::SetGenericValueImpl<>", (vm::IntrinsicFunction)&SystemArray::set_generic_value_impl, set_generic_value_impl_invoker},
+    {"System.Array::Copy(System.Array,System.Int32,System.Array,System.Int32,System.Int32)",
+     (vm::IntrinsicFunction)static_cast<RtResultVoid (*)(vm::RtArray*, int32_t, vm::RtArray*, int32_t, int32_t)>(&SystemArray::copy),
+     copy_indexed_invoker},
+    {"System.Array::Copy(System.Array,System.Array,System.Int32)",
+     (vm::IntrinsicFunction)static_cast<RtResultVoid (*)(vm::RtArray*, vm::RtArray*, int32_t)>(&SystemArray::copy), copy_invoker},
 };
 
 utils::Span<vm::IntrinsicEntry> SystemArray::get_intrinsic_entries() noexcept

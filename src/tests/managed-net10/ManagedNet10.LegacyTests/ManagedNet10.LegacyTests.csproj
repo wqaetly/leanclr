@@ -19,6 +19,7 @@
     <Compile Include="MemoryTestEntries.cs" />
     <Compile Include="ObjectMiscTestEntries.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ArrayCopyRegressionTestEntries.cs" />
     <Compile Include="CorlibToStringTestEntries.cs" />
     <Compile Include="ToStringRegressionTestEntries.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
