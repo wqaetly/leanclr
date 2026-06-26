@@ -6,19 +6,20 @@
 
 ## 结论摘要
 
-LeanCLR 当前已经能在本机 .NET 10 SDK 下构建 `net8.0` 的 LeanAOT 与工具项目，但这不等于已经支持 .NET 10 BCL。
+2026-06-27 范围收敛决策：当前主线不再追求“完整承载 `System.Private.CoreLib` / `Microsoft.NETCore.App` 的 .NET 10 BCL 子集”。新的目标是 **LeanCLR minimal net10 profile**：让项目自己的、受控的、纯逻辑 `net10.0` DLL 能在 LeanCLR 上稳定运行。
 
-要真正支持 .NET 10，主线工作不是简单把所有 `TargetFramework` 从 `net8.0` 改成 `net10.0`，而是建立 CoreCLR/.NET 10 BCL 输入、内部调用覆盖、测试工程和 CI 门禁。当前仓库主要仍围绕 Mono 4.5 BCL 与 `mscorlib` 模型组织，运行时和 AOT 工具里有多处对 `mscorlib`、`System`、`System.Core`、Mono icall 名称和旧式 `.NET Framework 4.8` 测试项目的假设。
+2026-06-27 验收口径补充：`minimal net10 profile` 是近期工程边界，不代表只跑少量精选测试就宣告合格。原作者已经设计好的 managed / Mono 测试资产应作为 LeanCLR 自身能力的完整质量门槛：可以按优先级分阶段迁移、分批排缺口，但最终需要全量跑通，才能认为 `.NET 10` 接入是完整可靠的。
 
-当前实施决策：`.NET 10` 第一阶段只处理解释执行，不把 AOT 作为近期验收目标。AOT 相关脚本和已完成验证继续保留为历史记录与后续阶段输入，但下一轮修复应优先让 `coreclr-net10` 在解释器路径中完成 corlib 初始化、入口调用、基础 BCL 和 NKG 核心 smoke。
+已经完成的 `.NET 10` 探路工作仍然有效：`coreclr-net10` profile 隔离、`System.Private.CoreLib` 识别、`leanrun` 解释执行 runner、`ManagedNet10.Smoke` 拆分与 53 个 `Test*` 子入口通过，证明 LeanCLR 已经具备运行受控 `net10.0` 纯逻辑程序集的基础。后续不应继续把目标扩大成小型 CoreCLR。
 
-优先级最高的事情：
+新的实施决策：
 
-1. 明确定义 `.NET 10 支持` 的范围：仅运行用户 `net10.0` 程序集，还是承载 `System.Private.CoreLib` / `Microsoft.NETCore.App` 的 .NET 10 BCL 子集。
-2. 为 CoreCLR/.NET 10 增加独立 BCL profile，不要覆盖现有 Mono/Unity profile。
-3. 生成并对比 .NET 10 BCL 的 internal call / intrinsic / PInvoke 需求清单。
-4. 新增 `net10.0` 托管测试资产和解释执行 smoke，保留现有 Mono 4.5 测试资产。
-5. 恢复 CI，并在 CI 中同时跑 SDK 工具链、旧 Mono 测试和新增 .NET 10 解释执行测试；AOT 门禁后置。
+1. 保留 `net10.0` 用户程序集加载、基础 IL、泛型、异常、委托、少量反射、必要 Span/Unsafe 与清晰诊断。
+2. 将 `System.Private.CoreLib` / `Microsoft.NETCore.App` 的完整或大子集承载后置，仅在真实纯逻辑 DLL 触发具体依赖时按需补齐。
+3. 不再以剩余 extern diff 数量下降作为主线目标；`ExportExtern` / `dotnet/runtime` 源码只作为排障和定位工具。
+4. 新增 API 白名单和 `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描，让不支持的 BCL 依赖在构建或加载阶段明确失败。
+5. 将后续主线转向真实纯逻辑 DLL smoke、Unity/Godot host bridge ABI、opaque handle registry 和主线程 dispatcher。
+6. 原作者 managed / Mono 测试资产采用“分阶段迁移、最终全量跑通”的策略；P0/P1/P2/P3 只用于排障排序，不用于缩减最终合格线。
 
 ## 官方基线
 
@@ -562,39 +563,45 @@ Unity/Godot host
 
 ### 4. 当前 `coreclr` 分支状态判断
 
-当前分支已经具备第一批 CoreCLR/.NET 10 基础设施：README 已明确 `coreclr` 分支目标，SDK 工具链可在 .NET 10 SDK 下构建，runtime API catalog 已 profile 化，`coreclr-net10` extern diff 和最小 `net10.0` smoke 已建立。
+当前分支已经具备第一批 minimal net10 基础设施：SDK 工具链可在 .NET 10 SDK 下构建，runtime API catalog 已 profile 化，`coreclr-net10` extern diff 和最小 `net10.0` smoke 已建立，`ManagedNet10.Smoke` 完整入口和 53 个 `Test*` 子入口已作为解释执行绿色基线。
 
-但以“能承载 `.NET 10` BCL 和 NKGGameFramework”为标准，当前还没有完成可验证的 .NET Core BCL 适配。主要证据：
+以“运行项目自己的纯逻辑 `net10.0` DLL，并最终跑通原作者测试资产”为标准，当前没有整体跑偏，但还缺少正式的能力边界、测试全量迁移和真实 workload 验收。主要缺口：
 
-- runtime 虽已能把 `System.Private.CoreLib` 识别为 corlib，且 native run 已通过 `Runtime::initialize()`，但完整入口调用阶段仍抛 `System.BadImageFormatException`；拆分子入口后已确认基础值类型算术、线程同步最小子集和 Span 子场景可执行，下一步应优先修 boxing metadata / `Object.GetType()` / `RuntimeType.Name` 等 CoreCLR metadata 路径。
-- `coreclr-net10` runtime API catalog 仍只是保守基线，diff 仍显示数千个 .NET 10 extern signature 尚未覆盖。
-- `src/libraries/LeanCLR` 仍是 `.NET Framework v4.8` 旧式项目，引用 `mono-4.5/mscorlib.dll`。
-- 旧式托管测试主要是 `.NET Framework v4.8` + `mono-4.5`；新增 `net10.0` smoke 现在能证明 LeanCLR 可执行少量 `System.Private.CoreLib` 子路径，但还不能证明完整 Microsoft.NETCore.App profile 可用。
-- NKGGameFramework、Unity/Godot bridge、现代 IL 全量覆盖和完整 CoreCLR assembly resolver 尚未纳入验收。
+- 尚未定义 `minimal-net10` API 白名单。
+- 尚未实现 `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描，无法在构建或加载阶段阻止越界 BCL 依赖。
+- 原作者 managed / Mono 测试资产尚未完成 `net10.0` profile 迁移和全量执行；当前只迁入少量 legacy cases，不能把精选通过作为最终完成。
+- `ManagedNet10.Smoke` 仍混有 BCL 探路性质的测试，需要整理为阶段性定位集，并和 legacy 测试全量迁移计划对齐。
+- 项目真实纯逻辑 DLL smoke 尚未接入；`C:\study\wqaetly\new\NKGGameFramework` 应作为第一批真实框架 workload。
+- Unity/Godot bridge、opaque handle registry、主线程 dispatcher 和 mock host 尚未纳入验收。
+
+以“完整承载 `.NET 10` BCL / Microsoft.NETCore.App”为标准，当前仍未完成；但该目标已经后置，不再作为近期计划主线。
 
 ## 建议实施计划
 
-### 作者反馈后的计划收敛
+### 2026-06-27 范围收敛后的计划
 
-在“先不处理 AOT，只先处理解释执行”的决策下，`coreclr` 分支近期方向收敛为三条主线：
+在确认实际目标是“导出并运行项目自己的纯逻辑 `net10.0` DLL”后，`coreclr` 分支近期方向收敛为四条新主线：
 
-1. **Corlib 名与 corlib contract 改造**：让 `System.Private.CoreLib` 成为 `coreclr-net10` profile 的真实 corlib，清理 runtime 中把 `mscorlib` / Mono-era 类型当全局必需条件的假设。
-2. **解释器路径支持 CoreCLR metadata / method resolution**：优先让接口默认方法、接口静态虚函数、泛型约束、boxing metadata、delegate 和 exception 等在解释执行中可解析、可调用、可诊断。
-3. **补齐解释路径需要的 .NET 10 BCL icalls / intrinsics**：继续用 `coreclr-net10` extern diff 驱动实现顺序，但只按解释执行 smoke 和实际 workload 分批补齐，不把 AOT lowering 作为当前完成条件。
+1. **minimal net10 profile**：保留 `net10.0` 用户程序集加载、基础 IL、核心类型、异常、委托、泛型、少量反射和必要 Span/Unsafe；完整 `Microsoft.NETCore.App` 承载后置。
+2. **API 白名单与静态扫描**：建立允许的 BCL/API 表，并扫描 `AssemblyRef` / `TypeRef` / `MemberRef`，让白名单外 API 在构建或加载阶段明确失败。
+3. **原作者测试资产全量迁移**：把已有 managed / Mono 测试按能力分层迁移到 `.NET 10` 验证路径；分层只决定顺序，最终门槛是全量跑通。
+4. **NKGGameFramework 真实 workload 与 Unity/Godot bridge**：用 `C:\study\wqaetly\new\NKGGameFramework` 的核心逻辑库验证真实项目可运行性，同时启动 host bridge ABI、opaque handle registry 和主线程 dispatcher 设计。
 
-因此当前计划应从“全面迁移 .NET 10 生态”进一步收敛为“先让最小 .NET 10 corlib + CoreCLR metadata 扩展 + BCL runtime API 在解释执行中跑通”。AOT、Unity/Godot bridge、Hosting/Web Debug 和历史资产清理都应排在解释执行端到端跑通之后。
+因此当前计划不再是“先让最小 .NET 10 corlib + CoreCLR metadata 扩展 + BCL runtime API 全面跑通”，而是“先让 LeanCLR 稳定运行受控纯逻辑 `net10.0` DLL，并对越界 API 做清晰诊断”。但最终合格线应提升为：原作者测试资产全量通过、NKGGameFramework 核心 workload 通过、API 白名单无越界。AOT、完整 BCL、完整 resolver、generic math、ThreadPool、Hosting/Web Debug 和历史资产清理都按真实 workload 与全量测试缺口排序。
 
 ### 阶段 0：定义支持范围
 
 输出一页设计决策：
 
-- 支持目标是 `net10.0` 用户程序集、.NET 10 BCL 子集，还是完整 CoreCLR BCL。
-- 是否支持单线程-only。
+- 支持目标明确为 `LeanCLR minimal net10 profile`：运行项目自己的纯逻辑 `net10.0` DLL。
+- 明确不承诺完整 `System.Private.CoreLib` / `Microsoft.NETCore.App` / CoreCLR BCL 兼容。
+- 是否支持单线程-only；完整 ThreadPool 和复杂 async continuation 后置。
 - 当前阶段明确只支持解释执行；AOT 作为后续阶段，不进入第一阶段验收口。
 - 支持平台优先级：Windows x64、Linux x64、wasm、移动端。
 - 明确 `coreclr` 分支是引擎无关 runtime 主线，Unity/Godot 通过宿主插件和 bridge 接入。
 - 明确 VM 核心复用边界，禁止把 .NET 10 支持误拆成重写 metadata/type system/interpreter/GC。
-- 明确近期三主线：corlib 改造、解释器 metadata/method resolution、解释路径需要的 .NET 10 BCL icalls/intrinsics。
+- 明确测试验收口径：原作者 managed / Mono 测试资产必须分阶段迁移并最终全量跑通；阶段标签只表示优先级，不表示缩减最终范围。
+- 明确近期四主线：API 白名单/静态扫描、原作者测试资产迁移、NKGGameFramework 真实 workload、Unity/Godot host bridge。
 
 ### 阶段 1：构建与 CI 基线
 
@@ -606,14 +613,14 @@ Unity/Godot host
 - Windows CI 安装 .NET Framework 4.8 Developer Pack 或调整旧测试项目以不依赖系统 reference assemblies。
 - 把 `dotnet build src/leanaot/LeanAOT.sln`、`ExportExtern`、`Pgo2Aot` 纳入 CI。
 
-### 阶段 2：.NET 10 BCL 输入与差异报告
+### 阶段 2：minimal net10 API 白名单与差异诊断
 
 任务：
 
-- 新增脚本定位本机/CI 的 .NET 10 reference assemblies 和 runtime assemblies。
-- 用 `ExportExtern` 或增强版工具导出 `System.Private.CoreLib` 等 assembly 的 external/runtime API 需求。
-- 将导出结果与现有 550 个 icall 和 45 个 intrinsic 做 diff。
-- 生成 `missing / signature changed / extra / renamed` 四类报告。
+- 定义 minimal profile 允许的 assembly、type 和 member 白名单。
+- 新增 `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描，识别用户 DLL 是否越界引用 BCL/API。
+- `ExportExtern` 和 runtime pack diff 仅作为排障工具，用于解释“为什么某个真实 workload 失败”，不作为持续归零指标。
+- 输出 `unsupported_api / missing_runtime_api / signature_changed` 等面向用户的诊断报告。
 
 ### 阶段 3：BCL profile 化
 
@@ -625,24 +632,26 @@ Unity/Godot host
 - runtime 的 corlib 名称识别支持 `System.Private.CoreLib`。
 - 保留 `mono45` 和 `unity` 现有行为。
 
-### 阶段 4：新增 .NET 10 测试资产
+### 阶段 4：新增 minimal net10 与真实纯逻辑测试资产
 
 任务：
 
 - 新增 SDK 风格 `net10.0` smoke tests。
-- 覆盖基础类型、泛型、异常、反射、数组、delegate、string、span、threading subset、P/Invoke subset。
-- 增加 `coreclr-net10` 的 icall coverage 标注。
-- 复用 `src/tools/leanrun`，新增解释执行 smoke 脚本，能直接加载 `net10.0` 程序集和 .NET 10 runtime pack。
+- 覆盖真实纯逻辑 DLL 会用到的基础类型、泛型、异常、反射、数组、delegate、string、span 和必要 unsafe 路径。
+- 迁移原作者 managed / Mono 测试资产：先迁移核心 IL、对象模型、泛型、委托、异常、反射边界等高频能力，再继续补齐 threading、P/Invoke、深层 reflection、I/O 等后续能力；最终不以“精选通过”为完成标准。
+- 接入 `C:\study\wqaetly\new\NKGGameFramework` 作为第一批真实框架 workload，先跑核心逻辑，再扩展到 async、轻量反射、序列化和引擎 bridge。
+- 复用 `src/tools/leanrun`，解释执行 smoke 脚本应能加载 `net10.0` 用户程序集和 minimal profile 所需程序集。
 - AOT smoke 只作为已有历史验证和后续阶段目标，不作为第一阶段门禁。
 
-### 阶段 5：实现高优先级 runtime API
+### 阶段 5：按真实 workload 实现高优先级 runtime API
 
 任务：
 
-- 按 diff 报告优先补齐 `System.Private.CoreLib` 直接启动路径。
-- 优先模块：string、array、object、runtime handles、reflection、marshal、interop、threading 基础、environment、math。
+- 按真实纯逻辑 DLL 和 minimal smoke 优先补齐 runtime API。
+- 优先模块：string、array、object、runtime handles、少量 reflection、exception、delegate、span/unsafe、math。
+- marshal、interop、threading、environment 等仅在真实 DLL 或 Unity/Godot bridge 需要时补齐。
 - 对暂不支持 API 输出明确 NotSupported/NotImplemented 诊断。
-- 每个新增 icall/intrinsic 都先由解释执行 smoke 或 `coreclr-net10` extern diff 证明需求来源，不为 AOT 预补大而全入口。
+- 每个新增 icall/intrinsic 都必须由真实 smoke 或白名单内 API 证明需求来源，不为 AOT 或完整 BCL 预补大而全入口。
 
 ### 阶段 6：解释器与现代 IL 兼容
 
@@ -653,17 +662,18 @@ Unity/Godot host
 - 对 `LibraryImport`、`UnmanagedCallersOnly`、function pointer、byref-like、InlineArray 等建立解释执行测试或明确 NotSupported 诊断。
 - AOT codegen 缺口暂不纳入本阶段，只在解释路径跑通后重新排序。
 
-### 当前下一轮最小验收切片
+### 当前下一轮验收切片
 
-当前不要把“完整 .NET 10 BCL”作为下一步唯一验收口，也不要再用 AOT native run 作为第一阶段主门禁。更合适的推进顺序是用解释执行 smoke 子入口和新增小 fixture，把三条线压成可独立通过的切片：
+当前不要把“完整 .NET 10 BCL”作为下一步验收口，也不要再用 AOT native run 作为第一阶段主门禁。更合适的推进顺序是用 API 白名单、静态扫描、原作者测试资产迁移、NKGGameFramework 真实 workload 和 Unity/Godot bridge mock host，把 minimal profile 压成可独立通过的切片。注意：这些切片是推进顺序，不是最终合格范围；最终仍要全量跑通原作者测试资产。
 
 | 主线 | 最小验证入口 | 通过证据 | 说明 |
 | --- | --- | --- | --- |
-| 解释执行 runner 基线 | `scripts/dotnet10/interp-smoke.ps1` 复用 `src/tools/leanrun`，可指定程序集目录、`.NET 10` runtime pack 目录、入口方法 | 已能构建 `ManagedNet10.Smoke` 和 `leanrun`，完整入口输出 `ok!` | 可作为第一阶段解释执行门禁的当前绿色基线 |
-| corlib contract / boxing metadata | 解释执行 `ManagedNet10.Smoke.Program::TestBoxingMetadata` | 输出 `ok!`，进程退出码 `0`，`TestBasics` 也通过 | 已证明 smoke 中 boxed value type 的 `Object.GetType()`、`RuntimeType.Name` 和 CoreCLR `System.Private.CoreLib` metadata 路径可用 |
-| CoreCLR method resolution | 新增 `TestStaticAbstractInterfaceMember` 子入口，先用自定义接口 `static abstract` 成员，再扩展到 generic math | 解释执行子入口输出 `ok!`，或给出明确 NotSupported 诊断 | 先验证 metadata loader、MethodImpl/interface method resolution 和解释器调用路径，不处理 AOT call emission |
-| .NET 10 BCL icalls / intrinsics | 解释执行 `TestReflection`、`TestGenericsDelegatesAndExceptions`、`TestAsync` 分别通过 | 每个子入口已单独 `ok!`；本阶段新增 QCall/PInvoke、Monitor fast-path、Unsafe/YieldAwaiter intrinsic | 后续继续按 smoke 和 extern diff 分批补齐，而不是一次性填满 4191 个缺口 |
-| 完整解释 smoke | 解释执行 `ManagedNet10.Smoke` 完整入口 | 完整入口输出 `ok!`，53 个 `Test*` 子入口逐项通过 | 适合作为第一阶段 CI 绿色门禁候选；仍不代表完整 BCL 支持 |
+| 解释执行 runner 基线 | `scripts/dotnet10/interp-smoke.ps1` 复用 `src/tools/leanrun`，可指定程序集目录和入口方法 | 已能构建 `ManagedNet10.Smoke` 和 `leanrun`，完整入口输出 `ok!` | 保留为 minimal profile 的基础绿色基线 |
+| API 白名单 | minimal profile 允许的 assembly/type/member 清单 | 白名单可审查、可版本化 | 作为“支持什么”的正式边界 |
+| 静态扫描 | 扫描项目纯逻辑 DLL 的 `AssemblyRef` / `TypeRef` / `MemberRef` | 白名单外 API 给出明确错误 | 防止用户无意把完整 BCL 生态拉进来 |
+| 原作者测试资产迁移 | `src/tests/managed` / shared legacy cases 分批迁入 `managed-net10` | 每批迁移后解释执行或 runner 退出 `0` | 分层推进，最终全量通过才算 LeanCLR 自身能力合格 |
+| NKGGameFramework smoke | 解释执行 `C:\study\wqaetly\new\NKGGameFramework` 实际导出的 `net10.0` 核心逻辑 DLL | 核心入口输出 `ok!`，退出码 `0` | 作为真实项目 workload 的第一验收口 |
+| Unity/Godot bridge mock | mock host 驱动托管入口、对象 handle、事件回调和主线程投递 | mock host 端到端通过 | 证明引擎接入路径，而不是扩大 BCL 面积 |
 
 每完成一个切片，都应同步更新三处：本机验证记录、近期任务清单、实施记录。不要只把失败点从一个子入口推到另一个子入口就标记 `.NET 10 支持` 完成。
 
@@ -704,7 +714,9 @@ Unity/Godot host
 
 ## NKGGameFramework 接入 LeanCLR 的改造范围
 
-`E:\Study\wqaetly\NKGGameFramework` 当前主包是 SDK 风格 `net10.0`，并直接依赖 `UniTask 2.5.11` 与 `OdinSerializerNetCore`。Unity/Godot adapter 项目目前主要是接口契约：`IUnityGameLoopDriver` / `IGodotGameLoopDriver`、asset service、scene service 等，没有把引擎程序集反向引入核心包。这个结构适合 LeanCLR 分阶段接入：先跑引擎无关核心，再通过宿主桥接访问 Unity/Godot API。
+`C:\study\wqaetly\new\NKGGameFramework` 当前主包是 SDK 风格 `net10.0`，并直接依赖 `UniTask 2.5.11` 与 `OdinSerializerNetCore`。Unity/Godot adapter 项目目前主要是接口契约：`IUnityGameLoopDriver` / `IGodotGameLoopDriver`、asset service、scene service 等，没有把引擎程序集反向引入核心包。这个结构适合 LeanCLR 分阶段接入：先跑引擎无关核心，再通过宿主桥接访问 Unity/Godot API。
+
+NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不是替代原作者测试资产，而是补足“真实项目会怎样组合这些能力”的验证。原作者测试资产负责证明 VM/语言/runtime 底座完整，NKGGameFramework 负责证明项目自己的纯逻辑 DLL、异步、轻量反射、序列化和后续引擎 bridge 可以按真实结构跑起来。
 
 ### 推荐运行边界
 
@@ -746,14 +758,15 @@ Unity/Godot host
 
 ### 建议验收顺序
 
-1. LeanCLR 能运行最小 `net10.0` Hello/Smoke 程序。
-2. LeanCLR 能加载并执行 `NKGGameFramework` 核心最小样例，不包含 Hosting、Unity、Godot。
-3. `RuntimeContext.Update`、事件、ECS、Timer、基础 GameplayTag/Skill/Buff 路径跑通。
-4. UniTask 的 completed/result/canceled、timer、next-frame、WhenAll/WhenAny 跑通。
-5. Odin 对 NKG 常见组件、Buff、Skill、BehaviorTree 数据结构序列化/反序列化跑通，或明确切到预生成 serializer profile。
-6. Unity bridge 实现 asset/scene/game-loop 三个最小服务，并用 opaque handle 调用真实 Unity API。
-7. Godot bridge 按同样 ABI 实现 process、resource、scene/node 服务。
-8. 最后再评估是否把 Hosting/Web Debug 搬进 LeanCLR，或改成宿主进程提供调试传输。
+1. 先在官方 `.NET 10` SDK 下构建并测试 `C:\study\wqaetly\new\NKGGameFramework`，建立真实项目的绿色基线。
+2. LeanCLR 能运行最小 `net10.0` Hello/Smoke 程序。
+3. LeanCLR 能加载并执行 `NKGGameFramework` 核心最小样例，不包含 Hosting、Unity、Godot。
+4. `RuntimeContext.Update`、事件、ECS、Timer、基础 GameplayTag/Skill/Buff 路径跑通。
+5. UniTask 的 completed/result/canceled、timer、next-frame、WhenAll/WhenAny 跑通。
+6. Odin 对 NKG 常见组件、Buff、Skill、BehaviorTree 数据结构序列化/反序列化跑通，或明确切到预生成 serializer profile。
+7. Unity bridge 实现 asset/scene/game-loop 三个最小服务，并用 opaque handle 调用真实 Unity API。
+8. Godot bridge 按同样 ABI 实现 process、resource、scene/node 服务。
+9. 最后再评估是否把 Hosting/Web Debug 搬进 LeanCLR，或改成宿主进程提供调试传输。
 
 ## 不建议的做法
 
@@ -765,34 +778,37 @@ Unity/Godot host
 
 ## 近期任务清单
 
-- [x] 定稿架构边界：`coreclr` 是引擎无关 `.NET 10` runtime 主线；Unity/Godot 只作为宿主插件和 bridge 接入。
-- [x] 定稿复用边界：保留 LeanCLR VM 核心，集中改造 BCL profile、runtime contract、解释执行兼容、测试和 bridge；AOT 后置。
+- [x] 定稿架构边界：当前主线收敛为 `LeanCLR minimal net10 profile`，目标是运行项目自己的纯逻辑 `net10.0` DLL；Unity/Godot 只作为宿主插件和 bridge 接入。
+- [x] 定稿复用边界：保留 LeanCLR VM 核心，保留 `.NET 10` 解释执行探路成果；完整 `Microsoft.NETCore.App` / 大型 BCL 承载后置。
 - [x] 恢复 CI 手动基线：移除 `.github/workflows/ci.yml` 的 `if: false`，固定 .NET 10 SDK，补齐 Linux native 和 Windows legacy managed job。
 - [x] 加入 `global.json`，pin 到当前验证过的 `10.0.301`，并允许 latest feature roll-forward。
 - [x] 安装并验证 .NET Framework 4.8 Developer Pack，本机 `managed.sln` 已可构建。
-- [x] 给 `ExportExtern` 增加一组 .NET 10 BCL 导出脚本。
-- [x] 输出 `coreclr-net10` 的 extern diff 报告。
+- [x] 给 `ExportExtern` 增加一组 .NET 10 BCL 导出脚本；该工具后续仅作为排障和缺口定位输入，不作为主线验收指标。
+- [x] 输出 `coreclr-net10` 的 extern diff 报告；剩余 diff 不再要求持续归零。
 - [x] 将 `RuntimeApiCatalog` 和 corlib/module 判断 profile 化，拆出 `mono45`、`coreclr-net10`。
 - [x] 新增最小 `net10.0` 测试解决方案。
 - [x] 新增最小 `net10.0` LeanAOT C++ 生成 smoke test。
-- [x] 将 `ManagedNet10.Smoke` 拆成可由 native runner 单独调用的子入口，便于定位 .NET 10 BCL 阻断点。
+- [x] 将 `ManagedNet10.Smoke` 拆成可由 native runner 单独调用的子入口，便于定位最小 `net10.0` 运行时阻断点。
 - [x] 补齐最小 Span stackalloc / RVA initializer smoke 所需的 codegen intrinsic 与 intrinsic 查找路径。
 - [x] 接入解释执行 smoke runner 脚本：复用 `src/tools/leanrun`，支持指定用户程序集目录、`.NET 10` runtime pack 目录和入口方法，避免第一阶段依赖 AOT 生成/编译流程。
 - [x] 跑通 `scripts\dotnet10\interp-smoke.ps1 -Entry "ManagedNet10.Smoke.Program::TestPairArithmetic"`，确认最小 .NET 10 解释入口可进入并退出 `0`。
-- [x] 拉取 `dotnet/runtime` 参考源码到 gitignored `artifacts/dotnet10-runtime-src`，用于快速对照 .NET 10 CoreLib/QCall/InternalCall 调用链。
-- [ ] 新增 `dotnet/runtime` 精简源码参考获取脚本：固定 `v10.0.9` 或当前 runtime patch 对应 tag，sparse checkout `src/coreclr/vm`、`src/libraries/System.Private.CoreLib/src` 和 `docs/design/coreclr`，输出到 gitignored 的参考目录。
+- [x] 拉取 `dotnet/runtime` 参考源码到 gitignored `artifacts/dotnet10-runtime-src`，用于快速对照 .NET 10 CoreLib/QCall/InternalCall 调用链；后续不再作为常规主线步骤。
+- [ ] 定义 `minimal-net10` API 白名单：明确允许的 core type、基础 BCL、反射、Span/Unsafe、异常、委托和引擎 bridge 所需 API。
+- [ ] 增加 `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描：项目纯逻辑 DLL 一旦引用白名单外 API，应在构建或加载阶段给出清晰诊断。
 - [x] 在解释执行 runner 中修复 `TestSpan`，让 Span stackalloc / RVA initializer 子路径不依赖 AOT codegen intrinsic 也能通过。
 - [x] 在解释执行 runner 中修复 `TestBoxingMetadata`，让 boxed value type 的 `Object.GetType()` / `RuntimeType.Name` 子路径在 `System.Private.CoreLib` 下通过。
-- [ ] 完成 `coreclr-net10` corlib contract 改造：解除 `System.Private.CoreLib` 初始化阶段的 Mono-era 类型阻断，并把 `mscorlib` / `System.Private.CoreLib` 差异显式 profile 化。
-- [ ] 新增并跑通接口静态虚函数 fixture：先覆盖自定义 `static abstract` interface member，再扩展到 `net10.0` generic math smoke。
-- [ ] 实现接口静态虚函数解释执行支持：覆盖 metadata loader、method resolution、interface method implementation 和解释器调用路径；AOT 调用生成后置。
+- [ ] 将原作者 managed / Mono 测试资产分阶段迁移到 `.NET 10` 验证路径，并以最终全量跑通作为 LeanCLR `.NET 10` 接入合格线。
+- [ ] 将 `ManagedNet10.Smoke` 整理为阶段性定位集：保留真实会用到的纯逻辑能力，同时和原作者测试资产全量迁移计划对齐。
+- [x] 在官方 `.NET 10` SDK 下跑通 `C:\study\wqaetly\new\NKGGameFramework` 基线：Release 构建成功，`NKGGameFramework.Tests` 142/142 通过。
+- [ ] 接入 `C:\study\wqaetly\new\NKGGameFramework` 真实 workload smoke：优先覆盖核心 `net10.0` 逻辑库，再扩展到 async、轻量反射、序列化和 bridge。
+- [ ] 接口静态虚函数、`static abstract`、generic math 等能力改为按需触发：只有真实纯逻辑 DLL 使用时才新增 fixture 和 runtime 支持。
 - [x] 根据 `coreclr-net10` extern diff 优先补齐启动路径 icalls / intrinsics，让最小 `ManagedNet10.Smoke` 能在 LeanCLR 解释执行 runner 中端到端执行。
-- [ ] 增加完整 `System.Private.CoreLib` / `.NET 10` runtime pack assembly resolver。
-- [ ] 为其它现代 IL / metadata 缺口增加解释执行 smoke test，并按实际 .NET 10/NKG workload 排序。
-- [ ] 更新 README/文档站能力矩阵。
-- [ ] 新增 NKGGameFramework 核心 smoke test，不包含 Hosting、Unity、Godot。
+- [ ] 完整 `System.Private.CoreLib` / `.NET 10` runtime pack assembly resolver 后置：当前只保留 minimal profile 所需解析能力，遇到真实依赖再补。
+- [ ] 为其它现代 IL / metadata 缺口增加解释执行 smoke test，但仅按真实纯逻辑 DLL workload 排序。
+- [ ] 更新 README/文档站能力矩阵：把 `.NET 10` 能力标为 `minimal net10 profile`，避免暗示完整 Microsoft.NETCore.App 兼容。
+- [ ] 新增 NKGGameFramework 真实纯逻辑核心 smoke test，不包含 Hosting、Unity、Godot，也不强依赖完整 Microsoft.NETCore.App。
 - [ ] 设计 Unity/Godot host bridge ABI、opaque handle registry 和主线程 dispatcher。
-- [ ] 若确认全切 `.NET 10`，按“历史资产清理”小节逐步删除或归档 mono-4.5 资产、旧式测试和 `mscorlib`/`Mono.*` 遗留。
+- [ ] 历史资产清理后置：当前不删除 mono-4.5 资产、旧式测试和 `mscorlib`/`Mono.*` 遗留，避免破坏已稳定 profile。
 
 ## 实施记录
 
@@ -873,10 +889,24 @@ Unity/Godot host
 - 本机已验证 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 完整入口输出 `ok!`。
 - 本机已验证 53 个 `ManagedNet10.Smoke.Program::Test*` 子入口逐项通过，均退出 `0`。
 
+2026-06-27 范围再次收敛：
+
+- 确认真实目标是导出并运行项目自己的纯逻辑 `net10.0` DLL，不再追求大而全的 `Microsoft.NETCore.App` / 完整 BCL 承载。
+- 已完成的 `coreclr-net10` profile、`System.Private.CoreLib` 识别、解释执行 runner 和 53 个 smoke 子入口保留为 minimal profile 基线。
+- 后续主线改为 API 白名单、`AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描、真实纯逻辑 DLL smoke，以及 Unity/Godot host bridge ABI。
+- 剩余 extern diff、完整 CoreCLR assembly resolver、generic math/static abstract、完整 ThreadPool、AOT native run 和历史资产清理全部后置，只有真实 workload 触发时才继续推进。
+
+2026-06-27 测试验收口径再次校准：
+
+- 原作者 managed / Mono 测试资产不再视为可选精选集；后续可以按能力优先级分阶段迁移和排缺口，但最终必须全量跑通，才能认为 LeanCLR `.NET 10` 接入合格。
+- `C:\study\wqaetly\new\NKGGameFramework` 确认为第一批真实框架 workload。官方 `.NET 10` SDK 基线已验证：`dotnet build NKGGameFramework.sln -c Release --no-restore` 成功，0 警告 0 错误；`dotnet test tests\NKGGameFramework.Tests\NKGGameFramework.Tests.csproj -c Release --no-build` 通过 142 个测试。
+- 一次并行执行 `dotnet build` 与 `dotnet test` 时，OdinSerializer 中间输出 DLL 被同时写入导致文件锁；顺序执行后通过。后续 CI 或脚本应避免对同一输出目录并行 build/test。
+
 仍未完成：
 
-- `coreclr-net10` 仍只是可复用实现的保守基线，不等于完整 .NET 10 BCL 支持；剩余 4191 个 extern signature 需要按启动路径和实际 workload 分批补齐。
-- `.NET 10` smoke 当前已验证 SDK 编译/运行、LeanAOT C++ 生成、生成 C++ 的 native 编译/链接、LeanCLR runtime 初始化通过，以及 `ManagedNet10.Smoke` 解释执行完整入口和 53 个 `Test*` 子入口通过；但这仍只是 smoke 级别，不等于完整 Microsoft.NETCore.App profile 可用。
-- 接口静态虚函数尚未实现，也还没有加入 generic math / static abstract interface member smoke。
-- native/AOT smoke 仍后置，当前 `aot-tester.exe` 完整入口和多个高级子入口仍失败，不能作为第一阶段验收门禁。
-- NKGGameFramework、Unity/Godot bridge、现代 IL 和完整 CoreCLR assembly resolver 仍属于后续阶段。
+- `minimal-net10` API 白名单尚未形成正式清单。
+- `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描尚未实现。
+- `ManagedNet10.Smoke` 仍需要按 minimal profile 重新整理：保留真实会用到的纯逻辑能力，标注或移除仅用于 BCL 探路的深水区场景。
+- 项目真实纯逻辑 `net10.0` DLL smoke 尚未接入。
+- Unity/Godot bridge、opaque handle registry、主线程 dispatcher 和 mock host 验证尚未实现。
+- 完整 Microsoft.NETCore.App、generic math/static abstract、完整 ThreadPool、完整 resolver、AOT native run 均已后置，暂不作为当前未完成主线。
