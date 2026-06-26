@@ -10,7 +10,7 @@ namespace ManagedNet10.LegacyTests
         public static void RunAll()
         {
             RunActivator();
-            RunArithmeticAdd();
+            RunArithmeticInstructions();
         }
 
         public static void RunActivator()
@@ -71,6 +71,15 @@ namespace ManagedNet10.LegacyTests
             RunArithmeticAddIntegers();
             RunArithmeticAddNativeInteger();
             RunArithmeticAddFloatingPoint();
+        }
+
+        public static void RunArithmeticInstructions()
+        {
+            RunArithmeticAdd();
+            RunArithmeticSub();
+            RunArithmeticMul();
+            RunArithmeticBitwise();
+            RunArithmeticNeg();
         }
 
         public static void RunArithmeticAddSmallIntegers()
@@ -165,6 +174,109 @@ namespace ManagedNet10.LegacyTests
         public static void RunArithmeticAddDoubleNaN()
         {
             var test = new Tests.Instruments.Ariths.TC_add();
+            test.double_NaN();
+        }
+
+        public static void RunArithmeticSub()
+        {
+            Tests.Instruments.Ariths.TC_sub.byte_vv_1();
+            Tests.Instruments.Ariths.TC_sub.sbyte_vv_1();
+            Tests.Instruments.Ariths.TC_sub.short_vv_1();
+            Tests.Instruments.Ariths.TC_sub.ushort_vv_1();
+            Tests.Instruments.Ariths.TC_sub.int_vv_1();
+            Tests.Instruments.Ariths.TC_sub.int_vc_1();
+            Tests.Instruments.Ariths.TC_sub.int_cv_1();
+            Tests.Instruments.Ariths.TC_sub.long_vv_1();
+            Tests.Instruments.Ariths.TC_sub.long_vc_1();
+            Tests.Instruments.Ariths.TC_sub.long_cv_1();
+            Tests.Instruments.Ariths.TC_sub.nint_int_vv_1();
+            Tests.Instruments.Ariths.TC_sub.Nuint_int_vv_1();
+            Tests.Instruments.Ariths.TC_sub.float_vv_1();
+            Tests.Instruments.Ariths.TC_sub.float_vv_inf();
+            Tests.Instruments.Ariths.TC_sub.float_vv_minf();
+            Tests.Instruments.Ariths.TC_sub.float_vv_NaN();
+            Tests.Instruments.Ariths.TC_sub.double_vv_1();
+            Tests.Instruments.Ariths.TC_sub.double_inf();
+            Tests.Instruments.Ariths.TC_sub.double_minf();
+            Tests.Instruments.Ariths.TC_sub.double_NaN();
+        }
+
+        public static void RunArithmeticMul()
+        {
+            Tests.Instruments.Ariths.TC_mul.byte_1();
+            Tests.Instruments.Ariths.TC_mul.sbyte_1();
+            Tests.Instruments.Ariths.TC_mul.short_1();
+            Tests.Instruments.Ariths.TC_mul.ushort_1();
+            Tests.Instruments.Ariths.TC_mul.int_1();
+            Tests.Instruments.Ariths.TC_mul.uint_1();
+            Tests.Instruments.Ariths.TC_mul.long_1();
+            Tests.Instruments.Ariths.TC_mul.ulong_1();
+            Tests.Instruments.Ariths.TC_mul.nint_1();
+            Tests.Instruments.Ariths.TC_mul.float_1();
+            Tests.Instruments.Ariths.TC_mul.float_NaN();
+            Tests.Instruments.Ariths.TC_mul.float_NaN_1();
+            Tests.Instruments.Ariths.TC_mul.double_1();
+            Tests.Instruments.Ariths.TC_mul.double_NaN();
+            Tests.Instruments.Ariths.TC_mul.double_NaN_1();
+        }
+
+        public static void RunArithmeticBitwise()
+        {
+            RunArithmeticAnd();
+            RunArithmeticOr();
+            RunArithmeticXor();
+            RunArithmeticNot();
+        }
+
+        public static void RunArithmeticAnd()
+        {
+            var test = new Tests.Instruments.Ariths.TC_and();
+            test.bool_true();
+            test.bool_false();
+            test.int_1();
+            test.long_1();
+        }
+
+        public static void RunArithmeticOr()
+        {
+            var test = new Tests.Instruments.Ariths.TC_or();
+            test.bool_1();
+            test.bool_2();
+            test.int_1();
+            test.long_1();
+        }
+
+        public static void RunArithmeticXor()
+        {
+            var test = new Tests.Instruments.Ariths.TC_xor();
+            test.int_1();
+            test.long_1();
+        }
+
+        public static void RunArithmeticNot()
+        {
+            var test = new Tests.Instruments.Ariths.TC_not();
+            test.int_1();
+            test.uint_1();
+            test.long_1();
+            test.ulong_1();
+            test.nint_1();
+        }
+
+        public static void RunArithmeticNeg()
+        {
+            var test = new Tests.Instruments.Ariths.TC_neg();
+            test.sbyte_1();
+            test.byte_1();
+            test.short_1();
+            test.ushort_1();
+            test.int_1();
+            test.long_1();
+            test.float_1();
+            test.float_inf();
+            test.float_NaN();
+            test.double_1();
+            test.double_inf();
             test.double_NaN();
         }
     }

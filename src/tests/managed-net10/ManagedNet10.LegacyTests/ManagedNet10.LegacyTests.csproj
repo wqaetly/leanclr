@@ -16,6 +16,13 @@
     <Compile Include="..\..\managed\Common\UnitTestAttribute.cs" Link="Common\UnitTestAttribute.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTActivator.cs" Link="Fixtures\AOTActivator.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_add.cs" Link="Instructions\Arithmetic\TC_add.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_and.cs" Link="Instructions\Arithmetic\TC_and.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_mul.cs" Link="Instructions\Arithmetic\TC_mul.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_neg.cs" Link="Instructions\Arithmetic\TC_neg.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_not.cs" Link="Instructions\Arithmetic\TC_not.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_or.cs" Link="Instructions\Arithmetic\TC_or.cs" />
+    <Compile Include="Instructions\Arithmetic\TC_sub.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_xor.cs" Link="Instructions\Arithmetic\TC_xor.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
   </ItemGroup>
 
