@@ -9,7 +9,20 @@ namespace ManagedNet10.LegacyTests
             RunBranchBrfalse();
             RunBranchBeq();
             RunBranchBneUn();
+            RunBranchRelational();
             RunBranchSwitch();
+        }
+
+        public static void RunBranchRelational()
+        {
+            RunBranchBge();
+            RunBranchBgeUn();
+            RunBranchBgt();
+            RunBranchBgtUn();
+            RunBranchBle();
+            RunBranchBleUn();
+            RunBranchBlt();
+            RunBranchBltUn();
         }
 
         public static void RunBranchBr()
@@ -110,6 +123,167 @@ namespace ManagedNet10.LegacyTests
             Tests.Instruments.Branches.TC_Bne_un.double_2();
 
             var test = new Tests.Instruments.Branches.TC_Bne_un();
+            test.CmpInfinite_float();
+            test.CmpInfinite_double();
+        }
+
+        public static void RunBranchBge()
+        {
+            Tests.Instruments.Branches.TC_Bge.s_blank();
+            Tests.Instruments.Branches.TC_Bge.s_int_1();
+            Tests.Instruments.Branches.TC_Bge.s_int_2();
+            Tests.Instruments.Branches.TC_Bge.s_int_3();
+            Tests.Instruments.Branches.TC_Bge.s_long_1();
+            Tests.Instruments.Branches.TC_Bge.s_long_2();
+            Tests.Instruments.Branches.TC_Bge.s_long_3();
+            Tests.Instruments.Branches.TC_Bge.int_1();
+            Tests.Instruments.Branches.TC_Bge.int_2();
+            Tests.Instruments.Branches.TC_Bge.int_3();
+            Tests.Instruments.Branches.TC_Bge.long_1();
+            Tests.Instruments.Branches.TC_Bge.long_2();
+            Tests.Instruments.Branches.TC_Bge.long_3();
+        }
+
+        public static void RunBranchBgeUn()
+        {
+            Tests.Instruments.Branches.TC_Bge_un.s_blank();
+            Tests.Instruments.Branches.TC_Bge_un.s_uint_1();
+            Tests.Instruments.Branches.TC_Bge_un.s_uint_2();
+            Tests.Instruments.Branches.TC_Bge_un.s_uint_3();
+            Tests.Instruments.Branches.TC_Bge_un.s_ulong_1();
+            Tests.Instruments.Branches.TC_Bge_un.s_ulong_2();
+            Tests.Instruments.Branches.TC_Bge_un.s_ulong_3();
+            Tests.Instruments.Branches.TC_Bge_un.s_float_1();
+            Tests.Instruments.Branches.TC_Bge_un.s_float_2();
+            Tests.Instruments.Branches.TC_Bge_un.s_float_3();
+            Tests.Instruments.Branches.TC_Bge_un.s_double_1();
+            Tests.Instruments.Branches.TC_Bge_un.s_double_2();
+            Tests.Instruments.Branches.TC_Bge_un.s_double_3();
+            Tests.Instruments.Branches.TC_Bge_un.uint_1();
+            Tests.Instruments.Branches.TC_Bge_un.uint_2();
+            Tests.Instruments.Branches.TC_Bge_un.uint_3();
+            Tests.Instruments.Branches.TC_Bge_un.ulong_1();
+            Tests.Instruments.Branches.TC_Bge_un.ulong_2();
+            Tests.Instruments.Branches.TC_Bge_un.ulong_3();
+            Tests.Instruments.Branches.TC_Bge_un.float_1();
+            Tests.Instruments.Branches.TC_Bge_un.float_2();
+            Tests.Instruments.Branches.TC_Bge_un.float_3();
+            Tests.Instruments.Branches.TC_Bge_un.double_1();
+            Tests.Instruments.Branches.TC_Bge_un.double_2();
+            Tests.Instruments.Branches.TC_Bge_un.double_3();
+
+            var test = new Tests.Instruments.Branches.TC_Bge_un();
+            test.CmpInfinite_float();
+            test.CmpInfinite_double();
+        }
+
+        public static void RunBranchBgt()
+        {
+            Tests.Instruments.Branches.TC_Bgt.s_blank();
+            Tests.Instruments.Branches.TC_Bgt.s_int_1();
+            Tests.Instruments.Branches.TC_Bgt.s_int_3();
+            Tests.Instruments.Branches.TC_Bgt.s_long_1();
+            Tests.Instruments.Branches.TC_Bgt.s_long_3();
+            Tests.Instruments.Branches.TC_Bgt.int_1();
+            Tests.Instruments.Branches.TC_Bgt.int_3();
+            Tests.Instruments.Branches.TC_Bgt.long_1();
+            Tests.Instruments.Branches.TC_Bgt.long_3();
+        }
+
+        public static void RunBranchBgtUn()
+        {
+            Tests.Instruments.Branches.TC_Bgt_un.s_blank();
+            Tests.Instruments.Branches.TC_Bgt_un.s_uint_1();
+            Tests.Instruments.Branches.TC_Bgt_un.s_uint_3();
+            Tests.Instruments.Branches.TC_Bgt_un.s_ulong_1();
+            Tests.Instruments.Branches.TC_Bgt_un.s_ulong_3();
+            Tests.Instruments.Branches.TC_Bgt_un.s_float_1();
+            Tests.Instruments.Branches.TC_Bgt_un.s_float_2();
+            Tests.Instruments.Branches.TC_Bgt_un.s_float_3();
+            Tests.Instruments.Branches.TC_Bgt_un.s_double_1();
+            Tests.Instruments.Branches.TC_Bgt_un.s_double_3();
+            Tests.Instruments.Branches.TC_Bgt_un.uint_1();
+            Tests.Instruments.Branches.TC_Bgt_un.uint_3();
+            Tests.Instruments.Branches.TC_Bgt_un.ulong_1();
+            Tests.Instruments.Branches.TC_Bgt_un.ulong_3();
+            Tests.Instruments.Branches.TC_Bgt_un.float_1();
+            Tests.Instruments.Branches.TC_Bgt_un.float_3();
+            Tests.Instruments.Branches.TC_Bgt_un.double_1();
+            Tests.Instruments.Branches.TC_Bgt_un.double_3();
+
+            var test = new Tests.Instruments.Branches.TC_Bgt_un();
+            test.CmpInfinite_float();
+            test.CmpInfinite_double();
+        }
+
+        public static void RunBranchBle()
+        {
+            Tests.Instruments.Branches.TC_Ble.s_blank();
+            Tests.Instruments.Branches.TC_Ble.s_int_1();
+            Tests.Instruments.Branches.TC_Ble.s_int_2();
+            Tests.Instruments.Branches.TC_Ble.s_int_3();
+            Tests.Instruments.Branches.TC_Ble.s_long_1();
+            Tests.Instruments.Branches.TC_Ble.s_long_2();
+            Tests.Instruments.Branches.TC_Ble.s_long_3();
+            Tests.Instruments.Branches.TC_Ble.int_1();
+            Tests.Instruments.Branches.TC_Ble.int_2();
+            Tests.Instruments.Branches.TC_Ble.int_3();
+            Tests.Instruments.Branches.TC_Ble.long_1();
+            Tests.Instruments.Branches.TC_Ble.long_2();
+            Tests.Instruments.Branches.TC_Ble.long_3();
+        }
+
+        public static void RunBranchBleUn()
+        {
+            Tests.Instruments.Branches.TC_Ble_un.s_blank();
+            Tests.Instruments.Branches.TC_Ble_un.ble_un_s_uint();
+            Tests.Instruments.Branches.TC_Ble_un.ble_un_s_ulong();
+            Tests.Instruments.Branches.TC_Ble_un.float_1();
+            Tests.Instruments.Branches.TC_Ble_un.float_2();
+            Tests.Instruments.Branches.TC_Ble_un.float_3();
+            Tests.Instruments.Branches.TC_Ble_un.s_double_1();
+            Tests.Instruments.Branches.TC_Ble_un.s_double_2();
+            Tests.Instruments.Branches.TC_Ble_un.s_double_3();
+            Tests.Instruments.Branches.TC_Ble_un.ble_un_int();
+            Tests.Instruments.Branches.TC_Ble_un.ble_un_long();
+
+            var test = new Tests.Instruments.Branches.TC_Ble_un();
+            test.CmpInfinite_float();
+            test.CmpInfinite_double();
+        }
+
+        public static void RunBranchBlt()
+        {
+            Tests.Instruments.Branches.TC_Blt.s_blank();
+            Tests.Instruments.Branches.TC_Blt.blt_s_int();
+            Tests.Instruments.Branches.TC_Blt.blt_s_long();
+            Tests.Instruments.Branches.TC_Blt.blt_int();
+            Tests.Instruments.Branches.TC_Blt.blt_long();
+        }
+
+        public static void RunBranchBltUn()
+        {
+            Tests.Instruments.Branches.TC_Blt_un.s_blank();
+            Tests.Instruments.Branches.TC_Blt_un.s_uint_1();
+            Tests.Instruments.Branches.TC_Blt_un.s_uint_3();
+            Tests.Instruments.Branches.TC_Blt_un.s_ulong_1();
+            Tests.Instruments.Branches.TC_Blt_un.s_ulong_3();
+            Tests.Instruments.Branches.TC_Blt_un.s_float_1();
+            Tests.Instruments.Branches.TC_Blt_un.s_float_2();
+            Tests.Instruments.Branches.TC_Blt_un.s_float_3();
+            Tests.Instruments.Branches.TC_Blt_un.s_double_1();
+            Tests.Instruments.Branches.TC_Blt_un.s_double_2();
+            Tests.Instruments.Branches.TC_Blt_un.s_double_3();
+            Tests.Instruments.Branches.TC_Blt_un.uint_1();
+            Tests.Instruments.Branches.TC_Blt_un.uint_3();
+            Tests.Instruments.Branches.TC_Blt_un.ulong_1();
+            Tests.Instruments.Branches.TC_Blt_un.ulong_3();
+            Tests.Instruments.Branches.TC_Blt_un.float_1();
+            Tests.Instruments.Branches.TC_Blt_un.float_3();
+            Tests.Instruments.Branches.TC_Blt_un.double_1();
+            Tests.Instruments.Branches.TC_Blt_un.double_3();
+
+            var test = new Tests.Instruments.Branches.TC_Blt_un();
             test.CmpInfinite_float();
             test.CmpInfinite_double();
         }

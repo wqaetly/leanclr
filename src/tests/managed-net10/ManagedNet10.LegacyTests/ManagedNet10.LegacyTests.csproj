@@ -28,6 +28,14 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_xor.cs" Link="Instructions\Arithmetic\TC_xor.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Br.cs" Link="Instructions\Branches\TC_Br.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Beq.cs" Link="Instructions\Branches\TC_Beq.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Bge.cs" Link="Instructions\Branches\TC_Bge.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Bge_un.cs" Link="Instructions\Branches\TC_Bge_un.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Bgt.cs" Link="Instructions\Branches\TC_Bgt.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Bgt_un.cs" Link="Instructions\Branches\TC_Bgt_un.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Ble.cs" Link="Instructions\Branches\TC_Ble.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Ble_un.cs" Link="Instructions\Branches\TC_Ble_un.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Blt.cs" Link="Instructions\Branches\TC_Blt.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Blt_un.cs" Link="Instructions\Branches\TC_Blt_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Brfalse.cs" Link="Instructions\Branches\TC_Brfalse.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_Bne_un.cs" Link="Instructions\Branches\TC_Bne_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Branches\TC_brtrue.cs" Link="Instructions\Branches\TC_brtrue.cs" />
