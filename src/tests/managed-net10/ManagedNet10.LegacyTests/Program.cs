@@ -11,6 +11,7 @@ namespace ManagedNet10.LegacyTests
         {
             RunActivator();
             RunArithmeticInstructions();
+            RunBranchInstructions();
             RunCompareInstructions();
         }
 
