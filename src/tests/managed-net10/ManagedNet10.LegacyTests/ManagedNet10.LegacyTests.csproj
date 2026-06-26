@@ -53,6 +53,10 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Cgt_un.cs" Link="Instructions\Compare\TC_Cgt_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt.cs" Link="Instructions\Compare\TC_Clt.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt_un.cs" Link="Instructions\Compare\TC_Clt_un.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_i1.cs" Link="Instructions\Converts\TC_conv_i1.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_i2.cs" Link="Instructions\Converts\TC_conv_i2.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_i4.cs" Link="Instructions\Converts\TC_conv_i4.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_i8.cs" Link="Instructions\Converts\TC_conv_i8.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_r4.cs" Link="Instructions\Converts\TC_conv_r4.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_r8.cs" Link="Instructions\Converts\TC_conv_r8.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\TC_conv_r_un.cs" Link="Instructions\Converts\TC_conv_r_un.cs" />
