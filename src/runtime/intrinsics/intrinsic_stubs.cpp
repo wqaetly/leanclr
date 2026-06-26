@@ -1,9 +1,11 @@
 #include "intrinsic_stubs.h"
 #include "system_array.h"
 #include "system_object.h"
+#include "system_reflection_rtfieldinfo.h"
 #include "system_span.h"
 #include "system_sr.h"
 #include "system_runtime_compilerservices_runtimehelpers.h"
+#include "system_runtimetype.h"
 #include "system_runtimetypehandle.h"
 #include "system_type.h"
 #include "intrinsics/system_string.h"
@@ -28,9 +30,11 @@ void IntrinsicStubs::get_intrinsic_entries(utils::Vector<vm::IntrinsicEntry>& en
     // append intrinsic entries from various classes
     Append(entries, SystemArray::get_intrinsic_entries());
     Append(entries, SystemObject::get_intrinsic_entries());
+    Append(entries, SystemReflectionRtFieldInfo::get_intrinsic_entries());
     Append(entries, SystemSpan::get_intrinsic_entries());
     Append(entries, SystemSR::get_intrinsic_entries());
     Append(entries, SystemRuntimeCompilerServicesRuntimeHelpers::get_intrinsic_entries());
+    Append(entries, SystemRuntimeType::get_intrinsic_entries());
     Append(entries, SystemRuntimeTypeHandle::get_intrinsic_entries());
     Append(entries, SystemType::get_intrinsic_entries());
     Append(entries, SystemString::get_intrinsic_entries());

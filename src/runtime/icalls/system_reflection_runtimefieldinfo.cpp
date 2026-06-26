@@ -14,61 +14,51 @@ namespace icalls
 
 RtResult<uint32_t> SystemReflectionRuntimeFieldInfo::get_metadata_token(vm::RtReflectionField* field) noexcept
 {
-    if (field == nullptr)
-    {
-        RET_ERR(RtErr::NullReference);
-    }
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
     RET_OK(field_info->token);
 }
 
 RtResult<int32_t> SystemReflectionRuntimeFieldInfo::get_field_offset(vm::RtReflectionField* field) noexcept
 {
-    if (field == nullptr)
-    {
-        RET_ERR(RtErr::NullReference);
-    }
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
     RET_OK(static_cast<int32_t>(vm::Field::get_field_offset_excludes_object_header_for_all_type(field_info)));
 }
 
 RtResult<vm::RtObject*> SystemReflectionRuntimeFieldInfo::get_raw_const_value(vm::RtReflectionField* field) noexcept
 {
-    if (field == nullptr)
-    {
-        RET_ERR(RtErr::NullReference);
-    }
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
     return vm::Field::get_field_const_object(field_info);
 }
 
 RtResult<vm::RtObject*> SystemReflectionRuntimeFieldInfo::get_value_internal(vm::RtReflectionField* field, vm::RtObject* obj) noexcept
 {
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
     return vm::Field::get_value_object(field_info, obj);
 }
 
 RtResult<vm::RtObject*> SystemReflectionRuntimeFieldInfo::unsafe_get_value(vm::RtReflectionField* field, vm::RtObject* obj) noexcept
 {
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
     return vm::Field::get_value_object(field_info, obj);
 }
 
 RtResultVoid SystemReflectionRuntimeFieldInfo::set_value_internal(vm::RtReflectionField* field, vm::RtObject* obj, vm::RtObject* value) noexcept
 {
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
     return vm::Field::set_value_object(field_info, obj, value);
 }
 
 RtResult<vm::RtReflectionType*> SystemReflectionRuntimeFieldInfo::get_parent_type(vm::RtReflectionField* field, bool declaring) noexcept
 {
-    const metadata::RtClass* parent = declaring ? field->field->parent : field->klass;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, reflection_klass, vm::Reflection::get_reflection_field_klass(field));
+    const metadata::RtClass* parent = declaring ? field_info->parent : reflection_klass;
     return vm::Reflection::get_klass_reflection_object(parent);
 }
 
 RtResult<vm::RtReflectionType*> SystemReflectionRuntimeFieldInfo::resolve_type(vm::RtReflectionField* field) noexcept
 {
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
     const metadata::RtTypeSig* type_sig = field_info->type_sig;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     return vm::Reflection::get_klass_reflection_object(klass);
@@ -76,7 +66,7 @@ RtResult<vm::RtReflectionType*> SystemReflectionRuntimeFieldInfo::resolve_type(v
 
 RtResult<vm::RtArray*> SystemReflectionRuntimeFieldInfo::get_type_modifiers(vm::RtReflectionField* field, bool optional) noexcept
 {
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
 
     utils::Vector<metadata::RtClass*> modifiers;
     RET_ERR_ON_FAIL(vm::Field::get_field_modifiers(field_info, optional, modifiers));

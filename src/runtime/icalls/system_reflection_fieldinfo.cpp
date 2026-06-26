@@ -35,7 +35,8 @@ RtResult<vm::RtReflectionField*> SystemReflectionFieldInfo::internal_from_handle
 
 RtResult<vm::RtCustomAttribute*> SystemReflectionFieldInfo::get_marshal_info(vm::RtReflectionField* field) noexcept
 {
-    return vm::CustomAttribute::get_marshal_info(field->field);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
+    return vm::CustomAttribute::get_marshal_info(field_info);
 }
 
 // ========== Invoker Functions ==========

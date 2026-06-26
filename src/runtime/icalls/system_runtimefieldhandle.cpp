@@ -7,6 +7,7 @@
 #include "vm/class.h"
 #include "vm/field.h"
 #include "vm/object.h"
+#include "vm/reflection.h"
 #include "vm/type.h"
 
 namespace leanclr
@@ -21,7 +22,7 @@ RtResult<vm::RtObject*> SystemRuntimeFieldHandle::get_value_direct(vm::RtReflect
     assert(typed_ref != nullptr);
     assert(context_type != nullptr);
 
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
     const metadata::RtClass* parent_klass = field_info->parent;
     //if (!vm::Class::is_value_type(parent_klass))
     //{
@@ -46,7 +47,7 @@ RtResultVoid SystemRuntimeFieldHandle::set_value_direct(vm::RtReflectionField* f
     assert(typed_ref != nullptr);
     assert(context_type != nullptr);
 
-    const metadata::RtFieldInfo* field_info = field->field;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
     const metadata::RtClass* parent_klass = field_info->parent;
     //if (!vm::Class::is_value_type(parent_klass))
     //{

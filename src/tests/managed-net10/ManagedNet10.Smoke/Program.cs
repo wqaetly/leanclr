@@ -245,6 +245,41 @@ internal static class Program
         Require((string?)field.GetValue(payload) == "leanclr", "private field read failed");
     }
 
+    private static void TestReflectionTypeOnly()
+    {
+        var type = typeof(Payload<string>);
+        Require(type != null, "reflection typeof failed");
+    }
+
+    private static void TestReflectionAttributeOnly()
+    {
+        var type = typeof(Payload<string>);
+        var attr = type.GetCustomAttribute<SmokeAttribute>();
+        Require(attr != null, "custom attribute object failed");
+    }
+
+    private static void TestReflectionAttributeNameOnly()
+    {
+        var type = typeof(Payload<string>);
+        var attr = type.GetCustomAttribute<SmokeAttribute>();
+        Require(attr?.Name == "payload", "custom attribute name failed");
+    }
+
+    private static void TestReflectionFieldLookupOnly()
+    {
+        var type = typeof(Payload<string>);
+        var field = type.GetField("_secret", BindingFlags.Instance | BindingFlags.NonPublic);
+        Require(field != null, "private field lookup failed");
+    }
+
+    private static void TestReflectionFieldValueOnly()
+    {
+        var type = typeof(Payload<string>);
+        var field = type.GetField("_secret", BindingFlags.Instance | BindingFlags.NonPublic);
+        var payload = new Payload<string>("value");
+        Require((string?)field?.GetValue(payload) == "leanclr", "private field read failed");
+    }
+
     private static void TestSpan()
     {
         TestSpanStackalloc();

@@ -46,6 +46,12 @@ struct FieldKey
     const metadata::RtClass* klass;
 };
 
+struct FieldObjectData
+{
+    const metadata::RtFieldInfo* field;
+    const metadata::RtClass* klass;
+};
+
 struct PropertyKey
 {
     const metadata::RtPropertyInfo* property;
@@ -131,6 +137,7 @@ static utils::HashMap<const metadata::RtTypeSig*, RtReflectionType*, metadata::T
 static utils::HashMap<MethodKey, RtReflectionMethod*, MethodKeyHash, MethodKeyEqual> s_method_reflection_map;
 static utils::HashMap<MethodKey, RtArray*, MethodKeyHash, MethodKeyEqual> s_method_params_map;
 static utils::HashMap<FieldKey, RtReflectionField*, FieldKeyHash, FieldKeyEqual> s_field_reflection_map;
+static utils::HashMap<RtReflectionField*, FieldObjectData> s_field_object_data_map;
 static utils::HashMap<PropertyKey, RtReflectionProperty*, PropertyKeyHash, PropertyKeyEqual> s_property_reflection_map;
 static utils::HashMap<EventKey, RtReflectionEventInfo*, EventKeyHash, EventKeyEqual> s_event_reflection_map;
 static utils::HashMap<const metadata::RtAssembly*, RtReflectionAssembly*> s_assembly_reflection_map;
@@ -213,6 +220,11 @@ static RtResult<RtArray*> invoke_new_array(const metadata::RtMethodInfo* method,
     {
         RET_ERR(RtErr::Argument);
     }
+}
+
+static bool has_legacy_reflection_field_layout(const metadata::RtClass* runtime_field_klass)
+{
+    return Class::get_instance_size_with_object_header(runtime_field_klass) == sizeof(RtReflectionField);
 }
 } // namespace
 
@@ -323,14 +335,61 @@ RtResult<RtReflectionField*> Reflection::get_field_reflection_object(const metad
     auto runtime_field_klass = corlib_types.cls_reflection_field;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ref_obj_raw, LEANCLR_NEWOBJ_INTERNAL(runtime_field_klass, "Reflection::get_field_reflection_object"));
     auto ref_obj = reinterpret_cast<RtReflectionField*>(ref_obj_raw);
-    ref_obj->field = field;
-    ref_obj->klass = reflection_at_klass;
-    ref_obj->name = String::create_string_from_utf8chars(field->name, static_cast<int32_t>(std::strlen(field->name)));
-    ref_obj->attrs = field->flags;
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, type_obj, get_type_reflection_object(field->type_sig));
-    ref_obj->type_ = type_obj;
     s_field_reflection_map.emplace(key, ref_obj);
+    s_field_object_data_map.emplace(ref_obj, FieldObjectData{field, reflection_at_klass});
+
+    if (has_legacy_reflection_field_layout(runtime_field_klass))
+    {
+        ref_obj->field = field;
+        ref_obj->klass = reflection_at_klass;
+        ref_obj->name = String::create_string_from_utf8chars(field->name, static_cast<int32_t>(std::strlen(field->name)));
+        ref_obj->attrs = field->flags;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, type_obj, get_type_reflection_object(field->type_sig));
+        ref_obj->type_ = type_obj;
+    }
     RET_OK(ref_obj);
+}
+
+RtResult<const metadata::RtFieldInfo*> Reflection::get_field_info_from_reflection_object(RtReflectionField* field_obj)
+{
+    if (field_obj == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    auto found = s_field_object_data_map.find(field_obj);
+    if (found != s_field_object_data_map.end())
+    {
+        RET_OK(found->second.field);
+    }
+
+    if (has_legacy_reflection_field_layout(field_obj->header.klass) && field_obj->field != nullptr)
+    {
+        RET_OK(field_obj->field);
+    }
+
+    RET_ERR(RtErr::Argument);
+}
+
+RtResult<const metadata::RtClass*> Reflection::get_reflection_field_klass(RtReflectionField* field_obj)
+{
+    if (field_obj == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    auto found = s_field_object_data_map.find(field_obj);
+    if (found != s_field_object_data_map.end())
+    {
+        RET_OK(found->second.klass);
+    }
+
+    if (has_legacy_reflection_field_layout(field_obj->header.klass) && field_obj->klass != nullptr)
+    {
+        RET_OK(field_obj->klass);
+    }
+
+    RET_ERR(RtErr::Argument);
 }
 
 RtResult<RtReflectionProperty*> Reflection::get_property_reflection_object(const metadata::RtPropertyInfo* prop, const metadata::RtClass* reflection_at_klass)

@@ -124,7 +124,11 @@ RtResultVoid Class::init_corlib_classes(metadata::RtModuleDef* corlib)
 
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_assembly, get_class_must_exist(corlib, "System.Reflection.RuntimeAssembly"));
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_module, get_class_must_exist(corlib, "System.Reflection.RuntimeModule"));
-    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_field, get_class_must_exist(corlib, "System.Reflection.RuntimeFieldInfo"));
+    UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_field, get_class_optional(corlib, "System.Reflection.RtFieldInfo"));
+    if (t.cls_reflection_field == nullptr)
+    {
+        UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_field, get_class_must_exist(corlib, "System.Reflection.RuntimeFieldInfo"));
+    }
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_method, get_class_must_exist(corlib, "System.Reflection.RuntimeMethodInfo"));
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_constructor, get_class_must_exist(corlib, "System.Reflection.RuntimeConstructorInfo"));
     UNWRAP_OR_RET_ERR_ON_FAIL(t.cls_reflection_property, get_class_must_exist(corlib, "System.Reflection.RuntimePropertyInfo"));

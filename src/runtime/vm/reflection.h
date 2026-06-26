@@ -14,6 +14,8 @@ class Reflection
     static RtResult<RtReflectionMethod*> get_method_reflection_object(const metadata::RtMethodInfo* method, const metadata::RtClass* reflection_at_klass);
     static RtResult<RtArray*> get_param_objects(const metadata::RtMethodInfo* method, const metadata::RtClass* reflection_at_klass);
     static RtResult<RtReflectionField*> get_field_reflection_object(const metadata::RtFieldInfo* field, const metadata::RtClass* reflection_at_klass);
+    static RtResult<const metadata::RtFieldInfo*> get_field_info_from_reflection_object(RtReflectionField* field_obj);
+    static RtResult<const metadata::RtClass*> get_reflection_field_klass(RtReflectionField* field_obj);
     static RtResult<RtReflectionProperty*> get_property_reflection_object(const metadata::RtPropertyInfo* prop, const metadata::RtClass* reflection_at_klass);
     static RtResult<RtReflectionEventInfo*> get_event_reflection_object(metadata::RtEventInfo* event_info, const metadata::RtClass* reflection_at_klass);
     static RtResult<RtReflectionAssembly*> get_assembly_reflection_object(metadata::RtAssembly* assembly);

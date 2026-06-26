@@ -1038,7 +1038,7 @@ static RtResult<CustomAttributeProvider> get_token_of_customattribute_provider(R
     else if (obj_klass == corlib_types.cls_reflection_field)
     {
         RtReflectionField* field_obj = reinterpret_cast<RtReflectionField*>(obj);
-        const metadata::RtFieldInfo* field = field_obj->field;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field, Reflection::get_field_info_from_reflection_object(field_obj));
         metadata::RtModuleDef* mod = field->parent->image;
         provider.mod = mod;
         provider.token = field->token;
