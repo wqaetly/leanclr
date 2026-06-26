@@ -329,8 +329,11 @@ flowchart LR
 | `aot-tester.exe -l <net10 smoke dir> -l <dotnet10 runtime dir> ManagedNet10.Smoke` | 失败 | runtime 初始化已通过；入口方法调用阶段抛出 `System.BadImageFormatException`，runner 随后异常退出 |
 | `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -BuildOnly` | 成功 | `ManagedNet10.Smoke` 和 `src/tools/leanrun` 解释执行 runner 构建通过 |
 | `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestPairArithmetic"` | 成功 | `leanrun` 解释执行路径可加载 `ManagedNet10.Smoke` 和 `.NET 10.0.9` runtime pack，并执行最小 record struct 算术子入口 |
-| `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestBoxingMetadata"` | 失败 | 解释执行路径仍抛 `System.BadImageFormatException`，随后 `leanrun.exe` 异常退出 |
-| `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestSpan"` | 失败 | 解释执行路径入口调用失败，当前异常栈获取也失败；Span 的 AOT 通过结果尚未等价覆盖解释路径 |
+| `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestBoxingMetadata"` | 成功 | boxed value type 的 `Object.GetType()` / `RuntimeType.Name` 解释执行路径已通过 |
+| `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestSpan"` | 成功 | Span stackalloc / RVA initializer 解释执行路径已通过 |
+| `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestAsync"` | 成功 | `Task.Yield` / `Task.FromResult` async 解释执行路径已通过；当前 `Task.Yield` 以单线程同步 continuation intrinsic 处理 |
+| `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` | 成功 | 完整 `ManagedNet10.Smoke` 解释执行入口输出 `ok!` |
+| `leanrun.exe` 逐项执行 `ManagedNet10.Smoke.Program::Test*` | 成功 | 本机 53 个 `Test*` 子入口全部退出 `0` |
 | `cmake --version` | 成功 | CMake `4.3.3` |
 
 这些结果说明：
@@ -339,6 +342,7 @@ flowchart LR
 - 旧式托管测试需要 .NET Framework 4.8 Developer Pack；本机已安装后可通过 VS MSBuild 构建。
 - 原生构建和测试 runner 需要安装/定位 CMake；本机已用 CMake `4.3.3` 验证。
 - .NET 10 native smoke 已经不再卡在 runtime 初始化；拆分子入口后，基础值类型算术、线程同步最小子集和 Span stackalloc/RVA initializer 已可执行，下一批阻断点集中在 boxing metadata、反射、delegate/exception 和 async。
+- .NET 10 解释执行 smoke 已经可以加载 `ManagedNet10.Smoke` 和本机 `.NET 10.0.9` runtime pack，并让完整入口与 53 个 `Test*` 子入口通过；这可以作为第一阶段解释执行门禁的当前绿色基线。
 
 ### 复现当前 .NET 10 smoke 状态
 
@@ -368,17 +372,14 @@ $runtimeDir = "C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.9"
 & $runner -l $smokeDir -l $runtimeDir -e "ManagedNet10.Smoke.Program::TestSpan" ManagedNet10.Smoke
 ```
 
-当前已通过的解释执行子入口：
+当前已通过的解释执行入口：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestPairArithmetic"
-```
-
-当前预期失败的解释执行子入口：
-
-```powershell
 powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestBoxingMetadata"
 powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestSpan"
+powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.Program::TestAsync"
+powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release
 ```
 
 当前预期失败的 native 入口：
@@ -391,7 +392,7 @@ powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Conf
 & $runner -l $smokeDir -l $runtimeDir ManagedNet10.Smoke
 ```
 
-如果本机 runtime patch 不是 `10.0.9`，把 `$runtimeDir` 替换为 `dotnet --list-runtimes` 中最新的 `Microsoft.NETCore.App 10.x` 目录。预期失败命令当前不是回归；它们是下一轮修复和验收的基线。
+如果本机 runtime patch 不是 `10.0.9`，把 `$runtimeDir` 替换为 `dotnet --list-runtimes` 中最新的 `Microsoft.NETCore.App 10.x` 目录。native/AOT 入口当前仍是后置阶段输入；解释执行入口已经作为第一阶段绿色基线。
 
 ## 关键风险
 
@@ -658,11 +659,11 @@ Unity/Godot host
 
 | 主线 | 最小验证入口 | 通过证据 | 说明 |
 | --- | --- | --- | --- |
-| 解释执行 runner 基线 | `scripts/dotnet10/interp-smoke.ps1` 复用 `src/tools/leanrun`，可指定程序集目录、`.NET 10` runtime pack 目录、入口方法 | 能构建 `ManagedNet10.Smoke` 和 `leanrun`，并把入口调用收敛到解释执行路径 | 工具入口已接入；下一步用最小入口实际排 `coreclr-net10` runtime 缺口 |
-| corlib contract / boxing metadata | 解释执行 `ManagedNet10.Smoke.Program::TestBoxingMetadata` | 输出 `ok!`，进程退出码 `0`，随后 `TestBasics` 也通过 | 当前最小 blocker；证明 boxed value type 的 `Object.GetType()`、`RuntimeType.Name` 和 CoreCLR `System.Private.CoreLib` metadata 路径可用 |
+| 解释执行 runner 基线 | `scripts/dotnet10/interp-smoke.ps1` 复用 `src/tools/leanrun`，可指定程序集目录、`.NET 10` runtime pack 目录、入口方法 | 已能构建 `ManagedNet10.Smoke` 和 `leanrun`，完整入口输出 `ok!` | 可作为第一阶段解释执行门禁的当前绿色基线 |
+| corlib contract / boxing metadata | 解释执行 `ManagedNet10.Smoke.Program::TestBoxingMetadata` | 输出 `ok!`，进程退出码 `0`，`TestBasics` 也通过 | 已证明 smoke 中 boxed value type 的 `Object.GetType()`、`RuntimeType.Name` 和 CoreCLR `System.Private.CoreLib` metadata 路径可用 |
 | CoreCLR method resolution | 新增 `TestStaticAbstractInterfaceMember` 子入口，先用自定义接口 `static abstract` 成员，再扩展到 generic math | 解释执行子入口输出 `ok!`，或给出明确 NotSupported 诊断 | 先验证 metadata loader、MethodImpl/interface method resolution 和解释器调用路径，不处理 AOT call emission |
-| .NET 10 BCL icalls / intrinsics | 解释执行 `TestReflection`、`TestGenericsDelegatesAndExceptions`、`TestAsync` 分别通过 | 每个子入口单独 `ok!`，并记录新增 icall/intrinsic 到 `coreclr-net10` profile | 用失败子入口驱动实现顺序；每补一个 API，都要能解释它来自哪个 smoke 或 extern diff |
-| 完整解释 smoke | 解释执行 `ManagedNet10.Smoke` 完整入口 | 完整入口输出 `ok!`，不再抛 `System.BadImageFormatException` 或崩溃退出 | 只有所有子入口通过后，完整解释 smoke 才适合作为第一阶段 CI 绿色门禁 |
+| .NET 10 BCL icalls / intrinsics | 解释执行 `TestReflection`、`TestGenericsDelegatesAndExceptions`、`TestAsync` 分别通过 | 每个子入口已单独 `ok!`；本阶段新增 QCall/PInvoke、Monitor fast-path、Unsafe/YieldAwaiter intrinsic | 后续继续按 smoke 和 extern diff 分批补齐，而不是一次性填满 4191 个缺口 |
+| 完整解释 smoke | 解释执行 `ManagedNet10.Smoke` 完整入口 | 完整入口输出 `ok!`，53 个 `Test*` 子入口逐项通过 | 适合作为第一阶段 CI 绿色门禁候选；仍不代表完整 BCL 支持 |
 
 每完成一个切片，都应同步更新三处：本机验证记录、近期任务清单、实施记录。不要只把失败点从一个子入口推到另一个子入口就标记 `.NET 10 支持` 完成。
 
@@ -778,13 +779,14 @@ Unity/Godot host
 - [x] 补齐最小 Span stackalloc / RVA initializer smoke 所需的 codegen intrinsic 与 intrinsic 查找路径。
 - [x] 接入解释执行 smoke runner 脚本：复用 `src/tools/leanrun`，支持指定用户程序集目录、`.NET 10` runtime pack 目录和入口方法，避免第一阶段依赖 AOT 生成/编译流程。
 - [x] 跑通 `scripts\dotnet10\interp-smoke.ps1 -Entry "ManagedNet10.Smoke.Program::TestPairArithmetic"`，确认最小 .NET 10 解释入口可进入并退出 `0`。
+- [x] 拉取 `dotnet/runtime` 参考源码到 gitignored `artifacts/dotnet10-runtime-src`，用于快速对照 .NET 10 CoreLib/QCall/InternalCall 调用链。
 - [ ] 新增 `dotnet/runtime` 精简源码参考获取脚本：固定 `v10.0.9` 或当前 runtime patch 对应 tag，sparse checkout `src/coreclr/vm`、`src/libraries/System.Private.CoreLib/src` 和 `docs/design/coreclr`，输出到 gitignored 的参考目录。
-- [ ] 在解释执行 runner 中修复 `TestSpan`，让 Span stackalloc / RVA initializer 子路径不依赖 AOT codegen intrinsic 也能通过。
-- [ ] 在解释执行 runner 中修复 `TestBoxingMetadata`，让 boxed value type 的 `Object.GetType()` / `RuntimeType.Name` 子路径在 `System.Private.CoreLib` 下通过。
+- [x] 在解释执行 runner 中修复 `TestSpan`，让 Span stackalloc / RVA initializer 子路径不依赖 AOT codegen intrinsic 也能通过。
+- [x] 在解释执行 runner 中修复 `TestBoxingMetadata`，让 boxed value type 的 `Object.GetType()` / `RuntimeType.Name` 子路径在 `System.Private.CoreLib` 下通过。
 - [ ] 完成 `coreclr-net10` corlib contract 改造：解除 `System.Private.CoreLib` 初始化阶段的 Mono-era 类型阻断，并把 `mscorlib` / `System.Private.CoreLib` 差异显式 profile 化。
 - [ ] 新增并跑通接口静态虚函数 fixture：先覆盖自定义 `static abstract` interface member，再扩展到 `net10.0` generic math smoke。
 - [ ] 实现接口静态虚函数解释执行支持：覆盖 metadata loader、method resolution、interface method implementation 和解释器调用路径；AOT 调用生成后置。
-- [ ] 根据 `coreclr-net10` extern diff 优先补齐启动路径 icalls / intrinsics，让最小 `ManagedNet10.Smoke` 能在 LeanCLR 解释执行 runner 中端到端执行。
+- [x] 根据 `coreclr-net10` extern diff 优先补齐启动路径 icalls / intrinsics，让最小 `ManagedNet10.Smoke` 能在 LeanCLR 解释执行 runner 中端到端执行。
 - [ ] 增加完整 `System.Private.CoreLib` / `.NET 10` runtime pack assembly resolver。
 - [ ] 为其它现代 IL / metadata 缺口增加解释执行 smoke test，并按实际 .NET 10/NKG workload 排序。
 - [ ] 更新 README/文档站能力矩阵。
@@ -820,8 +822,8 @@ Unity/Godot host
 - 计划改为优先使用 runtime pack extern diff、`dotnet/runtime` `System.Private.CoreLib`/`coreclr/vm` 源码和 `source.dot.net` 反查 CoreLib 调用链，不再手工猜 `.NET 10` BCL contract。
 - 确认仓库已有 `src/tools/leanrun` 可作为解释执行 runner，新增 `scripts/dotnet10/interp-smoke.ps1` / `.bat` 包装托管 smoke 构建、`leanrun` CMake 构建、runtime pack 自动定位和 `-e` 子入口执行。
 - 本机已验证 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -BuildOnly` 通过，`TestPairArithmetic` 解释执行通过并输出 `ok!`。
-- 本机已验证 `TestBoxingMetadata` 解释执行仍失败：入口调用阶段抛 `System.BadImageFormatException`，随后 `leanrun.exe` 异常退出。
-- 本机已验证 `TestSpan` 解释执行仍失败：入口调用失败，异常栈获取也失败；后续需要把 Span runtime/intrinsic 支持补到解释路径，而不是只依赖 AOT codegen。
+- 当时本机验证 `TestBoxingMetadata` 解释执行失败：入口调用阶段抛 `System.BadImageFormatException`，随后 `leanrun.exe` 异常退出；该问题已在后续切片中修复。
+- 当时本机验证 `TestSpan` 解释执行失败：入口调用失败，异常栈获取也失败；该问题已在后续解释路径中修复。
 
 2026-06-26 已落地第一批基础设施改造：
 
@@ -858,10 +860,23 @@ Unity/Godot host
 - runtime intrinsic 查找增加 closed generic declaring type 到 open generic declaring type 的 fallback，使 `System.Span<int>.get_Item` 这类闭泛型方法可命中 `System.Span\`1::get_Item` 已登记 intrinsic。
 - 本机 native 子入口验证已通过 `TestPairArithmetic`、`TestThreadingSubset`、`TestSpanStackalloc`、`TestSpanStackallocInitializer` 和 `TestSpan`；`TestBoxingMetadata`、`TestGenericsDelegatesAndExceptions`、`TestReflection`、`TestAsync` 以及完整入口仍失败。
 
+2026-06-26 已打通 .NET 10 解释执行完整 smoke：
+
+- 已拉取 `dotnet/runtime` 参考源码到 gitignored `artifacts/dotnet10-runtime-src`，当前用于快速对照 `System.Private.CoreLib`、QCall/PInvoke、InternalCall 和 async/ThreadPool 调用链；后续仍需补一个可复跑的 sparse checkout 脚本。
+- 在 `src/tools/leanrun` 增强异常诊断：Release 下缺失 internal call、intrinsic、P/Invoke、runtime/generic invoker 会打印具体方法名；托管 `StackTrace` 获取失败时回退输出 native trace。
+- 增加 .NET 10 QCall/PInvoke 基础入口：`Thread.GetCurrentThread`、`Debugger.IsManagedDebuggerAttached`、`RuntimeTypeHandle.GetGCHandle` / `FreeGCHandle`、`Exception.GetFrozenStackTrace`。
+- 增加 `Unsafe.AsPointer<T>` intrinsic，支撑 `ObjectHandleOnStack.Create<T>` 写回对象 handle。
+- 增加 `YieldAwaiter.get_IsCompleted` intrinsic：当前解释执行 smoke 按单线程同步 continuation 处理 `Task.Yield`，先作为第一阶段绿色基线；真正 ThreadPool continuation 语义仍属于后续工作。
+- 补齐 .NET 10 `Monitor` fast-path internal calls：`TryEnter_FastPath`、`TryEnter_FastPath_WithTimeout`、`Exit_FastPath`、`IsEnteredNative`，复用现有单线程 monitor 计数 stub。
+- 补充 `ManagedNet10.Smoke` 子入口，覆盖 `Thread.CurrentThread`、`Task.FromResult`、`AsyncTaskMethodBuilder`、async no-await/completed-await/yield 等定位切片。
+- 本机已验证 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -BuildOnly` 通过。
+- 本机已验证 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 完整入口输出 `ok!`。
+- 本机已验证 53 个 `ManagedNet10.Smoke.Program::Test*` 子入口逐项通过，均退出 `0`。
+
 仍未完成：
 
 - `coreclr-net10` 仍只是可复用实现的保守基线，不等于完整 .NET 10 BCL 支持；剩余 4191 个 extern signature 需要按启动路径和实际 workload 分批补齐。
-- `.NET 10` smoke 当前验证了 SDK 编译/运行、LeanAOT C++ 生成、生成 C++ 的 native 编译/链接、LeanCLR runtime 初始化通过，以及少量 `System.Private.CoreLib` 子路径可执行；解释执行 smoke 脚本已接入，`TestPairArithmetic` 已跑绿，但 `TestSpan`、`TestBoxingMetadata` 和完整 `ManagedNet10.Smoke` / Microsoft.NETCore.App 仍未端到端跑通。
+- `.NET 10` smoke 当前已验证 SDK 编译/运行、LeanAOT C++ 生成、生成 C++ 的 native 编译/链接、LeanCLR runtime 初始化通过，以及 `ManagedNet10.Smoke` 解释执行完整入口和 53 个 `Test*` 子入口通过；但这仍只是 smoke 级别，不等于完整 Microsoft.NETCore.App profile 可用。
 - 接口静态虚函数尚未实现，也还没有加入 generic math / static abstract interface member smoke。
-- boxing metadata、`Object.GetType()`、`RuntimeType.Name`、反射、delegate/exception 和 async 是下一轮解释执行 smoke 的优先排查点；native/AOT smoke 后置。
+- native/AOT smoke 仍后置，当前 `aot-tester.exe` 完整入口和多个高级子入口仍失败，不能作为第一阶段验收门禁。
 - NKGGameFramework、Unity/Godot bridge、现代 IL 和完整 CoreCLR assembly resolver 仍属于后续阶段。
