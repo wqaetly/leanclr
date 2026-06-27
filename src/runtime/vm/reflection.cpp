@@ -10,6 +10,7 @@
 #include "rt_array.h"
 #include "assembly.h"
 #include "class.h"
+#include "field.h"
 #include "method.h"
 #include "object.h"
 #include "gc/gc_roots.h"
@@ -358,6 +359,23 @@ RtResult<RtReflectionField*> Reflection::get_field_reflection_object(const metad
         ref_obj->attrs = field->flags;
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, type_obj, get_type_reflection_object(field->type_sig));
         ref_obj->type_ = type_obj;
+    }
+    else
+    {
+        const metadata::RtFieldInfo* field_handle_field = Class::get_field_for_name(runtime_field_klass, "m_fieldHandle", true);
+        if (field_handle_field == nullptr)
+        {
+            RET_ERR(RtErr::MissingField);
+        }
+
+        RET_ERR_ON_FAIL(Field::set_instance_value(field_handle_field, ref_obj, &field));
+
+        const metadata::RtFieldInfo* attributes_field = Class::get_field_for_name(runtime_field_klass, "m_fieldAttributes", true);
+        if (attributes_field != nullptr)
+        {
+            int32_t attrs = static_cast<int32_t>(field->flags);
+            RET_ERR_ON_FAIL(Field::set_instance_value(attributes_field, ref_obj, &attrs));
+        }
     }
     RET_OK(ref_obj);
 }

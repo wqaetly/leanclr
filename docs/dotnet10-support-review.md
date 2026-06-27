@@ -34,6 +34,21 @@ powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Conf
 
 以上命令均已通过，说明 Mono-only icall 隔离没有破坏当前 `ManagedNet10.Smoke` 主入口和已迁移的 legacy 反射扫描入口。
 
+2026-06-27 RuntimeModule 反射迁移阶段：将旧 `CorlibTests.InternalCall.TC_System_Reflection_RuntimeModule` 作为素材接入 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionRuntimeModule` 子入口并纳入 `RunAll` 反射扫描。运行时侧补齐 `.NET 10` `RuntimeModule` / `ModuleHandle` / `MetadataImport` / `RuntimeFieldHandle` / `RuntimeTypeHandle` 在该用例实际触发的桥接能力，包括模块 token、模块名称、签名 blob、token 有效性、类型/字段 token 解析、字段属性与名称、`RtFieldInfo` 句柄初始化和字段反射对象等价比较。
+
+本阶段特别确认了旧宽松 icall 注册的风险：不能再用 `System.RuntimeFieldHandle::GetToken` 这类无签名泛匹配去承接 `.NET 10` 路径，否则会误命中托管侧 IL 包装方法并把 `RtFieldInfo` 对象指针错当 native 字段句柄。当前实现改为只注册 `System.RuntimeFieldHandle::GetToken(System.IntPtr)`，后续清理 `icalls` / `pinvokes` / `intrinsics` 时也应优先移除宽松命中路径，保留精确签名和清晰诊断。
+
+本阶段补充验证命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunCorlibReflectionRuntimeModule"
+dotnet build src\tests\managed-net10\managed-net10.sln -c Release
+powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunAll"
+powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release
+```
+
+以上命令均已通过，说明 RuntimeModule 旧用例迁移后，`managed-net10` 主验证口和默认解释 smoke 仍保持绿色。
+
 ## 官方基线
 
 本次审查按以下官方信息作为外部基线：

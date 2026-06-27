@@ -67,6 +67,70 @@ static RtResult<int32_t> metadata_import_get_property_props(metadata::RtModuleDe
     RET_OK(0);
 }
 
+static RtResult<int32_t> metadata_import_get_signature_from_token(metadata::RtModuleDef* module, int32_t md_token,
+                                                                  MetadataConstArray* signature) noexcept
+{
+    if (module == nullptr || signature == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(md_token));
+    const metadata::CliImage& image = module->get_cli_image();
+    uint32_t blob_index = 0;
+
+    switch (token.table_type)
+    {
+    case metadata::TableType::Field:
+    {
+        auto row = image.read_field(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        blob_index = row->signature;
+        break;
+    }
+    case metadata::TableType::Method:
+    {
+        auto row = image.read_method(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        blob_index = row->signature;
+        break;
+    }
+    case metadata::TableType::MemberRef:
+    {
+        auto row = image.read_member_ref(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        blob_index = row->signature;
+        break;
+    }
+    case metadata::TableType::StandaloneSig:
+    {
+        auto row = image.read_stand_alone_sig(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        blob_index = row->signature;
+        break;
+    }
+    case metadata::TableType::TypeSpec:
+    {
+        auto row = image.read_type_spec(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        blob_index = row->signature;
+        break;
+    }
+    default:
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(utils::BinaryReader, blob_reader, module->get_decoded_blob_reader(blob_index));
+    signature->length = static_cast<int32_t>(blob_reader.length());
+    signature->data = reinterpret_cast<intptr_t>(blob_reader.data());
+    RET_OK(0);
+}
+
 static RtResult<int32_t> metadata_import_get_name(metadata::RtModuleDef* module, int32_t md_token, void** name) noexcept
 {
     if (module == nullptr || name == nullptr)
@@ -233,6 +297,51 @@ static RtResultVoid metadata_import_get_property_props_invoker(metadata::RtManag
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, hr,
                                             metadata_import_get_property_props(module, md_token, name, property_attributes, signature));
     EvalStackOp::set_return(ret, hr);
+    RET_VOID_OK();
+}
+
+/// @icall: System.Reflection.MetadataImport::GetSignatureFromToken(System.IntPtr,System.Int32,System.Reflection.ConstArray&)
+static RtResultVoid metadata_import_get_signature_from_token_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                     const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto module = EvalStackOp::get_param<metadata::RtModuleDef*>(params, 0);
+    auto md_token = EvalStackOp::get_param<int32_t>(params, 1);
+    auto signature = EvalStackOp::get_param<MetadataConstArray*>(params, 2);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, hr, metadata_import_get_signature_from_token(module, md_token, signature));
+    EvalStackOp::set_return(ret, hr);
+    RET_VOID_OK();
+}
+
+RtResult<bool> metadata_import_is_valid_token(metadata::RtModuleDef* module, int32_t token_value) noexcept
+{
+    if (module == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(token_value));
+    if (token.rid == 0)
+    {
+        RET_OK(false);
+    }
+
+    uint8_t table_index = static_cast<uint8_t>(token.table_type);
+    if (table_index > static_cast<uint8_t>(metadata::TableType::CustomDebugInformation))
+    {
+        RET_OK(false);
+    }
+
+    RET_OK(token.rid <= module->get_table_row_num(token.table_type));
+}
+
+/// @icall: System.Reflection.MetadataImport::IsValidToken(System.IntPtr,System.Int32)
+static RtResultVoid metadata_import_is_valid_token_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto module = EvalStackOp::get_param<metadata::RtModuleDef*>(params, 0);
+    int32_t token = EvalStackOp::get_param<int32_t>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, metadata_import_is_valid_token(module, token));
+    EvalStackOp::set_return(ret, result);
     RET_VOID_OK();
 }
 
@@ -743,6 +852,9 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeModule::get_internal_c
         {"System.Reflection.MetadataImport::GetName(System.IntPtr,System.Int32,System.Byte*&)", nullptr, metadata_import_get_name_invoker},
         {"System.Reflection.MetadataImport::GetPropertyProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&,System.Reflection.ConstArray&)", nullptr,
          metadata_import_get_property_props_invoker},
+        {"System.Reflection.MetadataImport::GetSignatureFromToken(System.IntPtr,System.Int32,System.Reflection.ConstArray&)", nullptr,
+         metadata_import_get_signature_from_token_invoker},
+        {"System.Reflection.MetadataImport::IsValidToken(System.IntPtr,System.Int32)", nullptr, metadata_import_is_valid_token_invoker},
         {"System.Reflection.RuntimeModule::GetMDStreamVersion(System.IntPtr)", (vm::InternalCallFunction)&SystemReflectionRuntimeModule::get_md_stream_version,
          get_md_stream_version_invoker},
         {"System.Reflection.RuntimeModule::InternalGetTypes(System.IntPtr)", (vm::InternalCallFunction)&SystemReflectionRuntimeModule::internal_get_types,

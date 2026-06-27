@@ -73,6 +73,26 @@ RtResult<bool> SystemRuntimeTypeHandle::has_references(metadata::RtClass* klass)
     RET_OK(vm::Class::get_has_references(klass));
 }
 
+RtResult<bool> SystemRuntimeTypeHandle::compare_canonical_handles(const vm::RtReflectionRuntimeType* left,
+                                                                  const vm::RtReflectionRuntimeType* right) noexcept
+{
+    if (left == nullptr || right == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    const metadata::RtTypeSig* left_sig = left->reflection_type.type_handle;
+    const metadata::RtTypeSig* right_sig = right->reflection_type.type_handle;
+    if (left_sig == right_sig)
+    {
+        RET_OK(true);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, left_class, vm::Class::get_class_from_typesig(left_sig));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, right_class, vm::Class::get_class_from_typesig(right_sig));
+    RET_OK(left_class == right_class);
+}
+
 RtResult<int32_t> SystemRuntimeTypeHandle::get_array_rank(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
     auto type_sig = runtime_type->reflection_type.type_handle;
@@ -490,6 +510,17 @@ static RtResultVoid has_references_invoker(metadata::RtManagedMethodPointer meth
     RET_VOID_OK();
 }
 
+/// @icall: System.RuntimeTypeHandle::CompareCanonicalHandles(System.RuntimeType,System.RuntimeType)
+static RtResultVoid compare_canonical_handles_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                      const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto left = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 0);
+    auto right = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeTypeHandle::compare_canonical_handles(left, right));
+    EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
 /// @icall: System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)
 static RtResultVoid get_array_rank_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -715,6 +746,10 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] 
     {"System.RuntimeTypeHandle::HasInstantiation", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::has_instantiation, has_instantiation_invoker},
     {"System.RuntimeTypeHandle::IsComObject(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_com_object, is_com_object_invoker},
     {"System.RuntimeTypeHandle::HasReferences", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::has_references, has_references_invoker},
+    {"System.RuntimeTypeHandle::CompareCanonicalHandles(System.RuntimeType,System.RuntimeType)",
+     (vm::InternalCallFunction)&SystemRuntimeTypeHandle::compare_canonical_handles, compare_canonical_handles_invoker},
+    {"System.RuntimeTypeHandle::CompareCanonicalHandles", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::compare_canonical_handles,
+     compare_canonical_handles_invoker},
     {"System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_array_rank, get_array_rank_invoker},
     {"System.RuntimeTypeHandle::GetElementType", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_element_type, get_element_type_invoker},
     {"System.RuntimeTypeHandle::IsGenericVariable", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_generic_variable, is_generic_variable_invoker},

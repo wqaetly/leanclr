@@ -30,6 +30,9 @@ class SystemRuntimeTypeHandle
     // Check if type has references
     static RtResult<bool> has_references(metadata::RtClass* klass) noexcept;
 
+    // Compare two runtime type handles after canonicalization.
+    static RtResult<bool> compare_canonical_handles(const vm::RtReflectionRuntimeType* left, const vm::RtReflectionRuntimeType* right) noexcept;
+
     // Get array rank
     static RtResult<int32_t> get_array_rank(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
 

@@ -106,6 +106,12 @@ struct StackFrameData
     bool is_last_frame_from_foreign_exception_stack_trace;
 };
 
+struct RtIntPtrSpan
+{
+    void** pointer;
+    int32_t length;
+};
+
 static bool is_value_type_fast_compare_blocked_field_type(metadata::RtElementType element_type) noexcept
 {
     switch (element_type)
@@ -478,6 +484,75 @@ RtResult<vm::RtArray*> get_module_types(void* qcall_module, void* native_handle)
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, module, get_module_from_qcall_module(qcall_module, native_handle));
     return vm::Assembly::get_types(module->get_assembly(), false);
+}
+
+RtResult<int32_t> get_runtime_type_fields(void* method_table, RtIntPtrSpan data, int32_t* used_count) noexcept
+{
+    if (used_count == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+    if (method_table == nullptr)
+    {
+        *used_count = 0;
+        RET_OK(1);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            get_type_sig_from_qcall_type_handle(method_table, method_table));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_fields(klass));
+
+    utils::Vector<const metadata::RtFieldInfo*> fields;
+    fields.reserve(klass->field_count);
+    for (uint32_t i = 0; i < klass->field_count; ++i)
+    {
+        const metadata::RtFieldInfo* field = klass->fields + i;
+        if (!vm::Field::is_static_literal(field))
+        {
+            fields.push_back(field);
+        }
+    }
+
+    int32_t count = static_cast<int32_t>(fields.size());
+    *used_count = count;
+    if (count > data.length)
+    {
+        RET_OK(0);
+    }
+    if (count > 0 && data.pointer == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    for (int32_t i = 0; i < count; ++i)
+    {
+        data.pointer[i] = const_cast<metadata::RtFieldInfo*>(fields[static_cast<size_t>(i)]);
+    }
+
+    RET_OK(1);
+}
+
+RtResult<int32_t> get_module_token(void* qcall_module, void* native_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, module, get_module_from_qcall_module(qcall_module, native_handle));
+    RET_OK(static_cast<int32_t>(module->get_module_token()));
+}
+
+RtResult<vm::RtString*> get_runtime_module_name(void* qcall_module, void* native_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, module, get_module_from_qcall_module(qcall_module, native_handle));
+    const char* name = module->get_name();
+    if (name == nullptr || name[0] == '\0')
+    {
+        name = module->get_name_no_ext();
+    }
+    if (name == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    return vm::String::create_string_from_utf8cstr(name);
 }
 
 RtResult<metadata::RtClass*> get_type_def_class_for_metadata_enum(metadata::RtModuleDef* module, int32_t parent_token) noexcept
@@ -951,6 +1026,142 @@ RtResult<vm::RtObject*> create_instance_for_generic_parameters(void* qcall_type_
     }
 
     RET_OK(obj);
+}
+
+RtResult<vm::RtObject*> create_runtime_field_info_stub(const metadata::RtFieldInfo* field) noexcept
+{
+    if (field == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtModuleDef* corlib = metadata::RtModuleDef::get_corlib_module();
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, stub_klass,
+                                            corlib->get_class_by_name("System.RuntimeFieldInfoStub", false, true));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, stub, LEANCLR_NEWOBJ_INTERNAL(stub_klass, "ModuleHandle_ResolveField"));
+
+    const metadata::RtFieldInfo* field_handle_field = vm::Class::get_field_for_name(stub_klass, "m_fieldHandle", true);
+    if (field_handle_field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+
+    RET_ERR_ON_FAIL(vm::Field::set_instance_value(field_handle_field, stub, &field));
+    RET_OK(stub);
+}
+
+RtResult<const metadata::RtFieldInfo*> resolve_module_field(void* qcall_module, void* native_handle, int32_t field_token,
+                                                            void** type_inst_args, int32_t type_inst_count, void** method_inst_args,
+                                                            int32_t method_inst_count) noexcept
+{
+    if (type_inst_count < 0 || type_inst_count > static_cast<int32_t>(metadata::RT_MAX_GENERIC_PARAM_COUNT) ||
+        method_inst_count < 0 || method_inst_count > static_cast<int32_t>(metadata::RT_MAX_GENERIC_PARAM_COUNT))
+    {
+        RET_ERR(RtErr::Argument);
+    }
+    if ((type_inst_count > 0 && type_inst_args == nullptr) || (method_inst_count > 0 && method_inst_args == nullptr))
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, module, get_module_from_qcall_module(qcall_module, native_handle));
+
+    const metadata::RtTypeSig* type_inst_sigs[metadata::RT_MAX_GENERIC_PARAM_COUNT]{};
+    for (int32_t i = 0; i < type_inst_count; ++i)
+    {
+        if (type_inst_args[i] == nullptr)
+        {
+            RET_ERR(RtErr::ArgumentNull);
+        }
+        type_inst_sigs[i] = reinterpret_cast<const metadata::RtTypeSig*>(type_inst_args[i]);
+    }
+
+    const metadata::RtTypeSig* method_inst_sigs[metadata::RT_MAX_GENERIC_PARAM_COUNT]{};
+    for (int32_t i = 0; i < method_inst_count; ++i)
+    {
+        if (method_inst_args[i] == nullptr)
+        {
+            RET_ERR(RtErr::ArgumentNull);
+        }
+        method_inst_sigs[i] = reinterpret_cast<const metadata::RtTypeSig*>(method_inst_args[i]);
+    }
+
+    const metadata::RtGenericInst* class_inst = nullptr;
+    if (type_inst_count > 0)
+    {
+        UNWRAP_OR_RET_ERR_ON_FAIL(class_inst,
+                                  metadata::MetadataCache::get_pooled_generic_inst(type_inst_sigs, static_cast<uint8_t>(type_inst_count)));
+    }
+
+    const metadata::RtGenericInst* method_inst = nullptr;
+    if (method_inst_count > 0)
+    {
+        UNWRAP_OR_RET_ERR_ON_FAIL(method_inst,
+                                  metadata::MetadataCache::get_pooled_generic_inst(method_inst_sigs, static_cast<uint8_t>(method_inst_count)));
+    }
+
+    metadata::RtGenericContainerContext gcc{};
+    metadata::RtGenericContext gc{class_inst, method_inst};
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(field_token));
+    return module->get_field_by_token(token, gcc, &gc);
+}
+
+RtResult<vm::RtReflectionRuntimeType*> resolve_module_type(void* qcall_module, void* native_handle, int32_t type_token,
+                                                           void** type_inst_args, int32_t type_inst_count, void** method_inst_args,
+                                                           int32_t method_inst_count) noexcept
+{
+    if (type_inst_count < 0 || type_inst_count > static_cast<int32_t>(metadata::RT_MAX_GENERIC_PARAM_COUNT) ||
+        method_inst_count < 0 || method_inst_count > static_cast<int32_t>(metadata::RT_MAX_GENERIC_PARAM_COUNT))
+    {
+        RET_ERR(RtErr::Argument);
+    }
+    if ((type_inst_count > 0 && type_inst_args == nullptr) || (method_inst_count > 0 && method_inst_args == nullptr))
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, module, get_module_from_qcall_module(qcall_module, native_handle));
+
+    const metadata::RtTypeSig* type_inst_sigs[metadata::RT_MAX_GENERIC_PARAM_COUNT]{};
+    for (int32_t i = 0; i < type_inst_count; ++i)
+    {
+        if (type_inst_args[i] == nullptr)
+        {
+            RET_ERR(RtErr::ArgumentNull);
+        }
+        type_inst_sigs[i] = reinterpret_cast<const metadata::RtTypeSig*>(type_inst_args[i]);
+    }
+
+    const metadata::RtTypeSig* method_inst_sigs[metadata::RT_MAX_GENERIC_PARAM_COUNT]{};
+    for (int32_t i = 0; i < method_inst_count; ++i)
+    {
+        if (method_inst_args[i] == nullptr)
+        {
+            RET_ERR(RtErr::ArgumentNull);
+        }
+        method_inst_sigs[i] = reinterpret_cast<const metadata::RtTypeSig*>(method_inst_args[i]);
+    }
+
+    const metadata::RtGenericInst* class_inst = nullptr;
+    if (type_inst_count > 0)
+    {
+        UNWRAP_OR_RET_ERR_ON_FAIL(class_inst,
+                                  metadata::MetadataCache::get_pooled_generic_inst(type_inst_sigs, static_cast<uint8_t>(type_inst_count)));
+    }
+
+    const metadata::RtGenericInst* method_inst = nullptr;
+    if (method_inst_count > 0)
+    {
+        UNWRAP_OR_RET_ERR_ON_FAIL(method_inst,
+                                  metadata::MetadataCache::get_pooled_generic_inst(method_inst_sigs, static_cast<uint8_t>(method_inst_count)));
+    }
+
+    metadata::RtGenericContainerContext gcc{};
+    metadata::RtGenericContext gc{class_inst, method_inst};
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(type_token));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            module->get_typesig_by_type_def_ref_spec_token(token, gcc, &gc));
+    return get_runtime_type_from_type_sig(type_sig);
 }
 
 bool is_diagnostics_stack_frame(const interp::InterpFrame* frame) noexcept
@@ -1811,7 +2022,7 @@ RtResultVoid runtime_type_handle_get_instantiation_invoker(metadata::RtManagedMe
 }
 
 RtResultVoid get_module_types_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
-                                      interp::RtStackObject* ret) noexcept
+                                       interp::RtStackObject* ret) noexcept
 {
     auto qcall_module = interp::EvalStackOp::get_param<void*>(params, 0);
     auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
@@ -1823,6 +2034,45 @@ RtResultVoid get_module_types_invoker(metadata::RtManagedMethodPointer, const me
         *types_slot = types;
     }
     interp::EvalStackOp::set_return(ret, types);
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_type_handle_get_fields_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                    interp::RtStackObject* ret) noexcept
+{
+    auto method_table = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto data = interp::EvalStackOp::get_param<RtIntPtrSpan>(params, 1);
+    auto used_count = interp::EvalStackOp::get_param<int32_t*>(params, 3);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, result, get_runtime_type_fields(method_table, data, used_count));
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid module_handle_get_token_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                             interp::RtStackObject* ret) noexcept
+{
+    auto qcall_module = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, token, get_module_token(qcall_module, native_handle));
+    interp::EvalStackOp::set_return(ret, token);
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_module_get_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                             interp::RtStackObject*) noexcept
+{
+    auto qcall_module = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto ret_string = interp::EvalStackOp::get_param<vm::RtString**>(params, 2);
+    if (ret_string == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtString*, name, get_runtime_module_name(qcall_module, native_handle));
+    *ret_string = name;
     RET_VOID_OK();
 }
 
@@ -1902,6 +2152,53 @@ RtResultVoid module_handle_resolve_method_invoker(metadata::RtManagedMethodPoint
                                             resolve_module_method(qcall_module, native_handle, method_token, type_inst_args, type_inst_count,
                                                                   method_inst_args, method_inst_count));
     interp::EvalStackOp::set_return(ret, method);
+    RET_VOID_OK();
+}
+
+RtResultVoid module_handle_resolve_type_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                interp::RtStackObject*) noexcept
+{
+    auto qcall_module = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t type_token = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    auto type_inst_args = interp::EvalStackOp::get_param<void**>(params, 3);
+    int32_t type_inst_count = interp::EvalStackOp::get_param<int32_t>(params, 4);
+    auto method_inst_args = interp::EvalStackOp::get_param<void**>(params, 5);
+    int32_t method_inst_count = interp::EvalStackOp::get_param<int32_t>(params, 6);
+    auto ret_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType**>(params, 7);
+    if (ret_type == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, type,
+                                            resolve_module_type(qcall_module, native_handle, type_token, type_inst_args, type_inst_count,
+                                                                method_inst_args, method_inst_count));
+    *ret_type = type;
+    RET_VOID_OK();
+}
+
+RtResultVoid module_handle_resolve_field_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                 interp::RtStackObject*) noexcept
+{
+    auto qcall_module = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t field_token = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    auto type_inst_args = interp::EvalStackOp::get_param<void**>(params, 3);
+    int32_t type_inst_count = interp::EvalStackOp::get_param<int32_t>(params, 4);
+    auto method_inst_args = interp::EvalStackOp::get_param<void**>(params, 5);
+    int32_t method_inst_count = interp::EvalStackOp::get_param<int32_t>(params, 6);
+    auto ret_field = interp::EvalStackOp::get_param<vm::RtObject**>(params, 7);
+    if (ret_field == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field,
+                                            resolve_module_field(qcall_module, native_handle, field_token, type_inst_args, type_inst_count,
+                                                                 method_inst_args, method_inst_count));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, stub, create_runtime_field_info_stub(field));
+    *ret_field = stub;
     RET_VOID_OK();
 }
 
@@ -2335,6 +2632,22 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.Reflection.RuntimeModule::GetTypes(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, get_module_types_invoker);
     vm::PInvokes::register_pinvoke("System.Reflection.RuntimeModule::GetTypes", nullptr, get_module_types_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeModule::GetFullyQualifiedName(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.StringHandleOnStack)",
+        nullptr, runtime_module_get_name_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeModule::GetFullyQualifiedName", nullptr, runtime_module_get_name_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeModule::GetScopeName(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.StringHandleOnStack)",
+        nullptr, runtime_module_get_name_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeModule::GetScopeName", nullptr, runtime_module_get_name_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeTypeHandle::GetFields(System.Runtime.CompilerServices.MethodTable*,System.Span`1<System.IntPtr>,System.Int32&)",
+        nullptr, runtime_type_handle_get_fields_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetFields", nullptr, runtime_type_handle_get_fields_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_GetFields", nullptr, runtime_type_handle_get_fields_invoker);
+    vm::PInvokes::register_pinvoke("System.ModuleHandle::GetToken(System.Runtime.CompilerServices.QCallModule)", nullptr,
+                                   module_handle_get_token_invoker);
+    vm::PInvokes::register_pinvoke("System.ModuleHandle::GetToken", nullptr, module_handle_get_token_invoker);
     vm::PInvokes::register_pinvoke("AssemblyNative_GetTypeCore", nullptr, assembly_get_type_core_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Reflection.RuntimeAssembly::<GetTypeCore>g____PInvoke|25_0(System.Runtime.CompilerServices.QCallAssembly,System.Byte*,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
@@ -2355,6 +2668,14 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.ModuleHandle::ResolveMethod(System.Runtime.CompilerServices.QCallModule,System.Int32,System.IntPtr*,System.Int32,System.IntPtr*,System.Int32)",
         nullptr, module_handle_resolve_method_invoker);
     vm::PInvokes::register_pinvoke("System.ModuleHandle::ResolveMethod", nullptr, module_handle_resolve_method_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.ModuleHandle::ResolveType(System.Runtime.CompilerServices.QCallModule,System.Int32,System.IntPtr*,System.Int32,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, module_handle_resolve_type_invoker);
+    vm::PInvokes::register_pinvoke("System.ModuleHandle::ResolveType", nullptr, module_handle_resolve_type_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.ModuleHandle::ResolveField(System.Runtime.CompilerServices.QCallModule,System.Int32,System.IntPtr*,System.Int32,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, module_handle_resolve_field_invoker);
+    vm::PInvokes::register_pinvoke("System.ModuleHandle::ResolveField", nullptr, module_handle_resolve_field_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::CreateInstanceForAnotherGenericParameter(System.Runtime.CompilerServices.QCallTypeHandle,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, create_instance_for_another_generic_parameter_invoker);

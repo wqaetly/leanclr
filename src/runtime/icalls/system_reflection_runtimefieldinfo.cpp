@@ -9,6 +9,45 @@ namespace leanclr
 {
 namespace icalls
 {
+namespace
+{
+RtResult<const metadata::RtFieldInfo*> get_field_handle_from_object(vm::RtObject* obj) noexcept
+{
+    if (obj == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    const metadata::RtFieldInfo* handle = nullptr;
+    const metadata::RtFieldInfo* handle_field = vm::Class::get_field_for_name(obj->klass, "m_fieldHandle", true);
+    if (handle_field != nullptr)
+    {
+        RET_ERR_ON_FAIL(vm::Field::get_instance_value(handle_field, obj, &handle));
+        if (handle != nullptr)
+        {
+            RET_OK(handle);
+        }
+    }
+
+    return vm::Reflection::get_field_info_from_reflection_object(reinterpret_cast<vm::RtReflectionField*>(obj));
+}
+
+RtResult<bool> rt_field_info_equals(vm::RtObject* self, vm::RtObject* other) noexcept
+{
+    if (self == other)
+    {
+        RET_OK(true);
+    }
+    if (self == nullptr || other == nullptr || self->klass != other->klass)
+    {
+        RET_OK(false);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, self_field, get_field_handle_from_object(self));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, other_field, get_field_handle_from_object(other));
+    RET_OK(self_field == other_field);
+}
+} // namespace
 
 // ========== Implementation Functions ==========
 
@@ -180,11 +219,23 @@ static RtResultVoid runtimefieldinfo_get_type_modifiers_invoker(metadata::RtMana
     RET_VOID_OK();
 }
 
+/// @icall: System.Reflection.RtFieldInfo::Equals(System.Object)
+static RtResultVoid rt_field_info_equals_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                 interp::RtStackObject* ret) noexcept
+{
+    auto self = EvalStackOp::get_param<vm::RtObject*>(params, 0);
+    auto other = EvalStackOp::get_param<vm::RtObject*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, rt_field_info_equals(self, other));
+    EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 // ========== Registration ==========
 
 static vm::InternalCallEntry s_internal_call_entries_system_reflection_runtimefieldinfo[] = {
     {"System.Reflection.RuntimeFieldInfo::get_metadata_token", (vm::InternalCallFunction)&SystemReflectionRuntimeFieldInfo::get_metadata_token,
      get_metadata_token_invoker_system_reflection_runtimefieldinfo},
+    {"System.Reflection.RtFieldInfo::Equals(System.Object)", nullptr, rt_field_info_equals_invoker},
     {"System.Reflection.RuntimeFieldInfo::GetFieldOffset", (vm::InternalCallFunction)&SystemReflectionRuntimeFieldInfo::get_field_offset,
      get_field_offset_invoker},
     {"System.Reflection.RuntimeFieldInfo::GetRawConstantValue", (vm::InternalCallFunction)&SystemReflectionRuntimeFieldInfo::get_raw_const_value,
