@@ -36,9 +36,11 @@
     <Compile Include="ToStringRegressionTestEntries.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
     <Compile Include="..\..\managed\Common\CoversIcallAttribute.cs" Link="Common\CoversIcallAttribute.cs" />
+    <Compile Include="..\..\managed\Common\GcUnitTestAttribute.cs" Link="Common\GcUnitTestAttribute.cs" />
     <Compile Include="..\..\managed\Common\IgnoreTestAttribute.cs" Link="Common\IgnoreTestAttribute.cs" />
     <Compile Include="..\..\managed\Common\TestCaseBase.cs" Link="Common\TestCaseBase.cs" />
     <Compile Include="..\..\managed\Common\UnitTestAttribute.cs" Link="Common\UnitTestAttribute.cs" />
+    <Compile Include="GcTestEntries.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTActivator.cs" Link="Fixtures\AOTActivator.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTEnums.cs" Link="Fixtures\AOTEnums.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTValueTypes.cs" Link="Fixtures\AOTValueTypes.cs" />
@@ -138,6 +140,8 @@
     <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_System_Object.cs" Link="CorlibTests\Intrinsic\TC_System_Object.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_2022_9_27.cs" Link="Regression\Bug_2022_9_27.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_ValueTypeToString_2022_7_22.cs" Link="Regression\Bug_ValueTypeToString_2022_7_22.cs" />
+    <Compile Include="..\..\managed\GcTests\Fixtures\GcGraphTypes.cs" Link="GcTests\Fixtures\GcGraphTypes.cs" />
+    <Compile Include="..\..\managed\GcTests\Fixtures\GcTestCaseBase.cs" Link="GcTests\Fixtures\GcTestCaseBase.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Assembly.cs" Link="Runtime\TC_Assembly.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_ArrayGenericInterface.cs" Link="Runtime\TC_ArrayGenericInterface.cs" />
