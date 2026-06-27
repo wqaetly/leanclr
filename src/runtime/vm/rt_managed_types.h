@@ -221,26 +221,18 @@ struct RtDelegateData : public RtObject
 // Delegate
 struct RtDelegate : public RtObject
 {
-    uintptr_t _method_ptr;
-    uintptr_t invoke_impl;
     RtObject* target;
-    const metadata::RtMethodInfo* method;
-    uintptr_t _delegate_trampoline;
-    intptr_t extra_arg;
-    uintptr_t method_code;
-    uintptr_t _interp_method;
-    metadata::RtManagedMethodPointer interp_invoke_impl;
-    const metadata::RtMethodInfo* method_info;
-    const metadata::RtMethodInfo* original_method_info;
-    RtDelegateData* data;
-    bool method_is_virtual;
+    RtObject* method_base;
+    uintptr_t method_ptr;
+    uintptr_t method_ptr_aux;
 };
 
 // Multicast delegate
 struct RtMulticastDelegate
 {
     RtDelegate dele;
-    RtArray* deles;
+    RtObject* invocation_list;
+    intptr_t invocation_count;
 };
 
 // Forward declaration for mono app domain

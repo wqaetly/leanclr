@@ -15,37 +15,45 @@ RtResultVoid Delegate::initialize()
     RET_VOID_OK();
 }
 
+const metadata::RtMethodInfo* Delegate::get_target_method(const RtDelegate* del) noexcept
+{
+    return del == nullptr ? nullptr : reinterpret_cast<const metadata::RtMethodInfo*>(del->method_ptr_aux);
+}
+
+void Delegate::set_target_method(RtDelegate* del, const metadata::RtMethodInfo* method) noexcept
+{
+    assert(del != nullptr);
+    del->method_ptr = reinterpret_cast<uintptr_t>(&Delegate::invoke_delegate_invoker);
+    del->method_ptr_aux = reinterpret_cast<uintptr_t>(method);
+}
+
 RtResult<RtMulticastDelegate*> Delegate::create_delegate_from_reflection(RtReflectionType* delegate_type, RtObject* target,
                                                                          const metadata::RtMethodInfo* method, bool throw_on_bind) noexcept
 {
     const metadata::RtTypeSig* type_sig = delegate_type->type_handle;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, delegate_klass, vm::Class::get_class_from_typesig(type_sig));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, del_obj, LEANCLR_NEWOBJ_INTERNAL(delegate_klass, "Delegate::create_delegate_from_reflection"));
-    RtDelegate& sub_del = reinterpret_cast<RtMulticastDelegate*>(del_obj)->dele;
+    RtMulticastDelegate* del = reinterpret_cast<RtMulticastDelegate*>(del_obj);
 
-    sub_del.target = target;
+    RET_ERR_ON_FAIL(constructor_delegate(del, target, method));
     bool is_vir_method = !Method::is_devirtualed(method);
     if (is_vir_method && target)
     {
-        UNWRAP_OR_RET_ERR_ON_FAIL(sub_del.method, Method::get_virtual_method_impl(target, method));
-        sub_del.method_is_virtual = false;
-    }
-    else
-    {
-        sub_del.method = method;
-        sub_del.method_is_virtual = is_vir_method;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, virtual_method, Method::get_virtual_method_impl(target, method));
+        set_target_method(&del->dele, virtual_method);
     }
 
-    RET_OK(reinterpret_cast<RtMulticastDelegate*>(del_obj));
+    RET_OK(del);
 }
 
 RtResultVoid Delegate::constructor_delegate(RtMulticastDelegate* del, RtObject* target, const metadata::RtMethodInfo* method) noexcept
 {
-    del->deles = nullptr;
+    del->invocation_list = nullptr;
+    del->invocation_count = 0;
     auto& sub_del = del->dele;
     sub_del.target = target;
-    sub_del.method = method;
-    sub_del.method_is_virtual = false;
+    sub_del.method_base = nullptr;
+    set_target_method(&sub_del, method);
     RET_VOID_OK();
 }
 
@@ -95,10 +103,20 @@ RtResultVoid Delegate::invoke_delegate_invoker(metadata::RtManagedMethodPointer 
     RtDelegate* temp_delegate_arr[1];
     RtDelegate** del_arr;
     size_t del_count;
-    if (del->deles)
+    if (del->invocation_list != nullptr && Class::is_array_or_szarray(del->invocation_list->klass))
     {
-        del_arr = Array::get_array_data_start_as<RtDelegate*>(del->deles);
-        del_count = static_cast<size_t>(Array::get_array_length(del->deles));
+        RtArray* invocation_array = reinterpret_cast<RtArray*>(del->invocation_list);
+        del_arr = Array::get_array_data_start_as<RtDelegate*>(invocation_array);
+        int32_t array_length = Array::get_array_length(invocation_array);
+        int32_t invocation_count = del->invocation_count > 0 && del->invocation_count <= array_length ? static_cast<int32_t>(del->invocation_count)
+                                                                                                      : array_length;
+        del_count = static_cast<size_t>(invocation_count);
+    }
+    else if (del->invocation_list != nullptr)
+    {
+        temp_delegate_arr[0] = reinterpret_cast<RtDelegate*>(del->invocation_list);
+        del_arr = temp_delegate_arr;
+        del_count = 1;
     }
     else
     {
@@ -111,7 +129,11 @@ RtResultVoid Delegate::invoke_delegate_invoker(metadata::RtManagedMethodPointer 
     for (size_t i = 0; i < del_count; ++i)
     {
         RtDelegate* curr_del = del_arr[i];
-        const metadata::RtMethodInfo* target_method = curr_del->method;
+        const metadata::RtMethodInfo* target_method = get_target_method(curr_del);
+        if (target_method == nullptr)
+        {
+            RET_ERR(RtErr::ExecutionEngine);
+        }
         RtObject* target_obj = curr_del->target;
         interp::RtStackObject* final_args;
         switch (delegate_param_count - (int32_t)target_method->parameter_count)

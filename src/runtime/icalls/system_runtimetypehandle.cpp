@@ -396,6 +396,37 @@ RtResultVoid SystemRuntimeTypeHandle::get_next_introduced_method(const metadata:
     RET_ERR(RtErr::BadImageFormat);
 }
 
+RtResult<int32_t> SystemRuntimeTypeHandle::get_num_virtuals(const vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto type_sig = runtime_type->reflection_type.type_handle;
+    if (type_sig == nullptr || type_sig->is_by_ref() || type_sig->ele_type == metadata::RtElementType::Var ||
+        type_sig->ele_type == metadata::RtElementType::MVar || type_sig->ele_type == metadata::RtElementType::Ptr ||
+        type_sig->ele_type == metadata::RtElementType::FnPtr)
+    {
+        RET_OK(0);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_vtables(klass));
+    RET_OK(static_cast<int32_t>(klass->vtable_count));
+}
+
+RtResult<vm::RtObject*> SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path(const metadata::RtClass* klass) noexcept
+{
+    if (klass == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    RET_ERR_ON_FAIL(vm::Class::initialize_all(const_cast<metadata::RtClass*>(klass)));
+    return LEANCLR_NEWOBJ_INTERNAL(klass, "RuntimeTypeHandle_InternalAllocNoChecks_FastPath");
+}
+
 // Invoker functions
 
 /// @icall: System.RuntimeTypeHandle::GetAttributes
@@ -643,6 +674,27 @@ static RtResultVoid get_next_introduced_method_invoker(metadata::RtManagedMethod
     RET_VOID_OK();
 }
 
+/// @icall: System.RuntimeTypeHandle::GetNumVirtuals
+static RtResultVoid get_num_virtuals_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                             interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, num_virtuals, SystemRuntimeTypeHandle::get_num_virtuals(runtime_type));
+    EvalStackOp::set_return(ret, num_virtuals);
+    RET_VOID_OK();
+}
+
+/// @icall: System.RuntimeTypeHandle::InternalAllocNoChecks_FastPath
+static RtResultVoid internal_alloc_no_checks_fast_path_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                              const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto klass = EvalStackOp::get_param<const metadata::RtClass*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
+                                            SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path(klass));
+    EvalStackOp::set_return(ret, obj);
+    RET_VOID_OK();
+}
+
 // Internal call registry
 static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] = {
     {"System.RuntimeTypeHandle::GetAttributes", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_attributes, get_attributes_invoker},
@@ -678,6 +730,10 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] 
      get_first_introduced_method_invoker},
     {"System.RuntimeTypeHandle::GetNextIntroducedMethod", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_next_introduced_method,
      get_next_introduced_method_invoker},
+    {"System.RuntimeTypeHandle::GetNumVirtuals", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_num_virtuals, get_num_virtuals_invoker},
+    {"System.RuntimeTypeHandle::InternalAllocNoChecks_FastPath",
+     (vm::InternalCallFunction)&SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path,
+     internal_alloc_no_checks_fast_path_invoker},
 };
 
 utils::Span<vm::InternalCallEntry> SystemRuntimeTypeHandle::get_internal_call_entries() noexcept

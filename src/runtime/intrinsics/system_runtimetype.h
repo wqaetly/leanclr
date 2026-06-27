@@ -15,6 +15,7 @@ class SystemRuntimeType
                                                         bool inherit) noexcept;
     static RtResult<vm::RtReflectionRuntimeType*> get_parent_type(vm::RtReflectionRuntimeType* runtime_type) noexcept;
     static RtResult<bool> get_is_actual_interface(vm::RtReflectionRuntimeType* runtime_type) noexcept;
+    static RtResult<bool> is_delegate(vm::RtReflectionRuntimeType* runtime_type) noexcept;
     static RtResult<bool> get_is_generic_type(vm::RtReflectionRuntimeType* runtime_type) noexcept;
     static RtResult<bool> get_is_generic_type_definition(vm::RtReflectionRuntimeType* runtime_type) noexcept;
     static RtResult<vm::RtObject*> create_instance(vm::RtReflectionRuntimeType* runtime_type) noexcept;

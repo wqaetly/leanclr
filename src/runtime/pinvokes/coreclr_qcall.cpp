@@ -10,6 +10,7 @@
 #include "utils/string_builder.h"
 #include "vm/assembly.h"
 #include "vm/class.h"
+#include "vm/delegate.h"
 #include "vm/field.h"
 #include "vm/generic_class.h"
 #include "vm/gchandle.h"
@@ -934,17 +935,51 @@ RtResultVoid delegate_find_method_handle_invoker(metadata::RtManagedMethodPointe
         RET_ERR(RtErr::NullReference);
     }
 
-    const metadata::RtMethodInfo* reflected_method = this_delegate->method;
+    const metadata::RtMethodInfo* reflected_method = vm::Delegate::get_target_method(this_delegate);
+    if (reflected_method == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
     if (this_delegate->target != nullptr)
     {
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, virtual_method,
-                                                vm::Method::get_virtual_method_impl(this_delegate->target, this_delegate->method));
+                                                vm::Method::get_virtual_method_impl(this_delegate->target, reflected_method));
         reflected_method = virtual_method;
     }
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethod*, method_info,
                                             vm::Reflection::get_method_reflection_object(reflected_method, reflected_method->parent));
     *method_info_slot = reinterpret_cast<vm::RtObject*>(method_info);
+    RET_VOID_OK();
+}
+
+RtResultVoid delegate_bind_to_method_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                  interp::RtStackObject* ret) noexcept
+{
+    auto delegate_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    auto target_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 1);
+    auto method = interp::EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 2);
+    (void)interp::EvalStackOp::get_param<void*>(params, 3);
+    (void)interp::EvalStackOp::get_param<void*>(params, 4);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 5);
+
+    if (delegate_slot == nullptr || *delegate_slot == nullptr || method == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto multicast_delegate = reinterpret_cast<vm::RtMulticastDelegate*>(*delegate_slot);
+    vm::RtObject* target = target_slot != nullptr ? *target_slot : nullptr;
+    RET_ERR_ON_FAIL(vm::Delegate::constructor_delegate(multicast_delegate, target, method));
+    bool is_virtual_method = !vm::Method::is_devirtualed(method);
+    if (is_virtual_method && target != nullptr)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, virtual_method,
+                                                vm::Method::get_virtual_method_impl(target, method));
+        vm::Delegate::set_target_method(&multicast_delegate->dele, virtual_method);
+    }
+
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(1));
     RET_VOID_OK();
 }
 
@@ -1027,6 +1062,26 @@ RtResultVoid create_instance_for_another_generic_parameter_invoker(metadata::RtM
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
                                             create_instance_for_generic_parameters(qcall_type_handle, native_handle, type_handles, type_handle_count));
     *ret_obj = obj;
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_type_handle_internal_alloc_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                        const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto method_table = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto result_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 1);
+    if (result_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            get_type_sig_from_qcall_type_handle(method_table, method_table));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_all(klass));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
+                                            LEANCLR_NEWOBJ_INTERNAL(klass, "RuntimeTypeHandle_InternalAlloc"));
+    *result_slot = obj;
     RET_VOID_OK();
 }
 
@@ -1218,6 +1273,9 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.Delegate::FindMethodHandle(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, delegate_find_method_handle_invoker);
     vm::PInvokes::register_pinvoke("System.Delegate::FindMethodHandle", nullptr, delegate_find_method_handle_invoker);
+    vm::PInvokes::register_pinvoke("System.Delegate::<BindToMethodInfo>g____PInvoke|21_0", nullptr,
+                                   delegate_bind_to_method_info_invoker);
+    vm::PInvokes::register_pinvoke("System.Delegate::BindToMethodInfo", nullptr, delegate_bind_to_method_info_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::ConstructName(System.Runtime.CompilerServices.QCallTypeHandle,System.TypeNameFormatFlags,System.Runtime.CompilerServices.StringHandleOnStack)",
         nullptr, construct_runtime_type_name_invoker);
@@ -1242,6 +1300,10 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, create_instance_for_another_generic_parameter_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::CreateInstanceForAnotherGenericParameter", nullptr,
                                    create_instance_for_another_generic_parameter_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeTypeHandle::InternalAlloc(System.Runtime.CompilerServices.MethodTable*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, runtime_type_handle_internal_alloc_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::InternalAlloc", nullptr, runtime_type_handle_internal_alloc_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Signature::Init(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Void*,System.Int32,System.RuntimeFieldHandleInternal,System.RuntimeMethodHandleInternal)",
         nullptr, signature_init_invoker);

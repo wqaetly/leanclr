@@ -41,6 +41,7 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTCtorParam.cs" Link="Fixtures\TestAOTCtorParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTParam.cs" Link="Fixtures\TestAOTParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTReturn.cs" Link="Fixtures\TestAOTReturn.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\TestDelegates.cs" Link="Fixtures\TestDelegates.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeFields.cs" Link="Fixtures\TypeFields.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields.cs" Link="Fixtures\TypeStaticFields.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields2.cs" Link="Fixtures\TypeStaticFields2.cs" />
@@ -106,6 +107,7 @@
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_2022_9_27.cs" Link="Regression\Bug_2022_9_27.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_ValueTypeToString_2022_7_22.cs" Link="Regression\Bug_ValueTypeToString_2022_7_22.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_OpenClose.cs" Link="Runtime\TC_Delegate_OpenClose.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Enum.cs" Link="Runtime\TC_Enum.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_event.cs" Link="Runtime\TC_event.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_foreach.cs" Link="Runtime\TC_foreach.cs" />

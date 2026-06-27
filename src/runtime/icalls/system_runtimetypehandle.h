@@ -79,6 +79,12 @@ class SystemRuntimeTypeHandle
     // Enumerate methods introduced by a runtime type
     static RtResult<const metadata::RtMethodInfo*> get_first_introduced_method(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
     static RtResultVoid get_next_introduced_method(const metadata::RtMethodInfo** method) noexcept;
+
+    // Get virtual method slot count for .NET RuntimeType method cache population
+    static RtResult<int32_t> get_num_virtuals(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
+
+    // Allocate an uninitialized object from the native type handle used by .NET 10 CoreLib fast paths
+    static RtResult<vm::RtObject*> internal_alloc_no_checks_fast_path(const metadata::RtClass* klass) noexcept;
 };
 
 } // namespace icalls

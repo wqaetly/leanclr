@@ -42,6 +42,21 @@ RtResult<int32_t> SystemSpan::index_of_null_byte(const uint8_t* pointer) noexcep
     RET_OK(static_cast<int32_t>(std::strlen(reinterpret_cast<const char*>(pointer))));
 }
 
+RtResult<int32_t> SystemSpan::sequence_equal(const uint8_t* first, const uint8_t* second, size_t length) noexcept
+{
+    if (length == 0)
+    {
+        RET_OK(1);
+    }
+
+    if (first == nullptr || second == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    RET_OK(std::memcmp(first, second, length) == 0 ? 1 : 0);
+}
+
 // ========== Invoker Functions ==========
 
 /// @intrinsic: System.Span`1::get_Item
@@ -87,6 +102,34 @@ static RtResultVoid index_of_null_byte_invoker(metadata::RtManagedMethodPointer,
     RET_VOID_OK();
 }
 
+static size_t get_size_param(const metadata::RtMethodInfo* method, const interp::RtStackObject* params, size_t index) noexcept
+{
+    const metadata::RtTypeSig* param_type = method->parameters[index];
+    switch (param_type->ele_type)
+    {
+    case metadata::RtElementType::U4:
+        return static_cast<size_t>(interp::EvalStackOp::get_param<uint32_t>(params, index));
+    case metadata::RtElementType::I4:
+        return static_cast<size_t>(interp::EvalStackOp::get_param<int32_t>(params, index));
+    case metadata::RtElementType::U:
+        return static_cast<size_t>(interp::EvalStackOp::get_param<uintptr_t>(params, index));
+    case metadata::RtElementType::I:
+    default:
+        return static_cast<size_t>(interp::EvalStackOp::get_param<intptr_t>(params, index));
+    }
+}
+
+static RtResultVoid sequence_equal_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
+                                           interp::RtStackObject* ret) noexcept
+{
+    auto first = interp::EvalStackOp::get_param<const uint8_t*>(params, 0);
+    auto second = interp::EvalStackOp::get_param<const uint8_t*>(params, 1);
+    size_t length = get_size_param(method, params, 2);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, equal, SystemSpan::sequence_equal(first, second, length));
+    interp::EvalStackOp::set_return(ret, equal);
+    RET_VOID_OK();
+}
+
 // ========== Intrinsic Entries ==========
 
 static vm::IntrinsicEntry s_intrinsic_entries_system_span[] = {
@@ -95,6 +138,8 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_span[] = {
     {"System.SpanHelpers::IndexOfNullByte(System.Byte*)", (vm::IntrinsicFunction)&SystemSpan::index_of_null_byte,
      index_of_null_byte_invoker},
     {"System.SpanHelpers::IndexOfNullByte", (vm::IntrinsicFunction)&SystemSpan::index_of_null_byte, index_of_null_byte_invoker},
+    {"System.SpanHelpers::SequenceEqual(System.Byte&,System.Byte&,System.UIntPtr)", (vm::IntrinsicFunction)&SystemSpan::sequence_equal,
+     sequence_equal_invoker},
 };
 
 static vm::NewobjIntrinsicEntry s_newobj_intrinsic_entries_system_span[] = {

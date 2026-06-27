@@ -4,6 +4,7 @@
 #include "rt_string.h"
 #include "rt_array.h"
 #include "class.h"
+#include "delegate.h"
 #include "field.h"
 #include "object.h"
 #include "type.h"
@@ -218,21 +219,26 @@ RtResult<metadata::RtNativeMethodPointer> Marshal::get_function_pointer_for_dele
     }
     auto* md = reinterpret_cast<RtMulticastDelegate*>(delegate);
     RtDelegate* single = nullptr;
-    if (md->deles != nullptr)
+    if (md->invocation_list != nullptr && Class::is_array_or_szarray(md->invocation_list->klass))
     {
-        const int32_t len = Array::get_array_length(md->deles);
+        auto invocation_array = reinterpret_cast<RtArray*>(md->invocation_list);
+        const int32_t len = Array::get_array_length(invocation_array);
         if (len != 1)
         {
             RET_ERR_WITH_MSG(RtErr::NotSupported, "Delegate has multiple methods");
         }
-        single = *Array::get_array_data_start_as<RtDelegate*>(md->deles);
+        single = *Array::get_array_data_start_as<RtDelegate*>(invocation_array);
+    }
+    else if (md->invocation_list != nullptr)
+    {
+        single = reinterpret_cast<RtDelegate*>(md->invocation_list);
     }
     else
     {
         single = &md->dele;
     }
     assert(single != nullptr);
-    const metadata::RtMethodInfo* target_method = single->method;
+    const metadata::RtMethodInfo* target_method = Delegate::get_target_method(single);
     assert(target_method != nullptr);
     if (Method::is_instance(target_method))
     {
