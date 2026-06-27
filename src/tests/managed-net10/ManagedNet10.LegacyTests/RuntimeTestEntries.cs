@@ -22,7 +22,9 @@ namespace ManagedNet10.LegacyTests
 
         public static void RunRuntimeDelegates()
         {
-            LegacyTestRunner.RunType(typeof(Tests.CSharp.Delegates.TC_Delegate_OpenClose));
+            LegacyTestRunner.RunTypes(
+                typeof(Tests.CSharp.Delegates.TC_Delegate_OpenClose),
+                typeof(Tests.CSharp.Delegates.TC_Delegate_DynamicInvoke));
         }
 
         public static void RunRuntimeReflection()
@@ -256,6 +258,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunRuntimeDelegateOpenClose()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.Delegates.TC_Delegate_OpenClose));
+        }
+
+        public static void RunRuntimeDelegateDynamicInvoke()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.Delegates.TC_Delegate_DynamicInvoke));
         }
     }
 }
