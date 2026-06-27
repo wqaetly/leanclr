@@ -147,6 +147,8 @@ static InternalCallEntry s_internal_call_entries_system_buffer[] = {
     {"System.Buffer::InternalMemcpy(System.Byte*,System.Byte*,System.Int32)", (InternalCallFunction)&SystemBuffer::internal_memcpy, internal_memcpy_invoker},
     {"System.Buffer::InternalBlockCopy(System.Array,System.Int32,System.Array,System.Int32,System.Int32)",
      (InternalCallFunction)&SystemBuffer::internal_block_copy, internal_block_copy_invoker},
+    {"System.Buffer::BulkMoveWithWriteBarrierInternal(System.Byte&,System.Byte&,System.UIntPtr)",
+     (InternalCallFunction)&SystemBuffer::bulk_move_with_write_barrier_internal, bulk_move_with_write_barrier_internal_invoker},
     {"System.Buffer::BulkMoveWithWriteBarrierInternal", (InternalCallFunction)&SystemBuffer::bulk_move_with_write_barrier_internal,
      bulk_move_with_write_barrier_internal_invoker},
 };

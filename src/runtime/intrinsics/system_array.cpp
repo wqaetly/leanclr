@@ -326,7 +326,9 @@ static RtResultVoid clear_invoker(metadata::RtManagedMethodPointer methodPtr, co
 
 // Intrinsic registry
 static vm::IntrinsicEntry s_intrinsic_entries_system_array[] = {
+    {"System.Array::get_Length()", (vm::IntrinsicFunction)&SystemArray::get_length, get_length_invoker_intrinsics_system_array},
     {"System.Array::get_Length", (vm::IntrinsicFunction)&SystemArray::get_length, get_length_invoker_intrinsics_system_array},
+    {"System.Array::get_LongLength()", (vm::IntrinsicFunction)&SystemArray::get_long_length, get_long_length_invoker},
     {"System.Array::get_LongLength", (vm::IntrinsicFunction)&SystemArray::get_long_length, get_long_length_invoker},
     {"System.Array::GetGenericValueImpl<>", (vm::IntrinsicFunction)&SystemArray::get_generic_value_impl, get_generic_value_impl_invoker},
     {"System.Array::SetGenericValueImpl<>", (vm::IntrinsicFunction)&SystemArray::set_generic_value_impl, set_generic_value_impl_invoker},

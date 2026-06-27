@@ -22,6 +22,7 @@ static RtResultVoid fast_poll_gc_invoker(metadata::RtManagedMethodPointer method
 }
 
 static vm::IntrinsicEntry s_intrinsic_entries_system_threading_thread[] = {
+    {"System.Threading.Thread::FastPollGC()", (vm::IntrinsicFunction)&SystemThreadingThreadIntrinsics::fast_poll_gc, fast_poll_gc_invoker},
     {"System.Threading.Thread::FastPollGC", (vm::IntrinsicFunction)&SystemThreadingThreadIntrinsics::fast_poll_gc, fast_poll_gc_invoker},
 };
 

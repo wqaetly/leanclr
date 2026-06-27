@@ -2,6 +2,7 @@
 
 #include "vm/class.h"
 #include "vm/method.h"
+#include "vm/reflection.h"
 #include "vm/rt_string.h"
 #include "vm/shim.h"
 
@@ -66,12 +67,8 @@ RtResult<const metadata::RtMethodInfo*> get_method_from_handle_arg(const void* m
     auto obj = reinterpret_cast<const vm::RtObject*>(method_arg);
     if (obj->klass == corlib_types.cls_reflection_method || obj->klass == corlib_types.cls_reflection_constructor)
     {
-        auto ref_method = reinterpret_cast<const vm::RtReflectionMethod*>(method_arg);
-        if (ref_method->method == nullptr)
-        {
-            RET_ERR(RtErr::ArgumentNull);
-        }
-        RET_OK(ref_method->method);
+        return vm::Reflection::get_method_info_from_reflection_object(const_cast<vm::RtReflectionMethod*>(
+            reinterpret_cast<const vm::RtReflectionMethod*>(method_arg)));
     }
     if (is_type_named(obj->klass, "System", "RuntimeMethodInfoStub"))
     {
@@ -127,12 +124,14 @@ RtResult<int32_t> SystemRuntimeMethodHandle::get_attributes(const metadata::RtMe
 
 RtResult<int32_t> SystemRuntimeMethodHandle::get_impl_attributes(const vm::RtReflectionMethod* method) noexcept
 {
-    if (method == nullptr || method->method == nullptr)
+    if (method == nullptr)
     {
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    RET_OK(static_cast<int32_t>(method->method->iflags));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method_info,
+                                            vm::Reflection::get_method_info_from_reflection_object(const_cast<vm::RtReflectionMethod*>(method)));
+    RET_OK(static_cast<int32_t>(method_info->iflags));
 }
 
 RtResult<const metadata::RtClass*> SystemRuntimeMethodHandle::get_method_table(const metadata::RtMethodInfo* method) noexcept
@@ -497,31 +496,63 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimemethodhandle[
     {"System.RuntimeMethodHandle::GetFunctionPointer(System.IntPtr)", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_function_pointer,
      get_function_pointer_invoker},
     {"System.RuntimeMethodHandle::GetAttributes", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_attributes, get_attributes_invoker},
+    {"System.RuntimeMethodHandle::GetAttributes(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_attributes, get_attributes_invoker},
     {"System.RuntimeMethodHandle::GetImplAttributes", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_impl_attributes,
      get_impl_attributes_invoker},
+    {"System.RuntimeMethodHandle::GetImplAttributes(System.IRuntimeMethodInfo)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_impl_attributes, get_impl_attributes_invoker},
     {"System.RuntimeMethodHandle::GetMethodTable", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_method_table, get_method_table_invoker},
+    {"System.RuntimeMethodHandle::GetMethodTable(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_method_table, get_method_table_invoker},
     {"System.RuntimeMethodHandle::GetSlot", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_slot, get_slot_invoker},
+    {"System.RuntimeMethodHandle::GetSlot(System.RuntimeMethodHandleInternal)", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_slot,
+     get_slot_invoker},
     {"System.RuntimeMethodHandle::GetMethodDef", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_method_def, get_method_def_invoker},
+    {"System.RuntimeMethodHandle::GetMethodDef(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_method_def, get_method_def_invoker},
     {"System.RuntimeMethodHandle::GetName(System.RuntimeMethodHandleInternal)", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_name,
      get_name_invoker},
     {"System.RuntimeMethodHandle::GetUtf8NameInternal", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_utf8_name, get_utf8_name_invoker},
+    {"System.RuntimeMethodHandle::GetUtf8NameInternal(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_utf8_name, get_utf8_name_invoker},
     {"System.RuntimeMethodHandle::HasMethodInstantiation", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::has_method_instantiation,
      has_method_instantiation_invoker},
+    {"System.RuntimeMethodHandle::HasMethodInstantiation(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::has_method_instantiation, has_method_instantiation_invoker},
     {"System.RuntimeMethodHandle::IsGenericMethodDefinition", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::is_generic_method_definition,
      is_generic_method_definition_invoker},
+    {"System.RuntimeMethodHandle::IsGenericMethodDefinition(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::is_generic_method_definition, is_generic_method_definition_invoker},
     {"System.RuntimeMethodHandle::GetGenericParameterCount", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_generic_parameter_count,
      get_generic_parameter_count_invoker},
+    {"System.RuntimeMethodHandle::GetGenericParameterCount(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_generic_parameter_count, get_generic_parameter_count_invoker},
     {"System.RuntimeMethodHandle::IsTypicalMethodDefinition", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::is_typical_method_definition,
      is_typical_method_definition_invoker},
+    {"System.RuntimeMethodHandle::IsTypicalMethodDefinition(System.IRuntimeMethodInfo)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::is_typical_method_definition, is_typical_method_definition_invoker},
     {"System.RuntimeMethodHandle::GetStubIfNeededInternal", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_stub_if_needed,
      get_stub_if_needed_invoker},
+    {"System.RuntimeMethodHandle::GetStubIfNeededInternal(System.RuntimeMethodHandleInternal,System.RuntimeType)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_stub_if_needed, get_stub_if_needed_invoker},
     {"System.RuntimeMethodHandle::GetMethodFromCanonical", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_method_from_canonical,
      get_method_from_canonical_invoker},
+    {"System.RuntimeMethodHandle::GetMethodFromCanonical(System.RuntimeMethodHandleInternal,System.RuntimeType)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_method_from_canonical, get_method_from_canonical_invoker},
     {"System.RuntimeMethodHandle::IsDynamicMethod", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::is_dynamic_method, is_dynamic_method_invoker},
+    {"System.RuntimeMethodHandle::IsDynamicMethod(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::is_dynamic_method, is_dynamic_method_invoker},
     {"System.RuntimeMethodHandle::IsConstructor", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::is_constructor, is_constructor_invoker},
+    {"System.RuntimeMethodHandle::IsConstructor(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::is_constructor, is_constructor_invoker},
     {"System.RuntimeMethodHandle::GetResolver", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_resolver, get_resolver_invoker},
+    {"System.RuntimeMethodHandle::GetResolver(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_resolver, get_resolver_invoker},
     {"System.RuntimeMethodHandle::GetLoaderAllocatorInternal", (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_loader_allocator,
      get_loader_allocator_invoker},
+    {"System.RuntimeMethodHandle::GetLoaderAllocatorInternal(System.RuntimeMethodHandleInternal)",
+     (vm::InternalCallFunction)&SystemRuntimeMethodHandle::get_loader_allocator, get_loader_allocator_invoker},
     {"System.RuntimeMethodHandle::GetMethodBody(System.IRuntimeMethodInfo,System.RuntimeType)", nullptr, get_method_body_invoker},
     {"System.RuntimeMethodHandle::GetMethodBody", nullptr, get_method_body_invoker},
 };

@@ -6,6 +6,9 @@
 #include "utils/string_util.h"
 #include "metadata/metadata_name.h"
 #include "intrinsics/intrinsic_stubs.h"
+#include "const_strs.h"
+
+#include <cstring>
 
 namespace leanclr
 {
@@ -17,6 +20,26 @@ static utils::HashMap<const char*, IntrinsicRegistry, utils::CStrHasher, utils::
 static utils::HashMap<const char*, IntrinsicInvoker, utils::CStrHasher, utils::CStrCompare> g_newobjIntrinsicMap;
 static utils::Vector<IntrinsicInvoker> g_intrinsicInvokerIdList;
 static utils::HashMap<IntrinsicInvoker, uint16_t> g_intrinsicInvokerIdMap;
+
+static bool is_coreclr_corlib_method(const metadata::RtMethodInfo* method) noexcept
+{
+    if (method == nullptr || method->parent == nullptr || method->parent->image == nullptr)
+    {
+        return false;
+    }
+
+    return method->parent->image->is_corlib() && std::strcmp(method->parent->image->get_name_no_ext(), STR_SYSTEM_PRIVATE_CORELIB_NAME) == 0;
+}
+
+static bool is_generic_intrinsic_shape_fallback_allowed(const metadata::RtMethodInfo* method) noexcept
+{
+    if (!is_coreclr_corlib_method(method))
+    {
+        return true;
+    }
+
+    return Method::get_generic_param_count(method) > 0 || Class::is_generic_inst(method->parent);
+}
 
 static RtResultVoid get_runtime_intrinsics_is_supported_false_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                                        const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -118,6 +141,7 @@ RtResult<const IntrinsicRegistry*> Intrinsics::get_intrinsic_by_method(const met
             RET_OK(&it->second);
     }
 
+    if (!is_coreclr_corlib_method(method))
     {
         sb.clear();
         RET_ERR_ON_FAIL(metadata::MetadataName::append_method_full_name_without_params(sb, method, metadata::TypeNameFormat::InternalName));
@@ -126,6 +150,7 @@ RtResult<const IntrinsicRegistry*> Intrinsics::get_intrinsic_by_method(const met
             RET_OK(&it->second);
     }
 
+    if (is_generic_intrinsic_shape_fallback_allowed(method))
     {
         sb.clear();
         RET_ERR_ON_FAIL(append_open_declaring_type_method_name(sb, method));

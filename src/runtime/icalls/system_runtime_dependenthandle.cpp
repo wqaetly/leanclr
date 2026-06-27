@@ -104,15 +104,27 @@ utils::Span<vm::InternalCallEntry> SystemRuntimeDependentHandle::get_internal_ca
     static vm::InternalCallEntry s_entries[] = {
         {"System.Runtime.DependentHandle::InternalAlloc", (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_alloc,
          internal_alloc_invoker},
+        {"System.Runtime.DependentHandle::InternalAlloc(System.Object,System.Object)",
+         (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_alloc, internal_alloc_invoker},
         {"System.Runtime.DependentHandle::InternalGetDependent", (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_get_dependent,
          internal_get_dependent_invoker},
+        {"System.Runtime.DependentHandle::InternalGetDependent(System.IntPtr)",
+         (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_get_dependent, internal_get_dependent_invoker},
         {"System.Runtime.DependentHandle::InternalGetTargetAndDependent",
+         (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_get_target_and_dependent, internal_get_target_and_dependent_invoker},
+        {"System.Runtime.DependentHandle::InternalGetTargetAndDependent(System.IntPtr,System.Object&)",
          (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_get_target_and_dependent, internal_get_target_and_dependent_invoker},
         {"System.Runtime.DependentHandle::InternalSetTargetToNull",
          (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_set_target_to_null, internal_set_target_to_null_invoker},
+        {"System.Runtime.DependentHandle::InternalSetTargetToNull(System.IntPtr)",
+         (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_set_target_to_null, internal_set_target_to_null_invoker},
         {"System.Runtime.DependentHandle::InternalSetDependent", (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_set_dependent,
          internal_set_dependent_invoker},
+        {"System.Runtime.DependentHandle::InternalSetDependent(System.IntPtr,System.Object)",
+         (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_set_dependent, internal_set_dependent_invoker},
         {"System.Runtime.DependentHandle::InternalFree", (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_free, internal_free_invoker},
+        {"System.Runtime.DependentHandle::InternalFree(System.IntPtr)",
+         (vm::InternalCallFunction)&SystemRuntimeDependentHandle::internal_free, internal_free_invoker},
     };
     return utils::Span<vm::InternalCallEntry>(s_entries, sizeof(s_entries) / sizeof(s_entries[0]));
 }

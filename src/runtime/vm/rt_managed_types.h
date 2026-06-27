@@ -86,13 +86,39 @@ struct RtReflectionField
 struct RtReflectionMethod
 {
     RtObject header;
-    const metadata::RtMethodInfo* method;
+    const metadata::RtMethodInfo* method; // RuntimeMethodInfo.m_handle
+    RtObject* reflected_type_cache;
     RtString* name;
-    RtReflectionType* ref_type;
+    RtString* to_string;
+    RtArray* parameters;
+    RtObject* return_parameter;
+    int32_t binding_flags;
+    int32_t method_attributes;
+    RtObject* signature;
+    RtReflectionRuntimeType* declaring_type;
+    RtObject* keepalive;
+    RtObject* invoker;
 };
 
 using RtReflectionGenericMethod = RtReflectionMethod;
-using RtReflectionConstructor = RtReflectionMethod;
+
+struct RtReflectionConstructor
+{
+    RtObject header;
+    RtReflectionRuntimeType* declaring_type;
+    RtObject* reflected_type_cache;
+    RtString* to_string;
+    RtArray* parameters;
+    RtObject* empty1;
+    RtObject* empty2;
+    RtObject* empty3;
+    const metadata::RtMethodInfo* method; // RuntimeConstructorInfo.m_handle
+    int32_t method_attributes;
+    int32_t binding_flags;
+    RtObject* signature;
+    RtObject* invoker;
+};
+
 struct RtReflectionMethodBody;
 
 // Mono method info
@@ -165,16 +191,10 @@ struct RtReflectionModule : public RtObject
 // Reflection assembly
 struct RtReflectionAssembly : public RtObject
 {
-    metadata::RtAssembly* assembly;
-    RtObject* evidence;
-    RtObject* resolve_event_holder;
-    RtObject* minimum;
-    RtObject* optional;
-    RtObject* refused;
-    RtObject* granted;
-    RtObject* denied;
-    bool from_byte_array;
-    RtString* name;
+    RtObject* module_resolve;
+    RtString* full_name;
+    RtObject* sync_root;
+    metadata::RtAssembly* assembly; // System.Reflection.RuntimeAssembly.m_assembly
 };
 
 // Reflection assembly name

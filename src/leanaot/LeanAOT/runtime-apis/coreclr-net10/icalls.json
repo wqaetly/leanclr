@@ -280,6 +280,16 @@
     "header": "icalls/system_mathf.h"
   },
   {
+    "name": "System.Delegate::GetInvokeMethod(System.Runtime.CompilerServices.MethodTable*)",
+    "func": "SystemDelegate::get_invoke_method",
+    "header": "icalls/system_delegate.h"
+  },
+  {
+    "name": "System.Delegate::GetMulticastInvoke(System.Runtime.CompilerServices.MethodTable*)",
+    "func": "SystemDelegate::get_multicast_invoke",
+    "header": "icalls/system_delegate.h"
+  },
+  {
     "name": "System.Object::GetType",
     "func": "SystemObject::get_type",
     "header": "icalls/system_object.h"

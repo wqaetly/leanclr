@@ -20,12 +20,11 @@ namespace icalls
 
 RtResult<RtArray*> SystemReflectionMonoMethodInfo::get_parameter_info(const RtMethodInfo* method, RtReflectionMethod* member) noexcept
 {
-    RtReflectionType* ref_type = member->ref_type;
     const RtClass* klass = nullptr;
-    if (ref_type != nullptr)
+    if (member != nullptr)
     {
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtClass*, resolved_klass, Class::get_class_from_typesig(ref_type->type_handle));
-        klass = resolved_klass;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const RtClass*, reflected_klass, Reflection::get_reflection_method_klass(member));
+        klass = reflected_klass;
     }
     else
     {

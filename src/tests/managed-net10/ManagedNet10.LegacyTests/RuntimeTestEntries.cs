@@ -158,6 +158,46 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_String));
         }
 
+        public static void RunRuntimeStringEmptyString()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_String), "EmptyString");
+        }
+
+        public static void RunRuntimeStringCreateStringFromCharArray()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_String), "CreateStringFromCharArray");
+        }
+
+        public static void RunRuntimeStringCreateStringFromCharArrayWithOffset()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_String), "CreateStringFromCharArrayWithOffset");
+        }
+
+        public static void RunRuntimeStringCreateStringFromCharPtr()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_String), "CreateStringFromCharPtr");
+        }
+
+        public static void RunRuntimeStringCreateStringFromCharPtrWithOffset()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_String), "CreateStringFromCharPtrWithOffset");
+        }
+
+        public static void RunRuntimeStringCreateStringFromSBytePtr()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_String), "CreateStringFromSBytePtr");
+        }
+
+        public static void RunRuntimeStringCreateStringFromSBytePtrWithOffset()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_String), "CreateStringFromSBytePtrWithOffset");
+        }
+
+        public static void RunRuntimeStringCreateStringFromSBytePtrWithOffsetAndEncoding()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_String), "CreateStringFromSBytePtrWithOffsetAndEncoding");
+        }
+
         public static void RunRuntimeEnum()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Enum));

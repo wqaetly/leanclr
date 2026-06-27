@@ -253,6 +253,45 @@ static RtResult<int32_t> metadata_import_get_name(metadata::RtModuleDef* module,
     RET_OK(0);
 }
 
+static RtResult<int32_t> metadata_import_get_namespace(metadata::RtModuleDef* module, int32_t md_token, void** namespaze) noexcept
+{
+    if (module == nullptr || namespaze == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(md_token));
+    const char* value = nullptr;
+    const metadata::CliImage& image = module->get_cli_image();
+
+    switch (token.table_type)
+    {
+    case metadata::TableType::TypeDef:
+    {
+        auto row = image.read_type_def(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->type_namespace));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::TypeRef:
+    {
+        auto row = image.read_type_ref(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->type_namespace));
+        value = resolved;
+        break;
+    }
+    default:
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    *namespaze = const_cast<char*>(value);
+    RET_OK(0);
+}
+
 /// @icall: System.Reflection.RuntimeModule::get_MetadataToken(System.Reflection.Module)
 static RtResultVoid get_metadata_token_invoker_system_reflection_runtimemodule(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -281,6 +320,18 @@ static RtResultVoid metadata_import_get_name_invoker(metadata::RtManagedMethodPo
     auto md_token = EvalStackOp::get_param<int32_t>(params, 1);
     auto name = EvalStackOp::get_param<void**>(params, 2);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, hr, metadata_import_get_name(module, md_token, name));
+    EvalStackOp::set_return(ret, hr);
+    RET_VOID_OK();
+}
+
+/// @icall: System.Reflection.MetadataImport::GetNamespace
+static RtResultVoid metadata_import_get_namespace_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto module = EvalStackOp::get_param<metadata::RtModuleDef*>(params, 0);
+    auto md_token = EvalStackOp::get_param<int32_t>(params, 1);
+    auto namespaze = EvalStackOp::get_param<void**>(params, 2);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, hr, metadata_import_get_namespace(module, md_token, namespaze));
     EvalStackOp::set_return(ret, hr);
     RET_VOID_OK();
 }
@@ -850,6 +901,8 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeModule::get_internal_c
         {"System.Reflection.MetadataImport::GetMetadataImport(System.Reflection.RuntimeModule)", nullptr, get_metadata_import_invoker},
         {"System.Reflection.MetadataImport::GetMetadataImport", nullptr, get_metadata_import_invoker},
         {"System.Reflection.MetadataImport::GetName(System.IntPtr,System.Int32,System.Byte*&)", nullptr, metadata_import_get_name_invoker},
+        {"System.Reflection.MetadataImport::GetNamespace(System.IntPtr,System.Int32,System.Byte*&)", nullptr,
+         metadata_import_get_namespace_invoker},
         {"System.Reflection.MetadataImport::GetPropertyProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&,System.Reflection.ConstArray&)", nullptr,
          metadata_import_get_property_props_invoker},
         {"System.Reflection.MetadataImport::GetSignatureFromToken(System.IntPtr,System.Int32,System.Reflection.ConstArray&)", nullptr,

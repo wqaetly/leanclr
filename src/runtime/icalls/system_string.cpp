@@ -221,7 +221,21 @@ RtResult<vm::RtString*> SystemString::fast_allocate_string(int32_t length) noexc
 static RtResultVoid fast_allocate_string_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    auto length = EvalStackOp::get_param<int32_t>(params, 0);
+    (void)methodPtr;
+    int32_t length = 0;
+    if (method != nullptr && method->parameter_count >= 2)
+    {
+        intptr_t native_length = EvalStackOp::get_param<intptr_t>(params, 1);
+        if (native_length < 0 || native_length > std::numeric_limits<int32_t>::max())
+        {
+            RET_ERR(RtErr::ArgumentOutOfRange);
+        }
+        length = static_cast<int32_t>(native_length);
+    }
+    else
+    {
+        length = EvalStackOp::get_param<int32_t>(params, 0);
+    }
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtString*, str, SystemString::fast_allocate_string(length));
     EvalStackOp::set_return(ret, str);
     RET_VOID_OK();
@@ -269,6 +283,8 @@ static RtResultVoid internal_is_interned_invoker(metadata::RtManagedMethodPointe
 // Internal call registry
 static vm::InternalCallEntry s_internal_call_entries_system_string[] = {
     {"System.String::FastAllocateString", (vm::InternalCallFunction)&SystemString::fast_allocate_string, fast_allocate_string_invoker},
+    {"System.String::FastAllocateString(System.Runtime.CompilerServices.MethodTable*,System.IntPtr)",
+     (vm::InternalCallFunction)&SystemString::fast_allocate_string, fast_allocate_string_invoker},
     {"System.String::InternalIntern", (vm::InternalCallFunction)&SystemString::internal_intern, internal_intern_invoker},
     {"System.String::InternalIsInterned", (vm::InternalCallFunction)&SystemString::internal_is_interned, internal_is_interned_invoker},
 };

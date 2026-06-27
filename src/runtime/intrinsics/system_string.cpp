@@ -153,7 +153,21 @@ static RtResultVoid equals_invoker(metadata::RtManagedMethodPointer methodPtr, c
     auto right = interp::EvalStackOp::get_param<vm::RtString*>(params, 1);
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemString::equals(left, right));
-    interp::EvalStackOp::set_return(ret, result);
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.String::op_Inequality(System.String,System.String)
+static RtResultVoid not_equals_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    auto left = interp::EvalStackOp::get_param<vm::RtString*>(params, 0);
+    auto right = interp::EvalStackOp::get_param<vm::RtString*>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemString::equals(left, right));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(!result));
     RET_VOID_OK();
 }
 
@@ -168,7 +182,7 @@ static RtResultVoid contains_invoker(metadata::RtManagedMethodPointer methodPtr,
 
     constexpr int32_t ordinal = 4;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemString::contains(str, value, ordinal));
-    interp::EvalStackOp::set_return(ret, result);
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
 }
 
@@ -183,20 +197,25 @@ static RtResultVoid contains_comparison_invoker(metadata::RtManagedMethodPointer
     int32_t comparison_type = interp::EvalStackOp::get_param<int32_t>(params, 2);
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemString::contains(str, value, comparison_type));
-    interp::EvalStackOp::set_return(ret, result);
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
 }
 
 // Intrinsic registry
 static vm::IntrinsicEntry s_intrinsic_entries_system_string[] = {
+    {"System.String::get_Chars(System.Int32)", (vm::IntrinsicFunction)&SystemString::get_chars, get_chars_invoker},
     {"System.String::get_Chars", (vm::IntrinsicFunction)&SystemString::get_chars, get_chars_invoker},
+    {"System.String::get_Length()", (vm::IntrinsicFunction)&SystemString::get_length, get_length_invoker_intrinsics_system_string},
     {"System.String::get_Length", (vm::IntrinsicFunction)&SystemString::get_length, get_length_invoker_intrinsics_system_string},
+    {"System.String::GetHashCode()", (vm::IntrinsicFunction)&SystemString::get_hash_code, get_hash_code_invoker},
     {"System.String::GetHashCode", (vm::IntrinsicFunction)&SystemString::get_hash_code, get_hash_code_invoker},
     {"System.String::Equals(System.String,System.String)", (vm::IntrinsicFunction)&SystemString::equals, equals_invoker},
     {"System.String::op_Equality(System.String,System.String)", (vm::IntrinsicFunction)&SystemString::equals, equals_invoker},
+    {"System.String::op_Inequality(System.String,System.String)", (vm::IntrinsicFunction)&SystemString::equals, not_equals_invoker},
     {"System.String::Contains(System.String)", (vm::IntrinsicFunction)&SystemString::contains, contains_invoker},
     {"System.String::Contains(System.String,System.StringComparison)", (vm::IntrinsicFunction)&SystemString::contains, contains_comparison_invoker},
     // redirected to intrinsic
+    {"System.String::GetLegacyNonRandomizedHashCode()", (vm::IntrinsicFunction)&SystemString::get_hash_code, get_hash_code_invoker},
     {"System.String::GetLegacyNonRandomizedHashCode", (vm::IntrinsicFunction)&SystemString::get_hash_code, get_hash_code_invoker},
 };
 

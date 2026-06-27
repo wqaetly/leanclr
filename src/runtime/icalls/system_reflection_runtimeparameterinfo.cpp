@@ -13,7 +13,7 @@ namespace icalls
 RtResult<int32_t> SystemReflectionRuntimeParameterInfo::get_metadata_token(const vm::RtReflectionParameter* param) noexcept
 {
     vm::RtReflectionMethod* ref_method = reinterpret_cast<vm::RtReflectionMethod*>(param->member);
-    const metadata::RtMethodInfo* method = ref_method->method;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, vm::Reflection::get_method_info_from_reflection_object(ref_method));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<uint32_t>, token_opt, vm::Method::get_parameter_token(method, param->index));
     uint32_t token = token_opt.has_value() ? token_opt.value() : 0;
     RET_OK(static_cast<int32_t>(token));
@@ -32,12 +32,12 @@ RtResult<vm::RtArray*> SystemReflectionRuntimeParameterInfo::get_type_modifiers(
     if (member_klass == reflection_method_class)
     {
         vm::RtReflectionMethod* ref_method = reinterpret_cast<vm::RtReflectionMethod*>(member);
-        method = ref_method->method;
+        UNWRAP_OR_RET_ERR_ON_FAIL(method, vm::Reflection::get_method_info_from_reflection_object(ref_method));
     }
     else if (member_klass == reflection_constructor_class)
     {
         vm::RtReflectionMethod* ref_constructor = reinterpret_cast<vm::RtReflectionMethod*>(member);
-        method = ref_constructor->method;
+        UNWRAP_OR_RET_ERR_ON_FAIL(method, vm::Reflection::get_method_info_from_reflection_object(ref_constructor));
     }
     else
     {

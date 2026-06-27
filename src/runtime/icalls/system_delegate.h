@@ -24,7 +24,7 @@ class SystemDelegate
 
     // Return the runtime delegate invoke entry marker used by .NET 10 multicast delegate setup
     static RtResult<void*> get_multicast_invoke(const metadata::RtClass* delegate_klass) noexcept;
-    static RtResult<void*> get_invoke_method(vm::RtDelegate* this_delegate) noexcept;
+    static RtResult<void*> get_invoke_method(const metadata::RtClass* delegate_klass) noexcept;
 };
 
 } // namespace icalls

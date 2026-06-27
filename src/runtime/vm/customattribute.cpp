@@ -992,7 +992,7 @@ RtResult<bool> CustomAttribute::has_customattribute_on_event(const metadata::RtE
 RtResult<bool> CustomAttribute::has_customattribute_on_parameter(RtReflectionParameter* parameter, const metadata::RtClass* customattribute_klass)
 {
     auto ref_method = reinterpret_cast<RtReflectionMethod*>(parameter->member);
-    const metadata::RtMethodInfo* method = ref_method->method;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, Reflection::get_method_info_from_reflection_object(ref_method));
     metadata::RtModuleDef* mod = method->parent->image;
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<uint32_t>, opt_param_token, Method::get_parameter_token(method, parameter->index));
@@ -1030,7 +1030,7 @@ static RtResult<CustomAttributeProvider> get_token_of_customattribute_provider(R
     else if (obj_klass == corlib_types.cls_reflection_method || obj_klass == corlib_types.cls_reflection_constructor)
     {
         RtReflectionMethod* method_obj = reinterpret_cast<RtReflectionMethod*>(obj);
-        const metadata::RtMethodInfo* method = method_obj->method;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, Reflection::get_method_info_from_reflection_object(method_obj));
         metadata::RtModuleDef* mod = method->parent->image;
         provider.mod = mod;
         provider.token = method->token;
@@ -1063,7 +1063,7 @@ static RtResult<CustomAttributeProvider> get_token_of_customattribute_provider(R
     {
         RtReflectionParameter* param_obj = reinterpret_cast<RtReflectionParameter*>(obj);
         RtReflectionMethod* ref_method = reinterpret_cast<RtReflectionMethod*>(param_obj->member);
-        const metadata::RtMethodInfo* method = ref_method->method;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, Reflection::get_method_info_from_reflection_object(ref_method));
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<uint32_t>, opt_param_token, Method::get_parameter_token(method, param_obj->index));
         uint32_t param_token = opt_param_token.value_or(0);
         metadata::RtModuleDef* mod = method->parent->image;

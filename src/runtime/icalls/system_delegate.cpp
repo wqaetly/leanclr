@@ -95,11 +95,11 @@ RtResult<void*> SystemDelegate::get_multicast_invoke(const metadata::RtClass* de
     RET_OK(reinterpret_cast<void*>(&vm::Delegate::invoke_delegate_invoker));
 }
 
-RtResult<void*> SystemDelegate::get_invoke_method(vm::RtDelegate* this_delegate) noexcept
+RtResult<void*> SystemDelegate::get_invoke_method(const metadata::RtClass* delegate_klass) noexcept
 {
-    if (this_delegate == nullptr)
+    if (delegate_klass == nullptr)
     {
-        RET_ERR(RtErr::NullReference);
+        RET_ERR(RtErr::ArgumentNull);
     }
 
     RET_OK(reinterpret_cast<void*>(&vm::Delegate::invoke_delegate_invoker));
@@ -129,8 +129,8 @@ static RtResultVoid get_multicast_invoke_invoker(metadata::RtManagedMethodPointe
 static RtResultVoid get_invoke_method_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject* ret) noexcept
 {
-    auto this_delegate = EvalStackOp::get_param<vm::RtDelegate*>(params, 0);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(void*, invoke, SystemDelegate::get_invoke_method(this_delegate));
+    auto delegate_klass = EvalStackOp::get_param<const metadata::RtClass*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(void*, invoke, SystemDelegate::get_invoke_method(delegate_klass));
     EvalStackOp::set_return(ret, invoke);
     RET_VOID_OK();
 }
@@ -144,9 +144,10 @@ utils::Span<vm::InternalCallEntry> SystemDelegate::get_internal_call_entries() n
          (vm::InternalCallFunction)&SystemDelegate::create_delegate_internal, create_delegate_internal_invoker},
         {"System.Delegate::AllocDelegateLike_internal(System.Delegate)", (vm::InternalCallFunction)&SystemDelegate::alloc_delegate_like_internal,
          alloc_delegate_like_internal_invoker},
-        {"System.Delegate::GetMulticastInvoke", (vm::InternalCallFunction)&SystemDelegate::get_multicast_invoke,
-         get_multicast_invoke_invoker},
-        {"System.Delegate::GetInvokeMethod", (vm::InternalCallFunction)&SystemDelegate::get_invoke_method, get_invoke_method_invoker},
+        {"System.Delegate::GetMulticastInvoke(System.Runtime.CompilerServices.MethodTable*)",
+         (vm::InternalCallFunction)&SystemDelegate::get_multicast_invoke, get_multicast_invoke_invoker},
+        {"System.Delegate::GetInvokeMethod(System.Runtime.CompilerServices.MethodTable*)",
+         (vm::InternalCallFunction)&SystemDelegate::get_invoke_method, get_invoke_method_invoker},
     };
     return utils::Span<vm::InternalCallEntry>(s_entries, sizeof(s_entries) / sizeof(s_entries[0]));
 }

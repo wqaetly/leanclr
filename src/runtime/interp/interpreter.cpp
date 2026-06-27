@@ -25,6 +25,18 @@ namespace leanclr
 namespace interp
 {
 
+static bool is_runtime_field_info_value_method(const metadata::RtMethodInfo* method) noexcept
+{
+    if (method == nullptr || method->parent == nullptr)
+    {
+        return false;
+    }
+
+    const metadata::RtClass* klass = method->parent;
+    return std::strcmp(klass->namespaze, "System") == 0 && std::strcmp(klass->name, "IRuntimeFieldInfo") == 0 &&
+           std::strcmp(method->name, "get_Value") == 0 && method->parameter_count == 0;
+}
+
 static RtResult<const RtInterpMethodInfo*> transform(const metadata::RtMethodInfo* method)
 {
     const metadata::RtClass* klass = method->parent;
@@ -6212,6 +6224,12 @@ method_start:
                             RAISE_RUNTIME_ERROR(RtErr::NullReference);
                         }
                         const metadata::RtMethodInfo* original_method = get_resolved_data<metadata::RtMethodInfo>(imi, ir->method_idx);
+                        if (is_runtime_field_info_value_method(original_method))
+                        {
+                            set_stack_value_at<void*>(eval_stack_base, ir->frame_base, obj);
+                            ip = reinterpret_cast<const uint8_t*>(ir + 1);
+                            LEANCLR_CONTINUE0();
+                        }
                         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, actual_method,
                                                                 vm::Method::get_virtual_method_impl(obj, original_method));
                         if (actual_method->invoker_type == metadata::RtInvokerType::Interpreter)

@@ -1,10 +1,12 @@
 #include "system_runtime_compilerservices_runtimehelpers.h"
 
 #include <climits>
+#include <cstring>
 
 #include "interp/interp_defs.h"
 #include "vm/class.h"
 #include "vm/field.h"
+#include "vm/rt_array.h"
 
 namespace leanclr
 {
@@ -179,6 +181,31 @@ RtResult<bool> SystemRuntimeCompilerServicesRuntimeHelpers::object_has_component
     RET_OK(vm::Class::is_array_or_szarray(obj->klass) || vm::Class::is_string_class(obj->klass));
 }
 
+RtResultVoid SystemRuntimeCompilerServicesRuntimeHelpers::initialize_array(vm::RtArray* array, const metadata::RtFieldInfo* field) noexcept
+{
+    if (array == nullptr || field == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const uint8_t*, rva_data, vm::Field::get_field_rva_data(field));
+    if (rva_data == nullptr)
+    {
+        RET_ASSERT_ERR(RtErr::ExecutionEngine);
+    }
+
+    size_t array_byte_length = vm::Array::get_array_byte_length(array);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(size_t, field_size, vm::Field::get_field_size(field));
+    if (array_byte_length > field_size)
+    {
+        RET_ERR(RtErr::Argument);
+    }
+
+    uint8_t* array_data = vm::Array::get_array_data_start_as<uint8_t>(array);
+    std::memcpy(array_data, rva_data, array_byte_length);
+    RET_VOID_OK();
+}
+
 RtResult<uint32_t> SystemRuntimeCompilerServicesRuntimeHelpers::get_num_instance_field_bytes(const void* method_table) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass, get_class_from_method_table_or_typesig(method_table));
@@ -318,6 +345,19 @@ static RtResultVoid get_method_table_invoker(metadata::RtManagedMethodPointer me
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::InitializeArray(System.Array,System.RuntimeFieldHandle)
+static RtResultVoid initialize_array_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                             const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    (void)ret;
+    auto array = interp::EvalStackOp::get_param<vm::RtArray*>(params, 0);
+    auto field = interp::EvalStackOp::get_param<const metadata::RtFieldInfo*>(params, 1);
+
+    return SystemRuntimeCompilerServicesRuntimeHelpers::initialize_array(array, field);
+}
+
 /// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::ObjectHasComponentSize(System.Object)
 static RtResultVoid object_has_component_size_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -445,6 +485,8 @@ static RtResultVoid is_reference_or_contains_references_invoker(metadata::RtMana
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_runtimehelpers[] = {
     {"System.Runtime.CompilerServices.RuntimeHelpers::GetMethodTable(System.Object)",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table, get_method_table_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::InitializeArray(System.Array,System.RuntimeFieldHandle)",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::initialize_array, initialize_array_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::ObjectHasComponentSize(System.Object)",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::object_has_component_size,
      object_has_component_size_invoker},

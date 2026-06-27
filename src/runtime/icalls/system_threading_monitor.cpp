@@ -202,10 +202,18 @@ static vm::InternalCallEntry s_internal_call_entries_system_threading_monitor[] 
      monitor_try_enter_with_atomic_var_invoker},
     {"System.Threading.Monitor::Monitor_test_owner", (vm::InternalCallFunction)&SystemThreadingMonitor::monitor_test_owner, monitor_test_owner_invoker},
     {"System.Threading.Monitor::TryEnter_FastPath", (vm::InternalCallFunction)&SystemThreadingMonitor::try_enter_fast_path, try_enter_fast_path_invoker},
+    {"System.Threading.Monitor::TryEnter_FastPath(System.Object)", (vm::InternalCallFunction)&SystemThreadingMonitor::try_enter_fast_path,
+     try_enter_fast_path_invoker},
     {"System.Threading.Monitor::TryEnter_FastPath_WithTimeout", (vm::InternalCallFunction)&SystemThreadingMonitor::try_enter_fast_path_with_timeout,
      try_enter_fast_path_with_timeout_invoker},
+    {"System.Threading.Monitor::TryEnter_FastPath_WithTimeout(System.Object,System.Int32)",
+     (vm::InternalCallFunction)&SystemThreadingMonitor::try_enter_fast_path_with_timeout, try_enter_fast_path_with_timeout_invoker},
     {"System.Threading.Monitor::Exit_FastPath", (vm::InternalCallFunction)&SystemThreadingMonitor::exit_fast_path, exit_fast_path_invoker},
+    {"System.Threading.Monitor::Exit_FastPath(System.Object)", (vm::InternalCallFunction)&SystemThreadingMonitor::exit_fast_path,
+     exit_fast_path_invoker},
     {"System.Threading.Monitor::IsEnteredNative", (vm::InternalCallFunction)&SystemThreadingMonitor::is_entered_native, is_entered_native_invoker},
+    {"System.Threading.Monitor::IsEnteredNative(System.Object)", (vm::InternalCallFunction)&SystemThreadingMonitor::is_entered_native,
+     is_entered_native_invoker},
 };
 
 utils::Span<vm::InternalCallEntry> SystemThreadingMonitor::get_internal_call_entries() noexcept

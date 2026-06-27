@@ -7,6 +7,9 @@
 #include "utils/string_builder.h"
 #include "utils/string_util.h"
 #include "metadata/metadata_name.h"
+#include "const_strs.h"
+
+#include <cstring>
 
 namespace leanclr
 {
@@ -15,6 +18,21 @@ namespace vm
 
 // Static maps for internal call functions
 static utils::HashMap<const char*, PInvokeRegistry, utils::CStrHasher, utils::CStrCompare> g_internalcall_map;
+
+static bool is_coreclr_corlib_method(const metadata::RtMethodInfo* method) noexcept
+{
+    if (method == nullptr || method->parent == nullptr || method->parent->image == nullptr)
+    {
+        return false;
+    }
+
+    return method->parent->image->is_corlib() && std::strcmp(method->parent->image->get_name_no_ext(), STR_SYSTEM_PRIVATE_CORELIB_NAME) == 0;
+}
+
+static bool is_coreclr_generated_pinvoke_wrapper(const metadata::RtMethodInfo* method) noexcept
+{
+    return is_coreclr_corlib_method(method) && method->name != nullptr && std::strstr(method->name, "g____PInvoke|") != nullptr;
+}
 
 // Register an internal call function by name
 void PInvokes::register_pinvoke(const char* name, PInvokeFunction func, PInvokeInvoker invoker)
@@ -62,6 +80,7 @@ RtResult<const PInvokeRegistry*> PInvokes::get_pinvoke_by_method(const metadata:
     }
 
     // Try with method name without parameters
+    if (!is_coreclr_corlib_method(method) || is_coreclr_generated_pinvoke_wrapper(method))
     {
         // signature: Namespace.Class.Method
         sb.clear();

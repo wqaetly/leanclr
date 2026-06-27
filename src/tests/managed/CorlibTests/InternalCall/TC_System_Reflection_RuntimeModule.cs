@@ -85,8 +85,9 @@ namespace CorlibTests.InternalCall
         {
             // Test GetGlobalType via public Module.GetType with null name
             Module module = typeof(TC_System_Reflection_RuntimeModule).Module;
+            string name = "CorlibTests.InternalCall.TC_System_Reflection_RuntimeModule";
             // GetGlobalType is tested indirectly through module type resolution
-            Type type = module.GetType("CorlibTests.InternalCall.TC_System_Reflection_RuntimeModule");
+            Type type = module.GetType(name);
             Assert.NotNull(type);
             type.GetField("NOT_EXIST_FIELD");
         }
