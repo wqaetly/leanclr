@@ -67,6 +67,128 @@ static RtResult<int32_t> metadata_import_get_property_props(metadata::RtModuleDe
     RET_OK(0);
 }
 
+static RtResult<int32_t> metadata_import_get_name(metadata::RtModuleDef* module, int32_t md_token, void** name) noexcept
+{
+    if (module == nullptr || name == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(md_token));
+    const char* value = nullptr;
+    const metadata::CliImage& image = module->get_cli_image();
+
+    switch (token.table_type)
+    {
+    case metadata::TableType::TypeDef:
+    {
+        auto row = image.read_type_def(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->type_name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::TypeRef:
+    {
+        auto row = image.read_type_ref(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->type_name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::Field:
+    {
+        auto row = image.read_field(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::Method:
+    {
+        auto row = image.read_method(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::Param:
+    {
+        auto row = image.read_param(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::MemberRef:
+    {
+        auto row = image.read_member_ref(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::Event:
+    {
+        auto row = image.read_event(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::Property:
+    {
+        auto row = image.read_property(token.rid);
+        if (!row)
+        {
+            RET_ERR(RtErr::BadImageFormat);
+        }
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::ModuleRef:
+    {
+        auto row = image.read_module_ref(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::AssemblyRef:
+    {
+        auto row = image.read_assembly_ref(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->name));
+        value = resolved;
+        break;
+    }
+    case metadata::TableType::ManifestResource:
+    {
+        auto row = image.read_manifest_resource(token.rid);
+        if (!row)
+            RET_ERR(RtErr::BadImageFormat);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, resolved, module->get_string(row->name));
+        value = resolved;
+        break;
+    }
+    default:
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    *name = const_cast<char*>(value);
+    RET_OK(0);
+}
+
 /// @icall: System.Reflection.RuntimeModule::get_MetadataToken(System.Reflection.Module)
 static RtResultVoid get_metadata_token_invoker_system_reflection_runtimemodule(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -87,11 +209,23 @@ static RtResultVoid get_metadata_import_invoker(metadata::RtManagedMethodPointer
     RET_VOID_OK();
 }
 
+/// @icall: System.Reflection.MetadataImport::GetName
+static RtResultVoid metadata_import_get_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                     interp::RtStackObject* ret) noexcept
+{
+    auto module = EvalStackOp::get_param<metadata::RtModuleDef*>(params, 0);
+    auto md_token = EvalStackOp::get_param<int32_t>(params, 1);
+    auto name = EvalStackOp::get_param<void**>(params, 2);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, hr, metadata_import_get_name(module, md_token, name));
+    EvalStackOp::set_return(ret, hr);
+    RET_VOID_OK();
+}
+
 /// @icall: System.Reflection.MetadataImport::GetPropertyProps
 static RtResultVoid metadata_import_get_property_props_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    auto module = EvalStackOp::get_param<metadata::RtModuleDef*>(params, 5);
+    auto module = EvalStackOp::get_param<metadata::RtModuleDef*>(params, 0);
     auto md_token = EvalStackOp::get_param<int32_t>(params, 1);
     auto name = EvalStackOp::get_param<void**>(params, 2);
     auto property_attributes = EvalStackOp::get_param<int32_t*>(params, 3);
@@ -606,7 +740,9 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeModule::get_internal_c
          (vm::InternalCallFunction)&SystemReflectionRuntimeModule::get_metadata_token, get_metadata_token_invoker_system_reflection_runtimemodule},
         {"System.Reflection.MetadataImport::GetMetadataImport(System.Reflection.RuntimeModule)", nullptr, get_metadata_import_invoker},
         {"System.Reflection.MetadataImport::GetMetadataImport", nullptr, get_metadata_import_invoker},
-        {"System.Reflection.MetadataImport::GetPropertyProps", nullptr, metadata_import_get_property_props_invoker},
+        {"System.Reflection.MetadataImport::GetName(System.IntPtr,System.Int32,System.Byte*&)", nullptr, metadata_import_get_name_invoker},
+        {"System.Reflection.MetadataImport::GetPropertyProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&,System.Reflection.ConstArray&)", nullptr,
+         metadata_import_get_property_props_invoker},
         {"System.Reflection.RuntimeModule::GetMDStreamVersion(System.IntPtr)", (vm::InternalCallFunction)&SystemReflectionRuntimeModule::get_md_stream_version,
          get_md_stream_version_invoker},
         {"System.Reflection.RuntimeModule::InternalGetTypes(System.IntPtr)", (vm::InternalCallFunction)&SystemReflectionRuntimeModule::internal_get_types,

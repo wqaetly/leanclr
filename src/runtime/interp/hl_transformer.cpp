@@ -1224,11 +1224,12 @@ RtResultVoid Transformer::add_call_common(const metadata::RtMethodInfo* method, 
     GeneralInst* ir = create_add_inst(opcode);
     ir->set_method_and_params(method, get_cur_eval_stack_top(), params);
     ir->set_prefix(_prefix);
-    if (invoker_type == metadata::RtInvokerType::NewObjIntrinsic)
+    if (invoker_type == metadata::RtInvokerType::Intrinsic || invoker_type == metadata::RtInvokerType::CustomInstrinsic ||
+        invoker_type == metadata::RtInvokerType::NewObjIntrinsic)
     {
         ir->set_invoker_idx(vm::Intrinsics::register_intrinsic_invoker_id(invoker));
     }
-    else if (invoker_type == metadata::RtInvokerType::NewObjInternalCall)
+    else if (invoker_type == metadata::RtInvokerType::InternalCall || invoker_type == metadata::RtInvokerType::NewObjInternalCall)
     {
         ir->set_invoker_idx(vm::InternalCalls::register_internal_call_invoker_id(invoker));
     }

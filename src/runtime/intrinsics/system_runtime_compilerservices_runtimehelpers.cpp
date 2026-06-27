@@ -241,6 +241,57 @@ RtResult<vm::RtReadOnlySpan<uint8_t>> SystemRuntimeCompilerServicesRuntimeHelper
     RET_OK(span);
 }
 
+RtResult<vm::RtReadOnlySpan<uint8_t>> SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_as_span(void* buffer, int32_t length) noexcept
+{
+    if (length < 0)
+    {
+        RET_ERR(RtErr::ArgumentOutOfRange);
+    }
+
+    if (buffer == nullptr && length != 0)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    vm::RtReadOnlySpan<uint8_t> span{reinterpret_cast<const uint8_t*>(buffer), length};
+    RET_OK(span);
+}
+
+RtResult<void*> SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_first_element_ref(void* buffer) noexcept
+{
+    if (buffer == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    RET_OK(buffer);
+}
+
+RtResult<void*> SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_element_ref(const metadata::RtMethodInfo* method, void* buffer,
+                                                                                     int32_t index) noexcept
+{
+    if (buffer == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    if (index < 0 || method == nullptr || method->generic_method == nullptr || method->generic_method->generic_context.method_inst == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentOutOfRange);
+    }
+
+    const metadata::RtGenericInst* method_inst = method->generic_method->generic_context.method_inst;
+    if (method_inst->generic_arg_count != 2)
+    {
+        RET_ERR(RtErr::ExecutionEngine);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(interp::ReduceTypeAndSize, element_type_and_size,
+                                            interp::InterpDefs::get_reduce_type_and_size_by_typesig(method_inst->generic_args[1]));
+    auto* element = reinterpret_cast<uint8_t*>(buffer) + (static_cast<size_t>(index) * element_type_and_size.byte_size);
+    RET_OK(element);
+}
+
 RtResult<bool> SystemRuntimeCompilerServicesRuntimeHelpers::is_bitwise_equatable(const metadata::RtMethodInfo* method) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig, get_single_method_generic_arg(method));
@@ -322,6 +373,49 @@ static RtResultVoid create_span_invoker(metadata::RtManagedMethodPointer methodP
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::InlineArrayAsSpan<,>(TBuffer&,System.Int32)
+/// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::InlineArrayAsReadOnlySpan<,>(TBuffer&,System.Int32)
+static RtResultVoid inline_array_as_span_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    void* buffer = interp::EvalStackOp::get_param<void*>(params, 0);
+    int32_t length = interp::EvalStackOp::get_param<int32_t>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReadOnlySpan<uint8_t>, span,
+                                            SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_as_span(buffer, length));
+    interp::EvalStackOp::set_return(ret, span);
+    RET_VOID_OK();
+}
+
+/// @intrinsic: <PrivateImplementationDetails>::InlineArrayFirstElementRef<,>(TBuffer&)
+static RtResultVoid inline_array_first_element_ref_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    void* buffer = interp::EvalStackOp::get_param<void*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(void*, element, SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_first_element_ref(buffer));
+    interp::EvalStackOp::set_return(ret, element);
+    RET_VOID_OK();
+}
+
+/// @intrinsic: <PrivateImplementationDetails>::InlineArrayElementRef<,>(TBuffer&,System.Int32)
+static RtResultVoid inline_array_element_ref_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                                    const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    void* buffer = interp::EvalStackOp::get_param<void*>(params, 0);
+    int32_t index = interp::EvalStackOp::get_param<int32_t>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(void*, element,
+                                            SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_element_ref(method, buffer, index));
+    interp::EvalStackOp::set_return(ret, element);
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::IsBitwiseEquatable<>()
 static RtResultVoid is_bitwise_equatable_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -361,6 +455,20 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_ru
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_primitive_cor_element_type, get_primitive_cor_element_type_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::CreateSpan<>(System.RuntimeFieldHandle)",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::create_span, create_span_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::InlineArrayAsSpan<,>",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_as_span, inline_array_as_span_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::InlineArrayAsReadOnlySpan<,>",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_as_span, inline_array_as_span_invoker},
+    {"<PrivateImplementationDetails>::InlineArrayAsSpan<,>",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_as_span, inline_array_as_span_invoker},
+    {"<PrivateImplementationDetails>::InlineArrayAsReadOnlySpan<,>",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_as_span, inline_array_as_span_invoker},
+    {"<PrivateImplementationDetails>::InlineArrayFirstElementRef<,>",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_first_element_ref,
+     inline_array_first_element_ref_invoker},
+    {"<PrivateImplementationDetails>::InlineArrayElementRef<,>",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::inline_array_element_ref,
+     inline_array_element_ref_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::IsBitwiseEquatable<>()",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::is_bitwise_equatable, is_bitwise_equatable_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::IsReferenceOrContainsReferences<>()",

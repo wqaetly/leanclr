@@ -21,6 +21,19 @@ internal sealed record class Payload<T>(T Value)
 
 internal readonly record struct Pair(int Left, int Right);
 
+[InlineArray(16)]
+internal struct InlineIntBuffer
+{
+    private int _element0;
+}
+
+internal struct InlineArrayHolder
+{
+    public int Length;
+    public InlineIntBuffer Buffer;
+    public int[]? Large;
+}
+
 internal static class Program
 {
     private static Type? s_seenType;
@@ -317,6 +330,8 @@ internal static class Program
     {
         TestSpanStackalloc();
         TestSpanStackallocInitializer();
+        TestSpanBoolStackalloc();
+        TestInlineArrayStructLayout();
     }
 
     private static void TestSpanStackalloc()
@@ -331,6 +346,31 @@ internal static class Program
         Span<int> values = stackalloc[] { 4, 8, 15, 16, 23, 42 };
         values[0] = values[^1];
         Require(values[0] == 42, "span index-from-end failed");
+    }
+
+    private static void TestSpanBoolStackalloc()
+    {
+        Span<bool> values = stackalloc bool[2];
+        values[1] = true;
+        Require(values[1], "span bool stackalloc failed");
+        Require(ReadSpanBoolArg(values), "span bool argument read failed");
+    }
+
+    private static bool ReadSpanBoolArg(Span<bool> values)
+    {
+        return values[1];
+    }
+
+    private static void TestInlineArrayStructLayout()
+    {
+        var holder = new InlineArrayHolder();
+        holder.Length = 16;
+        holder.Buffer[15] = 42;
+        Require(holder.Large == null, "inline array tail reference overlapped");
+
+        holder.Large = [7, 42];
+        Require(holder.Buffer[15] == 42, "inline array element was clobbered");
+        Require(holder.Large[1] == 42, "inline array tail reference read failed");
     }
 
     private static void TestThreadingSubset()

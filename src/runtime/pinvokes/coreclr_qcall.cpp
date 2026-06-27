@@ -624,19 +624,6 @@ RtResultVoid store_metadata_enum_tokens(const utils::Vector<int32_t>& tokens, in
         RET_VOID_OK();
     }
 
-    if (large_result != nullptr)
-    {
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, token_array,
-                                                LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(vm::Class::get_corlib_types().cls_int32,
-                                                                                           result_count, "MetadataImport::Enum"));
-        for (int32_t i = 0; i < result_count; ++i)
-        {
-            vm::Array::set_array_data_at<int32_t>(token_array, i, tokens[static_cast<size_t>(i)]);
-        }
-        *large_result = token_array;
-        RET_VOID_OK();
-    }
-
     if (result_count <= small_capacity)
     {
         if (result_buffer == nullptr)
@@ -788,6 +775,7 @@ RtResultVoid initialize_signature_from_metadata(vm::RtSignature* signature, void
     const metadata::RtTypeSig* return_or_field_type = nullptr;
     const metadata::RtTypeSig* const* parameters = nullptr;
     int32_t parameter_count = 0;
+    metadata::RtPropertySig property_sig;
 
     if (method != nullptr)
     {
@@ -806,7 +794,27 @@ RtResultVoid initialize_signature_from_metadata(vm::RtSignature* signature, void
     }
     else
     {
-        RETURN_NOT_IMPLEMENTED_ERROR();
+        if (raw_sig == nullptr || raw_sig_size < 0 || signature->declaring_type == nullptr ||
+            signature->declaring_type->reflection_type.type_handle == nullptr)
+        {
+            RET_ERR(RtErr::BadImageFormat);
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+            metadata::RtClass*, declaring_klass,
+            vm::Class::get_class_from_typesig(signature->declaring_type->reflection_type.type_handle));
+        if (declaring_klass == nullptr || declaring_klass->image == nullptr)
+        {
+            RET_ERR(RtErr::BadImageFormat);
+        }
+
+        utils::BinaryReader reader(raw_sig, static_cast<size_t>(raw_sig_size));
+        UNWRAP_OR_RET_ERR_ON_FAIL(
+            property_sig,
+            declaring_klass->image->read_property_sig(reader, vm::Class::get_generic_container_context(declaring_klass), nullptr));
+        return_or_field_type = property_sig.type_sig;
+        parameters = property_sig.params.data();
+        parameter_count = static_cast<int32_t>(property_sig.params.size());
     }
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, return_type,

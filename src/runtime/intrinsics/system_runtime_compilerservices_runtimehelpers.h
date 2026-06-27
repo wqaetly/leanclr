@@ -16,6 +16,9 @@ class SystemRuntimeCompilerServicesRuntimeHelpers
     static RtResult<uint32_t> get_num_instance_field_bytes(const void* method_table) noexcept;
     static RtResult<metadata::RtElementType> get_primitive_cor_element_type(const void* method_table) noexcept;
     static RtResult<vm::RtReadOnlySpan<uint8_t>> create_span(const metadata::RtMethodInfo* method, const metadata::RtFieldInfo* field) noexcept;
+    static RtResult<vm::RtReadOnlySpan<uint8_t>> inline_array_as_span(void* buffer, int32_t length) noexcept;
+    static RtResult<void*> inline_array_first_element_ref(void* buffer) noexcept;
+    static RtResult<void*> inline_array_element_ref(const metadata::RtMethodInfo* method, void* buffer, int32_t index) noexcept;
     static RtResult<bool> is_bitwise_equatable(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<bool> is_reference_or_contains_references(const metadata::RtMethodInfo* method) noexcept;
 };

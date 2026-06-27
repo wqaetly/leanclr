@@ -115,6 +115,8 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Array.cs" Link="CorlibTests\InternalCall\TC_System_Array.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Buffer.cs" Link="CorlibTests\InternalCall\TC_System_Buffer.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_DateTime.cs" Link="CorlibTests\InternalCall\TC_System_DateTime.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Diagnostics_Debugger.cs" Link="CorlibTests\InternalCall\TC_System_Diagnostics_Debugger.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Diagnostics_StackFrame.cs" Link="CorlibTests\InternalCall\TC_System_Diagnostics_StackFrame.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Diagnostics_StopWatch.cs" Link="CorlibTests\InternalCall\TC_System_Diagnostics_StopWatch.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Enum.cs" Link="CorlibTests\InternalCall\TC_System_Enum.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Environment.cs" Link="CorlibTests\InternalCall\TC_System_Environment.cs" />

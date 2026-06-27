@@ -26,11 +26,13 @@
 本阶段验证命令：
 
 ```powershell
+dotnet build src\tests\managed-net10\managed-net10.sln -c Release
+powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunCorlibDiagnostics"
 powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release
 powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunAll"
 ```
 
-两条命令均已通过，说明 Mono-only icall 隔离没有破坏当前 `ManagedNet10.Smoke` 主入口和已迁移的 legacy 反射扫描入口。
+以上命令均已通过，说明 Mono-only icall 隔离没有破坏当前 `ManagedNet10.Smoke` 主入口和已迁移的 legacy 反射扫描入口。
 
 ## 官方基线
 
@@ -941,6 +943,16 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 该切片暴露出 .NET 10 `Stopwatch` 在 Windows 上会走 `Kernel32.QueryPerformanceFrequency` / `QueryPerformanceCounter` P/Invoke；已在 `coreclr_qcall` P/Invoke registry 和 `platform::Kernel32` 中补齐最小桥接。
 - 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunCorlibDiagnosticsStopwatch"` 通过并输出 `ok!`。
 - 本机已复验 `ManagedNet10.LegacyTests.Program::RunAll` 和默认 `ManagedNet10.Smoke` 均通过并输出 `ok!`。
+
+2026-06-27 已修复 diagnostics 反射属性链路和 InlineArray 布局：
+
+- `ManagedNet10.LegacyTests` 的 diagnostics 切片继续链接旧 `TC_System_Diagnostics_Debugger` / `TC_System_Diagnostics_StackFrame`，并由 `RunCorlibDiagnostics` 聚合执行 Debugger、StackFrame、Stopwatch 三组入口。
+- `System.Reflection.MetadataImport::GetName` 和 `GetPropertyProps` 改为按 .NET 10 实际 internal-call 签名精确注册，避免旧 name-only 入口误劫持托管包装方法；`GetPropertyProps` 的 module 参数也恢复为第 0 个参数。
+- `MetadataImport.GetName` 当前覆盖 TypeDef、TypeRef、Field、Method、Param、MemberRef、Event、Property、ModuleRef、AssemblyRef、ManifestResource 的名称解析，足以支撑 `StackFrame.PopulateProperties` 读取 `Debugger.IsAttached` 等属性元数据。
+- `MetadataEnumResult` 的枚举结果存储修正为优先使用 small buffer，只有超过容量时才写入 `_largeResult`；同时补齐 property/event `MethodSemantics` 枚举和 property raw signature 初始化路径。
+- `.NET 10` `InlineArrayAttribute` 布局支持已按 custom attribute blob 读取长度，`RuntimeHelpers` 补齐 `InlineArrayAsSpan` / `InlineArrayAsReadOnlySpan` / `InlineArrayFirstElementRef` / `InlineArrayElementRef`，`ManagedNet10.Smoke` 新增 `Span<bool>` stackalloc 与 inline-array struct tail reference 不重叠的验证。
+- 清理了本轮定位期间加入的解释器、intrinsic、QCall 和反射 stderr 诊断输出；保留的改动均为运行时行为或测试入口改动。
+- 本机已验证 `dotnet build src\tests\managed-net10\managed-net10.sln -c Release` 通过，`RunCorlibDiagnostics`、`ManagedNet10.LegacyTests.Program::RunAll` 和默认 `ManagedNet10.Smoke` 三条 `interp-smoke.ps1` 命令均输出 `ok!`。
 
 仍未完成：
 

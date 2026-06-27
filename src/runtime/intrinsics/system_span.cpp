@@ -4,6 +4,7 @@
 #include "system_readonlyspan.h"
 #include "interp/interp_defs.h"
 #include "interp/eval_stack_op.h"
+#include "vm/class.h"
 
 namespace leanclr
 {
@@ -59,6 +60,32 @@ RtResult<int32_t> SystemSpan::sequence_equal(const uint8_t* first, const uint8_t
 
 // ========== Invoker Functions ==========
 
+static RtResult<const metadata::RtTypeSig*> get_span_element_type(const metadata::RtMethodInfo* method) noexcept
+{
+    if (method == nullptr || method->parent == nullptr)
+    {
+        RET_ERR(RtErr::ExecutionEngine);
+    }
+
+    const metadata::RtClass* klass = method->parent;
+    if (vm::Class::is_generic_inst(klass))
+    {
+        const metadata::RtGenericClass* generic_class = klass->by_val->data.generic_class;
+        if (generic_class != nullptr && generic_class->class_inst != nullptr && generic_class->class_inst->generic_arg_count == 1)
+        {
+            RET_OK(generic_class->class_inst->generic_args[0]);
+        }
+    }
+
+    if (method->generic_method != nullptr && method->generic_method->generic_context.class_inst != nullptr &&
+        method->generic_method->generic_context.class_inst->generic_arg_count == 1)
+    {
+        RET_OK(method->generic_method->generic_context.class_inst->generic_args[0]);
+    }
+
+    RET_ERR(RtErr::BadImageFormat);
+}
+
 /// @intrinsic: System.Span`1::get_Item
 static RtResultVoid get_item_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                      interp::RtStackObject* ret) noexcept
@@ -67,9 +94,7 @@ static RtResultVoid get_item_invoker(metadata::RtManagedMethodPointer methodPtr,
     const vm::RtReadOnlySpan<uint8_t>& span = *interp::EvalStackOp::get_param<const vm::RtReadOnlySpan<uint8_t>*>(params, 0);
     int32_t index = interp::EvalStackOp::get_param<int32_t>(params, 1);
 
-    const metadata::RtClass* klass = method->parent;
-    const metadata::RtGenericClass* generic_class = klass->by_val->data.generic_class;
-    const metadata::RtTypeSig* ele_type = *generic_class->class_inst->generic_args;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, ele_type, get_span_element_type(method));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(interp::ReduceTypeAndSize, type_and_size, interp::InterpDefs::get_reduce_type_and_size_by_typesig(ele_type));
     size_t ele_size = type_and_size.byte_size;
 

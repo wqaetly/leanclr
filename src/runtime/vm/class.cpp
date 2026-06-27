@@ -1,4 +1,6 @@
+#include <cstring>
 #include <functional>
+#include <limits>
 
 #include "class.h"
 #include "const_strs.h"
@@ -22,6 +24,7 @@
 #include "customattribute.h"
 #include "assembly.h"
 #include "type.h"
+#include "utils/mem_op.h"
 
 namespace leanclr
 {
@@ -1039,6 +1042,87 @@ void Class::collect_instance_fields(const metadata::RtClass* klass, utils::Vecto
     }
 }
 
+namespace
+{
+bool is_inline_array_attribute_class(const metadata::RtClass* klass)
+{
+    return klass != nullptr && klass->namespaze != nullptr && klass->name != nullptr &&
+           std::strcmp(klass->namespaze, "System.Runtime.CompilerServices") == 0 &&
+           std::strcmp(klass->name, "InlineArrayAttribute") == 0;
+}
+
+RtResult<std::optional<uint32_t>> get_inline_array_length(const metadata::RtClass* klass)
+{
+    if (klass == nullptr || klass->image == nullptr || klass->token == 0)
+    {
+        RET_OK(std::optional<uint32_t>{});
+    }
+
+    metadata::RtModuleDef* mod = klass->image;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(metadata::RtCustomAttributeRidRange, rid_range, mod->get_custom_attribute_rid_range(klass->token));
+    for (uint32_t i = 0; i < rid_range.count; ++i)
+    {
+        uint32_t ca_rid = rid_range.start_rid + i;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtCustomAttributeRawData, raw_data, mod->get_custom_attribute_raw_data(ca_rid));
+        if (!is_inline_array_attribute_class(raw_data.ctor->parent))
+        {
+            continue;
+        }
+
+        if (raw_data.ctor->parameter_count != 1 || raw_data.dataBlobIndex == 0)
+        {
+            RET_ASSERT_ERR(RtErr::BadImageFormat);
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(utils::BinaryReader, reader, mod->get_decoded_blob_reader(raw_data.dataBlobIndex));
+        uint16_t prolog = 0;
+        uint32_t length = 0;
+        if (!reader.try_read_u16(prolog) || prolog != 0x0001 || !reader.try_read_u32(length))
+        {
+            RET_ASSERT_ERR(RtErr::BadImageFormat);
+        }
+        if (length == 0)
+        {
+            RET_ASSERT_ERR(RtErr::BadImageFormat);
+        }
+        RET_OK(std::optional<uint32_t>{length});
+    }
+
+    RET_OK(std::optional<uint32_t>{});
+}
+
+RtResult<std::optional<metadata::SizeAndAlignment>> get_inline_array_layout(metadata::RtClass* klass,
+                                                                            const utils::Vector<const metadata::RtFieldInfo*>& instanceFields,
+                                                                            int32_t first_field_index_of_current_class)
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<uint32_t>, opt_length, get_inline_array_length(klass));
+    if (!opt_length)
+    {
+        RET_OK(std::optional<metadata::SizeAndAlignment>{});
+    }
+
+    if (Class::is_reference_type(klass) || first_field_index_of_current_class < 0 ||
+        instanceFields.size() != static_cast<size_t>(first_field_index_of_current_class + 1))
+    {
+        RET_ASSERT_ERR(RtErr::BadImageFormat);
+    }
+
+    const metadata::RtFieldInfo* element_field = instanceFields[static_cast<size_t>(first_field_index_of_current_class)];
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::SizeAndAlignment, element_layout,
+                                            metadata::Layout::get_field_size_and_alignment(const_cast<metadata::RtTypeSig*>(element_field->type_sig)));
+
+    uint64_t size = static_cast<uint64_t>(element_layout.size) * static_cast<uint64_t>(*opt_length);
+    if (size > std::numeric_limits<uint32_t>::max())
+    {
+        RET_ASSERT_ERR(RtErr::BadImageFormat);
+    }
+    size = utils::MemOp::align_up(static_cast<uint32_t>(size), element_layout.alignment);
+
+    metadata::SizeAndAlignment result = {static_cast<uint32_t>(size), element_layout.alignment};
+    RET_OK(std::optional<metadata::SizeAndAlignment>{result});
+}
+} // namespace
+
 RtResultVoid Class::setup_field_layout(metadata::RtClass* klass)
 {
     assert(has_initialized_part(klass, metadata::RtClassInitPart::Field));
@@ -1125,6 +1209,12 @@ RtResultVoid Class::setup_field_layout(metadata::RtClass* klass)
         }
         UNWRAP_OR_RET_ERR_ON_FAIL(instanceSizeAndAlignment,
                                   metadata::Layout::compute_layout(instanceFields, first_field_index_of_current_class, static_cast<uint8_t>(packingSize)));
+    }
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<metadata::SizeAndAlignment>, inline_array_layout,
+                                            get_inline_array_layout(klass, instanceFields, first_field_index_of_current_class));
+    if (inline_array_layout)
+    {
+        instanceSizeAndAlignment = *inline_array_layout;
     }
     klass->instance_size_without_header = std::max(instanceSizeAndAlignment.size, classSize);
     if (!is_ref_type)
