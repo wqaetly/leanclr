@@ -6,7 +6,7 @@
 
 ## 结论
 
-LeanCLR 对接 .NET 10 不是从零重新实现一套 CLR，也不是把元数据、反射、ICALL 和 BCL 全部重写一遍。
+LeanCLR 对接 .NET 10 不是从零重新实现一套 CLR，也不是把元数据、解释器、GC 和对象系统全部重写一遍。但当前实现计划已经从“跑旧测试、遇到一个缺口补一个缺口”调整为 **先重写 .NET 10 主路径的 runtime contract / model，再用测试验收**。
 
 更准确的说法是：LeanCLR 已经有自己的 VM、元数据加载、类型系统、对象模型、解释器、AOT、GC、反射框架、ICALL/Intrinsic 注册表。当前 `.NET 10` 适配的主线已经收敛为 **LeanCLR minimal net10 profile**：运行项目自己的、受控的、纯逻辑 `net10.0` DLL，而不是完整承接 `System.Private.CoreLib` / `Microsoft.NETCore.App`。
 
@@ -15,10 +15,12 @@ LeanCLR 对接 .NET 10 不是从零重新实现一套 CLR，也不是把元数�
 因此工作重点是：
 
 - 保留独立的 `coreclr-net10` / `minimal-net10` profile 边界，不污染现有 `mono45` / Unity profile。
+- 基于 .NET 10 `System.Private.CoreLib` / CoreCLR VM 源码抽取 contract map，先定义 RuntimeType、RuntimeHandle、Assembly、Module、CustomAttribute、Span/Unsafe、Monitor/Task 等 net10 façade。
+- 重写 `coreclr-net10` 活跃路径的 model/façade，外部满足 CoreLib 期待，内部映射到 LeanCLR 自己的 `RtClass` / `RtMethodInfo` / `RtFieldInfo` / metadata cache / interpreter。
 - 只支持项目纯逻辑 DLL 实际使用到的核心类型、基础 IL、泛型、异常、委托、少量反射、必要 Span/Unsafe 和 host bridge API。
 - 不再以完整 `Microsoft.NETCore.App` 或剩余 extern diff 归零作为近期目标。
 - 对白名单外的 BCL、反射、线程、IO、网络、动态代码生成等能力，优先给出清晰诊断，而不是隐式尝试兼容。
-- 通过 `leanrun`、`ManagedNet10.Smoke` 和真实纯逻辑 DLL smoke 验证能力边界。
+- 通过 `leanrun`、`ManagedNet10.Smoke`、legacy 测试子集和真实纯逻辑 DLL smoke 验证能力边界；测试后置为验收，不再驱动架构形状。
 
 当前仓库中已有相关基础：
 
@@ -140,23 +142,24 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    A["固定 .NET 10 SDK / runtime pack 版本"] --> B["导出 BCL extern 清单"]
-    B --> C["和 coreclr-net10 catalog 做 diff"]
-    C --> D["选择一个 smoke 子入口"]
-    D --> E["leanrun 解释执行"]
-    E --> F{"失败？"}
-    F -->|缺入口| G["补 ICALL / Intrinsic / PInvoke 映射"]
-    F -->|类型或反射错误| H["修 CoreLib contract、handle、metadata resolution"]
-    F -->|IL 语义错误| I["补解释器、方法解析、泛型或接口行为"]
-    F -->|通过| J["扩大到下一组 API / workload"]
-    G --> E
-    H --> E
-    I --> E
+    A["固定 .NET 10 SDK / runtime pack 版本"] --> B["阅读 CoreLib / CoreCLR 源码并导出 extern 清单"]
+    B --> C["抽取 net10 runtime contract map"]
+    C --> D["重写 LeanCLR net10 facade / model"]
+    D --> E["登记 coreclr-net10 catalog 与 NotSupported 边界"]
+    E --> F["选择 smoke / legacy / workload 验收入口"]
+    F --> G["leanrun 解释执行"]
+    G --> H{"失败？"}
+    H -->|contract 缺口| C
+    H -->|facade 映射缺口| D
+    H -->|IL/VM 通用语义缺口| I["补 LeanCLR VM 核心能力"]
+    H -->|通过| J["扩大到下一组 API / workload"]
+    I --> G
 ```
 
 建议每个新增 contract 都满足三个条件：
 
 - 能被 `coreclr-net10` profile 独立描述。
+- 能在 `net10-runtime-contract` 中说明它来自 CoreLib 哪条真实调用链。
 - 能被一个小 smoke 子入口稳定触发。
 - 缺失或签名不匹配时能输出具体方法名，而不是只表现为 `BadImageFormatException` 或启动失败。
 

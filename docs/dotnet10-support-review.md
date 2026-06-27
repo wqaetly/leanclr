@@ -606,7 +606,24 @@ Unity/Godot host
 
 ## 建议实施计划
 
-### 2026-06-27 范围收敛后的计划
+### 2026-06-27 contract-first 实施计划转向
+
+当前推进方式正式从“跑旧测试、遇到一个缺口补一个缺口”调整为 **先重写 .NET 10 主路径的 runtime contract / model，再用测试验收**。旧 managed / Mono 测试资产仍然保留为回归和最终质量门槛，但不再作为设计来源；设计来源改为 .NET 10 `System.Private.CoreLib` / CoreCLR VM 源码、runtime pack extern 清单、真实纯逻辑 DLL workload 和 LeanCLR 自身 VM 边界。
+
+本轮转向的目标不是重写整个 LeanCLR。应保留 metadata loader、类型系统、对象模型、解释器、GC、异常、委托、泛型、基础反射框架和已有 profile/catalog 基建；需要重写的是 `.NET 10` 活跃路径上的 **BCL/runtime contract 层**，也就是 CoreLib 期望看到的 type handle、method handle、field handle、assembly/module/custom attribute、Span/Unsafe、Monitor/Thread/Task 等 façade 结构和调用边界。
+
+新的执行顺序：
+
+1. **冻结当前补丁式推进**：记录当前能过/不能过的 smoke、legacy 子入口和真实 workload；只处理阻塞 contract 重建的 P0，暂停继续按旧 Mono 用例逐点补丁。
+2. **抽取 .NET 10 contract map**：基于 `.NET 10` 源码和 runtime pack 导出清单，整理 `RuntimeType`、`RuntimeTypeHandle`、`RuntimeMethodHandle`、`RuntimeFieldHandle`、`RuntimeAssembly`、`RuntimeModule`、`CustomAttribute`、`RuntimeHelpers`、`Unsafe/Span`、`Thread/Monitor/Task` 的最小 contract、入口签名、私有字段/handle 访问形状和 NotSupported 边界。
+3. **重写 net10 model / façade**：定义 LeanCLR 自己的 `net10` façade 层，外部满足 CoreLib 期待，内部映射到 `RtClass`、`RtMethodInfo`、`RtFieldInfo`、metadata cache、interpreter 和现有 runtime 服务；不要照搬 CoreCLR 的完整 MethodTable / loader / GC / ThreadPool 实现。
+4. **隔离旧 Mono-era 适配**：将 `Mono.*`、`System.IO.Mono*`、`System.Runtime.Remoting*`、旧 `mscorlib` 布局假设和无签名宽松匹配从 `coreclr-net10` 活跃路径移走；旧实现可暂留 `mono45` profile 或对照分支。
+5. **按领域替换桥接层**：优先顺序为 type/reflection handles -> assembly/module/custom attribute -> Span/Unsafe/RuntimeHelpers -> exception/delegate -> threading/Monitor/async -> host bridge。每个领域完成后再接对应 smoke。
+6. **测试后置为验收门禁**：contract/model 重写完成一个领域后，再跑 `ManagedNet10.Smoke` 定位入口、`ManagedNet10.LegacyTests` 对应子集、最终 `RunAll` 和真实纯逻辑 DLL smoke。测试只验证 contract 是否成立，不再驱动架构形状。
+
+阶段性完成标准也随之调整：第一阶段不是“所有已迁移旧用例立即跑绿”，而是先产出可审查、可版本化的 `net10-runtime-contract` 文档和 façade 骨架，并保证白名单内入口失败时有明确诊断。随后每个领域以测试验收收口。
+
+### 2026-06-27 范围收敛后的支撑计划
 
 在确认实际目标是“导出并运行项目自己的纯逻辑 `net10.0` DLL”后，`coreclr` 分支近期方向收敛为四条新主线：
 
@@ -615,7 +632,7 @@ Unity/Godot host
 3. **原作者测试资产全量迁移**：把已有 managed / Mono 测试按能力分层迁移到 `.NET 10` 验证路径；分层只决定顺序，最终门槛是全量跑通。
 4. **NKGGameFramework 真实 workload 与 Unity/Godot bridge**：用 `C:\study\wqaetly\new\NKGGameFramework` 的核心逻辑库验证真实项目可运行性，同时启动 host bridge ABI、opaque handle registry 和主线程 dispatcher 设计。
 
-因此当前计划不再是“先让最小 .NET 10 corlib + CoreCLR metadata 扩展 + BCL runtime API 全面跑通”，而是“先让 LeanCLR 稳定运行受控纯逻辑 `net10.0` DLL，并对越界 API 做清晰诊断”。但最终合格线应提升为：原作者测试资产全量通过、NKGGameFramework 核心 workload 通过、API 白名单无越界。AOT、完整 BCL、完整 resolver、generic math、ThreadPool、Hosting/Web Debug 和历史资产清理都按真实 workload 与全量测试缺口排序。
+因此当前计划不再是“先让最小 .NET 10 corlib + CoreCLR metadata 扩展 + BCL runtime API 全面跑通”，也不再是“继续按旧测试失败点逐个补丁”。新的主线是：先重建 `.NET 10` contract/model，让 LeanCLR 稳定运行受控纯逻辑 `net10.0` DLL，并对越界 API 做清晰诊断；随后用测试资产和真实 workload 验收。最终合格线仍应提升为：原作者测试资产全量通过、NKGGameFramework 核心 workload 通过、API 白名单无越界。AOT、完整 BCL、完整 resolver、generic math、ThreadPool、Hosting/Web Debug 和历史资产清理都按真实 workload 与全量测试缺口排序。
 
 ### 阶段 0：定义支持范围
 
@@ -692,11 +709,12 @@ Unity/Godot host
 
 ### 当前下一轮验收切片
 
-当前不要把“完整 .NET 10 BCL”作为下一步验收口，也不要再用 AOT native run 作为第一阶段主门禁。更合适的推进顺序是用 API 白名单、静态扫描、原作者测试资产迁移、NKGGameFramework 真实 workload 和 Unity/Godot bridge mock host，把 minimal profile 压成可独立通过的切片。注意：这些切片是推进顺序，不是最终合格范围；最终仍要全量跑通原作者测试资产。
+当前不要把“完整 .NET 10 BCL”作为下一步验收口，也不要再用 AOT native run 或旧测试 `RunAll` 作为第一阶段主门禁。下一轮先交付 `net10-runtime-contract` 和对应 façade/model 骨架，再用 API 白名单、静态扫描、原作者测试资产迁移、NKGGameFramework 真实 workload 和 Unity/Godot bridge mock host，把 minimal profile 压成可独立通过的切片。注意：这些切片是验收顺序，不是设计来源；最终仍要全量跑通原作者测试资产。
 
 | 主线 | 最小验证入口 | 通过证据 | 说明 |
 | --- | --- | --- | --- |
-| 解释执行 runner 基线 | `scripts/dotnet10/interp-smoke.ps1` 复用 `src/tools/leanrun`，可指定程序集目录和入口方法 | 已能构建 `ManagedNet10.Smoke` 和 `leanrun`，完整入口输出 `ok!` | 保留为 minimal profile 的基础绿色基线 |
+| net10 contract/model | `docs/net10-runtime-contract.md` 或同等设计文档，覆盖 RuntimeType/Handle/Assembly/Module/Attribute/Span/Monitor 等 façade | contract 可审查、入口签名可追踪、NotSupported 边界明确 | 下一轮最优先；先定结构再跑测试 |
+| 解释执行 runner 基线 | `scripts/dotnet10/interp-smoke.ps1` 复用 `src/tools/leanrun`，可指定程序集目录和入口方法 | 能构建 `ManagedNet10.Smoke` 和 `leanrun`，最小定位入口退出 `0` | 作为 contract 领域验收工具，不再驱动设计 |
 | API 白名单 | minimal profile 允许的 assembly/type/member 清单 | 白名单可审查、可版本化 | 作为“支持什么”的正式边界 |
 | 静态扫描 | 扫描项目纯逻辑 DLL 的 `AssemblyRef` / `TypeRef` / `MemberRef` | 白名单外 API 给出明确错误 | 防止用户无意把完整 BCL 生态拉进来 |
 | 原作者测试资产迁移 | `src/tests/managed` / shared legacy cases 分批迁入 `managed-net10` | 每批迁移后解释执行或 runner 退出 `0` | 分层推进，最终全量通过才算 LeanCLR 自身能力合格 |
@@ -823,6 +841,9 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 拉取 `dotnet/runtime` 参考源码到 gitignored `artifacts/dotnet10-runtime-src`，用于快速对照 .NET 10 CoreLib/QCall/InternalCall 调用链；后续不再作为常规主线步骤。
 - [ ] 定义 `minimal-net10` API 白名单：明确允许的 core type、基础 BCL、反射、Span/Unsafe、异常、委托和引擎 bridge 所需 API。
 - [ ] 增加 `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描：项目纯逻辑 DLL 一旦引用白名单外 API，应在构建或加载阶段给出清晰诊断。
+- [ ] 新增 `net10-runtime-contract` 设计文档：从 .NET 10 `System.Private.CoreLib` / CoreCLR 源码抽取 RuntimeType、RuntimeTypeHandle、RuntimeMethodHandle、RuntimeFieldHandle、RuntimeAssembly、RuntimeModule、CustomAttribute、RuntimeHelpers、Unsafe/Span、Thread/Monitor/Task 的最小 contract。
+- [ ] 重写 `coreclr-net10` 活跃路径的 model/façade：外部满足 CoreLib contract，内部映射到 LeanCLR `RtClass` / `RtMethodInfo` / `RtFieldInfo` / metadata cache / interpreter。
+- [ ] 将旧 Mono-era 适配从 `coreclr-net10` 主路径隔离：禁止 `Mono.*`、`System.IO.Mono*`、`System.Runtime.Remoting*`、旧 `mscorlib` 布局假设和无签名宽松匹配隐式命中 `.NET 10` BCL。
 - [x] 在解释执行 runner 中修复 `TestSpan`，让 Span stackalloc / RVA initializer 子路径不依赖 AOT codegen intrinsic 也能通过。
 - [x] 在解释执行 runner 中修复 `TestBoxingMetadata`，让 boxed value type 的 `Object.GetType()` / `RuntimeType.Name` 子路径在 `System.Private.CoreLib` 下通过。
 - [ ] 将原作者 managed / Mono 测试资产分阶段迁移到 `.NET 10` 验证路径，并以最终全量跑通作为 LeanCLR `.NET 10` 接入合格线。
