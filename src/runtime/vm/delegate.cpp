@@ -17,14 +17,14 @@ RtResultVoid Delegate::initialize()
 
 const metadata::RtMethodInfo* Delegate::get_target_method(const RtDelegate* del) noexcept
 {
-    return del == nullptr ? nullptr : reinterpret_cast<const metadata::RtMethodInfo*>(del->method_ptr_aux);
+    return del == nullptr ? nullptr : reinterpret_cast<const metadata::RtMethodInfo*>(del->method_ptr);
 }
 
 void Delegate::set_target_method(RtDelegate* del, const metadata::RtMethodInfo* method) noexcept
 {
     assert(del != nullptr);
-    del->method_ptr = reinterpret_cast<uintptr_t>(&Delegate::invoke_delegate_invoker);
-    del->method_ptr_aux = reinterpret_cast<uintptr_t>(method);
+    del->method_ptr = reinterpret_cast<uintptr_t>(method);
+    del->method_ptr_aux = del->target != nullptr && Method::is_instance(method) ? 0 : reinterpret_cast<uintptr_t>(method);
 }
 
 RtResult<RtMulticastDelegate*> Delegate::create_delegate_from_reflection(RtReflectionType* delegate_type, RtObject* target,
