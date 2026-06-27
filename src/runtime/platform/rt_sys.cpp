@@ -180,6 +180,35 @@ uint32_t RtSys::get_environment_variable(const Utf16Char* variable_name, Utf16Ch
 #endif
 }
 
+int32_t RtSys::set_environment_variable(const Utf16Char* variable_name, const Utf16Char* value)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    if (variable_name == nullptr)
+    {
+        ::SetLastError(ERROR_INVALID_PARAMETER);
+        return 0;
+    }
+    return ::SetEnvironmentVariableW(reinterpret_cast<LPCWSTR>(variable_name), reinterpret_cast<LPCWSTR>(value)) ? 1 : 0;
+#else
+    if (variable_name == nullptr)
+    {
+        s_last_win32_error = 87; // ERROR_INVALID_PARAMETER
+        return 0;
+    }
+
+    utils::Utf8StringBuilder name;
+    name.append_utf16_str(variable_name, static_cast<size_t>(utils::StringUtil::get_utf16chars_length(variable_name)));
+    if (value == nullptr)
+    {
+        return ::unsetenv(name.get_const_chars()) == 0 ? 1 : 0;
+    }
+
+    utils::Utf8StringBuilder value_utf8;
+    value_utf8.append_utf16_str(value, static_cast<size_t>(utils::StringUtil::get_utf16chars_length(value)));
+    return ::setenv(name.get_const_chars(), value_utf8.get_const_chars(), 1) == 0 ? 1 : 0;
+#endif
+}
+
 int32_t RtSys::get_locale_info_ex(const Utf16Char* locale_name, uint32_t lc_type, Utf16Char* locale_data, int32_t locale_data_length)
 {
 #ifdef LEANCLR_PLATFORM_WIN

@@ -16,6 +16,7 @@
 #include "vm/array_class.h"
 #include "vm/class.h"
 #include "vm/delegate.h"
+#include "vm/environment.h"
 #include "vm/field.h"
 #include "vm/generic_class.h"
 #include "vm/gchandle.h"
@@ -54,6 +55,21 @@ struct RtOsVersionInfoEx
     uint16_t wSuiteMask;
     uint8_t wProductType;
     uint8_t wReserved;
+};
+
+struct RtSystemInfo
+{
+    uint16_t wProcessorArchitecture;
+    uint16_t wReserved;
+    uint32_t dwPageSize;
+    uintptr_t lpMinimumApplicationAddress;
+    uintptr_t lpMaximumApplicationAddress;
+    uintptr_t dwActiveProcessorMask;
+    uint32_t dwNumberOfProcessors;
+    uint32_t dwProcessorType;
+    uint32_t dwAllocationGranularity;
+    uint16_t wProcessorLevel;
+    uint16_t wProcessorRevision;
 };
 
 struct RtStackFrameHelper : public vm::RtObject
@@ -1154,6 +1170,29 @@ RtResultVoid kernel32_get_environment_variable_invoker(metadata::RtManagedMethod
     RET_VOID_OK();
 }
 
+RtResultVoid kernel32_get_environment_variable_ptr_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    Utf16Char* variable_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 0);
+    Utf16Char* value = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+    uint32_t value_length = interp::EvalStackOp::get_param<uint32_t>(params, 2);
+
+    uint32_t result = platform::RtSys::get_environment_variable(variable_name, value, value_length);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_set_environment_variable_ptr_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    Utf16Char* variable_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 0);
+    Utf16Char* value = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+
+    int32_t result = platform::RtSys::set_environment_variable(variable_name, value);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_get_locale_info_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -1165,6 +1204,36 @@ RtResultVoid kernel32_get_locale_info_ex_invoker(metadata::RtManagedMethodPointe
     int32_t result = platform::RtSys::get_locale_info_ex(locale_name != nullptr ? vm::String::get_chars_ptr(locale_name) : nullptr,
                                                          lc_type, locale_data, locale_data_length);
     interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+uint16_t get_system_processor_architecture() noexcept
+{
+#if defined(_M_X64) || defined(__x86_64__) || defined(__amd64__)
+    return 9; // PROCESSOR_ARCHITECTURE_AMD64
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    return 12; // PROCESSOR_ARCHITECTURE_ARM64
+#elif defined(_M_IX86) || defined(__i386__)
+    return 0; // PROCESSOR_ARCHITECTURE_INTEL
+#else
+    return 0xffff; // PROCESSOR_ARCHITECTURE_UNKNOWN
+#endif
+}
+
+RtResultVoid kernel32_get_system_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                              const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto info = interp::EvalStackOp::get_param<RtSystemInfo*>(params, 0);
+    if (info != nullptr)
+    {
+        std::memset(info, 0, sizeof(RtSystemInfo));
+        info->wProcessorArchitecture = get_system_processor_architecture();
+        info->dwPageSize = static_cast<uint32_t>(vm::Environment::get_page_size());
+        info->dwActiveProcessorMask = static_cast<uintptr_t>(1);
+        int32_t processor_count = vm::Environment::get_processor_count();
+        info->dwNumberOfProcessors = static_cast<uint32_t>(processor_count > 0 ? processor_count : 1);
+        info->dwAllocationGranularity = 65536;
+    }
     RET_VOID_OK();
 }
 
@@ -1827,15 +1896,43 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetEnvironmentVariable", nullptr, kernel32_get_environment_variable_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0(System.String,System.Char&,System.UInt32)",
                                    nullptr, kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0(System.UInt16*,System.Char*,System.UInt32)",
+                                   nullptr, kernel32_get_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0", nullptr,
-                                   kernel32_get_environment_variable_invoker);
+                                   kernel32_get_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetEnvironmentVariable(System.String,System.Char&,System.UInt32)", nullptr,
                                    kernel32_get_environment_variable_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetEnvironmentVariable", nullptr, kernel32_get_environment_variable_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0(System.String,System.Char&,System.UInt32)", nullptr,
                                    kernel32_get_environment_variable_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0(System.UInt16*,System.Char*,System.UInt32)", nullptr,
+                                   kernel32_get_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0", nullptr,
-                                   kernel32_get_environment_variable_invoker);
+                                   kernel32_get_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0(System.UInt16*,System.Char*,System.UInt32)", nullptr,
+                                   kernel32_get_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0", nullptr,
+                                   kernel32_get_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0(System.UInt16*,System.UInt16*)",
+                                   nullptr, kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0", nullptr,
+                                   kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0(System.UInt16*,System.UInt16*)",
+                                   nullptr, kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0", nullptr,
+                                   kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0(System.UInt16*,System.UInt16*)",
+                                   nullptr, kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0", nullptr,
+                                   kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::SetEnvironmentVariable(System.UInt16*,System.UInt16*)",
+                                   nullptr, kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::SetEnvironmentVariable", nullptr,
+                                   kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::SetEnvironmentVariable(System.UInt16*,System.UInt16*)", nullptr,
+                                   kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::SetEnvironmentVariable", nullptr,
+                                   kernel32_set_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
                                    kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx", nullptr, kernel32_get_locale_info_ex_invoker);
@@ -1850,6 +1947,24 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0", nullptr,
                                    kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetSystemInfo(Interop/Kernel32/SYSTEM_INFO*)", nullptr,
+                                   kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetSystemInfo", nullptr, kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetSystemInfo(Interop/Kernel32/SYSTEM_INFO*)", nullptr,
+                                   kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetSystemInfo", nullptr, kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetSystemInfo(Interop/Kernel32/SYSTEM_INFO*)", nullptr,
+                                   kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetSystemInfo", nullptr, kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetNativeSystemInfo(Interop/Kernel32/SYSTEM_INFO*)", nullptr,
+                                   kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetNativeSystemInfo", nullptr, kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetNativeSystemInfo(Interop/Kernel32/SYSTEM_INFO*)", nullptr,
+                                   kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetNativeSystemInfo", nullptr, kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetNativeSystemInfo(Interop/Kernel32/SYSTEM_INFO*)", nullptr,
+                                   kernel32_get_system_info_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetNativeSystemInfo", nullptr, kernel32_get_system_info_invoker);
     vm::PInvokes::register_pinvoke("Interop/Globalization::LoadICU()", nullptr, globalization_load_icu_invoker);
     vm::PInvokes::register_pinvoke("Interop/Globalization::LoadICU", nullptr, globalization_load_icu_invoker);
     vm::PInvokes::register_pinvoke("Globalization::LoadICU()", nullptr, globalization_load_icu_invoker);
