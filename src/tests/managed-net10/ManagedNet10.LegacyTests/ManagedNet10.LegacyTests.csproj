@@ -37,6 +37,7 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\CallDefs.cs" Link="Fixtures\CallDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdftnDefs.cs" Link="Fixtures\LdftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdvirftnDefs.cs" Link="Fixtures\LdvirftnDefs.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\NullableTypeUtil.cs" Link="Fixtures\NullableTypeUtil.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTCtorParam.cs" Link="Fixtures\TestAOTCtorParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTParam.cs" Link="Fixtures\TestAOTParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTReturn.cs" Link="Fixtures\TestAOTReturn.cs" />
@@ -106,6 +107,9 @@
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_ValueTypeToString_2022_7_22.cs" Link="Regression\Bug_ValueTypeToString_2022_7_22.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Enum.cs" Link="Runtime\TC_Enum.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_event.cs" Link="Runtime\TC_event.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_foreach.cs" Link="Runtime\TC_foreach.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_Nullable.cs" Link="Runtime\TC_Nullable.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_String.cs" Link="Runtime\TC_String.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_using.cs" Link="Runtime\TC_using.cs" />
   </ItemGroup>

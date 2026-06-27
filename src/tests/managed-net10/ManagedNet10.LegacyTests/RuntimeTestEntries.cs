@@ -10,6 +10,14 @@ namespace ManagedNet10.LegacyTests
                 typeof(Tests.CSharp.TC_using));
         }
 
+        public static void RunRuntimeLanguageFeatures()
+        {
+            LegacyTestRunner.RunTypes(
+                typeof(Tests.CSharp.TC_foreach),
+                typeof(Tests.CSharp.TC_event),
+                typeof(Tests.CSharp.TC_Nullable));
+        }
+
         public static void RunRuntimeString()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_String));
@@ -23,6 +31,21 @@ namespace ManagedNet10.LegacyTests
         public static void RunRuntimeUsing()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_using));
+        }
+
+        public static void RunRuntimeForeach()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_foreach));
+        }
+
+        public static void RunRuntimeEvent()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_event));
+        }
+
+        public static void RunRuntimeNullable()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Nullable));
         }
     }
 }
