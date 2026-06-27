@@ -7,6 +7,7 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunTypes(
                 typeof(Tests.CSharp.TC_String),
                 typeof(Tests.CSharp.TC_Enum),
+                typeof(Tests.CSharp.TC_Interlocked),
                 typeof(Tests.CSharp.TC_using));
         }
 
@@ -70,6 +71,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunRuntimeEnum()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Enum));
+        }
+
+        public static void RunRuntimeInterlocked()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Interlocked));
         }
 
         public static void RunRuntimeUsing()
