@@ -40,6 +40,21 @@ class Kernel32
     static bool close_handle(intptr_t handle);
     static bool query_performance_frequency(int64_t* frequency);
     static bool query_performance_counter(int64_t* counter);
+    static void initialize_critical_section(void* critical_section);
+    static void delete_critical_section(void* critical_section);
+    static void enter_critical_section(void* critical_section);
+    static void leave_critical_section(void* critical_section);
+    static void initialize_condition_variable(void* condition_variable);
+    static bool sleep_condition_variable_cs(void* condition_variable, void* critical_section, int32_t milliseconds);
+    static void wake_condition_variable(void* condition_variable);
+    static intptr_t create_io_completion_port(intptr_t file_handle, intptr_t existing_completion_port, uintptr_t completion_key,
+                                              int32_t number_of_concurrent_threads);
+    static bool post_queued_completion_status(intptr_t completion_port, uint32_t number_of_bytes_transferred, uintptr_t completion_key,
+                                              intptr_t overlapped);
+    static bool get_queued_completion_status(intptr_t completion_port, uint32_t* number_of_bytes_transferred, uintptr_t* completion_key,
+                                             intptr_t* overlapped, int32_t milliseconds);
+    static bool get_queued_completion_status_ex(intptr_t completion_port, void* completion_port_entries, int32_t count,
+                                                int32_t* number_of_entries_removed, int32_t milliseconds, int32_t alertable);
     static int32_t copy_file2(vm::RtString* existing, vm::RtString* new_file, void* extended_parameters);
     static bool copy_file_ex_private(vm::RtString* src, vm::RtString* dst, intptr_t progress_routine, intptr_t progress_data, int32_t* cancel, int32_t flags);
     static bool create_directory_private(vm::RtString* path, void* security_attributes);

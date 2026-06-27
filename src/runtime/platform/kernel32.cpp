@@ -296,6 +296,108 @@ bool Kernel32::query_performance_counter(int64_t* counter)
     return true;
 }
 
+void Kernel32::initialize_critical_section(void* critical_section)
+{
+    if (critical_section == nullptr)
+        return;
+    ::InitializeCriticalSection(static_cast<CRITICAL_SECTION*>(critical_section));
+}
+
+void Kernel32::delete_critical_section(void* critical_section)
+{
+    if (critical_section == nullptr)
+        return;
+    ::DeleteCriticalSection(static_cast<CRITICAL_SECTION*>(critical_section));
+}
+
+void Kernel32::enter_critical_section(void* critical_section)
+{
+    if (critical_section == nullptr)
+        return;
+    ::EnterCriticalSection(static_cast<CRITICAL_SECTION*>(critical_section));
+}
+
+void Kernel32::leave_critical_section(void* critical_section)
+{
+    if (critical_section == nullptr)
+        return;
+    ::LeaveCriticalSection(static_cast<CRITICAL_SECTION*>(critical_section));
+}
+
+void Kernel32::initialize_condition_variable(void* condition_variable)
+{
+    if (condition_variable == nullptr)
+        return;
+    ::InitializeConditionVariable(static_cast<CONDITION_VARIABLE*>(condition_variable));
+}
+
+bool Kernel32::sleep_condition_variable_cs(void* condition_variable, void* critical_section, int32_t milliseconds)
+{
+    if (condition_variable == nullptr || critical_section == nullptr)
+        return false;
+    DWORD timeout = milliseconds < 0 ? INFINITE : static_cast<DWORD>(milliseconds);
+    return ::SleepConditionVariableCS(static_cast<CONDITION_VARIABLE*>(condition_variable), static_cast<CRITICAL_SECTION*>(critical_section),
+                                      timeout) != 0;
+}
+
+void Kernel32::wake_condition_variable(void* condition_variable)
+{
+    if (condition_variable == nullptr)
+        return;
+    ::WakeConditionVariable(static_cast<CONDITION_VARIABLE*>(condition_variable));
+}
+
+intptr_t Kernel32::create_io_completion_port(intptr_t file_handle, intptr_t existing_completion_port, uintptr_t completion_key,
+                                             int32_t number_of_concurrent_threads)
+{
+    HANDLE h = ::CreateIoCompletionPort(reinterpret_cast<HANDLE>(file_handle), reinterpret_cast<HANDLE>(existing_completion_port),
+                                        static_cast<ULONG_PTR>(completion_key), static_cast<DWORD>(number_of_concurrent_threads));
+    return reinterpret_cast<intptr_t>(h);
+}
+
+bool Kernel32::post_queued_completion_status(intptr_t completion_port, uint32_t number_of_bytes_transferred, uintptr_t completion_key,
+                                             intptr_t overlapped)
+{
+    return ::PostQueuedCompletionStatus(reinterpret_cast<HANDLE>(completion_port), static_cast<DWORD>(number_of_bytes_transferred),
+                                        static_cast<ULONG_PTR>(completion_key), reinterpret_cast<LPOVERLAPPED>(overlapped)) != 0;
+}
+
+bool Kernel32::get_queued_completion_status(intptr_t completion_port, uint32_t* number_of_bytes_transferred, uintptr_t* completion_key,
+                                            intptr_t* overlapped, int32_t milliseconds)
+{
+    DWORD native_bytes = 0;
+    ULONG_PTR native_completion_key = 0;
+    LPOVERLAPPED native_overlapped = nullptr;
+    DWORD timeout = milliseconds < 0 ? INFINITE : static_cast<DWORD>(milliseconds);
+    BOOL ok = ::GetQueuedCompletionStatus(reinterpret_cast<HANDLE>(completion_port), &native_bytes, &native_completion_key, &native_overlapped, timeout);
+    if (number_of_bytes_transferred != nullptr)
+        *number_of_bytes_transferred = static_cast<uint32_t>(native_bytes);
+    if (completion_key != nullptr)
+        *completion_key = static_cast<uintptr_t>(native_completion_key);
+    if (overlapped != nullptr)
+        *overlapped = reinterpret_cast<intptr_t>(native_overlapped);
+    return ok != 0;
+}
+
+bool Kernel32::get_queued_completion_status_ex(intptr_t completion_port, void* completion_port_entries, int32_t count,
+                                               int32_t* number_of_entries_removed, int32_t milliseconds, int32_t alertable)
+{
+    if (completion_port_entries == nullptr || count <= 0)
+    {
+        if (number_of_entries_removed != nullptr)
+            *number_of_entries_removed = 0;
+        return false;
+    }
+
+    ULONG native_entries_removed = 0;
+    DWORD timeout = milliseconds < 0 ? INFINITE : static_cast<DWORD>(milliseconds);
+    BOOL ok = ::GetQueuedCompletionStatusEx(reinterpret_cast<HANDLE>(completion_port), static_cast<LPOVERLAPPED_ENTRY>(completion_port_entries),
+                                            static_cast<ULONG>(count), &native_entries_removed, timeout, alertable != 0 ? TRUE : FALSE);
+    if (number_of_entries_removed != nullptr)
+        *number_of_entries_removed = static_cast<int32_t>(native_entries_removed);
+    return ok != 0;
+}
+
 int32_t Kernel32::copy_file2(vm::RtString* existing, vm::RtString* new_file, void* extended_parameters)
 {
     const HRESULT hr = ::CopyFile2(reinterpret_cast<PCWSTR>(vm::String::get_chars_ptr(existing)), reinterpret_cast<PCWSTR>(vm::String::get_chars_ptr(new_file)),

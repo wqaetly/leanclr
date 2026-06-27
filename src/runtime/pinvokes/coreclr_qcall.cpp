@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <limits>
 
+#include "alloc/general_allocation.h"
 #include "icalls/system_enum.h"
 #include "interp/eval_stack_op.h"
 #include "interp/machine_state.h"
@@ -1550,11 +1551,282 @@ RtResultVoid populate_stack_frame_helper(RtStackFrameHelper* helper, const utils
     RET_VOID_OK();
 }
 
+int32_t g_next_coreclr_thread_id = 1;
+
+RtResult<uint8_t*> get_instance_field_data(vm::RtObject* obj, const char* field_name) noexcept
+{
+    if (obj == nullptr || field_name == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto klass = const_cast<metadata::RtClass*>(obj->klass);
+    if (klass == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    RET_ERR_ON_FAIL(vm::Class::initialize_fields(klass));
+    const metadata::RtFieldInfo* field = vm::Class::get_field_for_name(klass, field_name, true);
+    if (field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+
+    RET_OK(reinterpret_cast<uint8_t*>(obj) + vm::Field::get_instance_field_offset_includes_object_header_for_all_type(field));
+}
+
+void set_instance_int32_field_if_present(vm::RtObject* obj, const char* field_name, int32_t value) noexcept
+{
+    if (obj == nullptr || obj->klass == nullptr)
+    {
+        return;
+    }
+
+    const metadata::RtFieldInfo* field = vm::Class::get_field_for_name(obj->klass, field_name, true);
+    if (field == nullptr)
+    {
+        return;
+    }
+
+    uint8_t* data = reinterpret_cast<uint8_t*>(obj) + vm::Field::get_instance_field_offset_includes_object_header_for_all_type(field);
+    *reinterpret_cast<int32_t*>(data) = value;
+}
+
+void set_instance_bool_field_if_present(vm::RtObject* obj, const char* field_name, bool value) noexcept
+{
+    if (obj == nullptr || obj->klass == nullptr)
+    {
+        return;
+    }
+
+    const metadata::RtFieldInfo* field = vm::Class::get_field_for_name(obj->klass, field_name, true);
+    if (field == nullptr)
+    {
+        return;
+    }
+
+    uint8_t* data = reinterpret_cast<uint8_t*>(obj) + vm::Field::get_instance_field_offset_includes_object_header_for_all_type(field);
+    *reinterpret_cast<bool*>(data) = value;
+}
+
+RtResultVoid ensure_coreclr_thread_initialized(vm::RtObject* thread, bool current_thread) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(uint8_t*, internal_thread_data, get_instance_field_data(thread, "_DONT_USE_InternalThread"));
+    auto internal_thread_slot = reinterpret_cast<intptr_t*>(internal_thread_data);
+    if (*internal_thread_slot != 0)
+    {
+        RET_VOID_OK();
+    }
+
+    auto internal_thread = alloc::GeneralAllocation::malloc_any_zeroed<vm::RtInternalThread>();
+    auto native_thread = alloc::GeneralAllocation::malloc_any_zeroed<vm::RtNativeThread>();
+    if (internal_thread == nullptr || native_thread == nullptr)
+    {
+        alloc::GeneralAllocation::free(internal_thread);
+        alloc::GeneralAllocation::free(native_thread);
+        RET_ERR(RtErr::OutOfMemory);
+    }
+
+    int32_t managed_thread_id = current_thread ? 1 : ++g_next_coreclr_thread_id;
+    internal_thread->handle = native_thread;
+    internal_thread->thread_id = managed_thread_id;
+    internal_thread->managed_id = managed_thread_id;
+    internal_thread->state = current_thread ? vm::RtThreadState::Running : vm::RtThreadState::Unstarted;
+    internal_thread->priority = static_cast<int32_t>(vm::ThreadPriority::Normal);
+
+    *internal_thread_slot = reinterpret_cast<intptr_t>(internal_thread);
+    set_instance_int32_field_if_present(thread, "_priority", static_cast<int32_t>(vm::ThreadPriority::Normal));
+    set_instance_int32_field_if_present(thread, "_managedThreadId", managed_thread_id);
+    set_instance_bool_field_if_present(thread, "_isDead", false);
+    set_instance_bool_field_if_present(thread, "_isThreadPool", false);
+
+    RET_VOID_OK();
+}
+
+RtResult<vm::RtInternalThread*> get_coreclr_internal_thread(vm::RtObject* thread) noexcept
+{
+    RET_ERR_ON_FAIL(ensure_coreclr_thread_initialized(thread, false));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(uint8_t*, internal_thread_data, get_instance_field_data(thread, "_DONT_USE_InternalThread"));
+    auto internal_thread = reinterpret_cast<vm::RtInternalThread*>(*reinterpret_cast<intptr_t*>(internal_thread_data));
+    if (internal_thread == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+    RET_OK(internal_thread);
+}
+
+vm::RtInternalThread* get_coreclr_internal_thread_from_handle(intptr_t thread_handle) noexcept
+{
+    return reinterpret_cast<vm::RtInternalThread*>(thread_handle);
+}
+
 RtResultVoid get_current_thread_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                         interp::RtStackObject*) noexcept
 {
-    auto thread_slot = interp::EvalStackOp::get_param<vm::RtThread**>(params, 0);
-    *thread_slot = vm::Thread::get_current_thread();
+    auto thread_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    if (thread_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    vm::RtObject* current_thread = reinterpret_cast<vm::RtObject*>(vm::Thread::get_current_thread());
+    RET_ERR_ON_FAIL(ensure_coreclr_thread_initialized(current_thread, true));
+    *thread_slot = current_thread;
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_initialize_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                       interp::RtStackObject*) noexcept
+{
+    auto thread_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    if (thread_slot == nullptr || *thread_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    return ensure_coreclr_thread_initialized(*thread_slot, false);
+}
+
+RtResultVoid thread_get_is_background_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                              interp::RtStackObject* ret) noexcept
+{
+    intptr_t thread_handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    vm::RtInternalThread* thread = get_coreclr_internal_thread_from_handle(thread_handle);
+    int32_t is_background =
+        thread != nullptr && (static_cast<int32_t>(thread->state) & static_cast<int32_t>(vm::RtThreadState::Background)) != 0 ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, is_background);
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_set_is_background_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                              interp::RtStackObject*) noexcept
+{
+    intptr_t thread_handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    int32_t value = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    vm::RtInternalThread* thread = get_coreclr_internal_thread_from_handle(thread_handle);
+    if (thread == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    int32_t state = static_cast<int32_t>(thread->state);
+    if (value != 0)
+    {
+        state |= static_cast<int32_t>(vm::RtThreadState::Background);
+    }
+    else
+    {
+        state &= ~static_cast<int32_t>(vm::RtThreadState::Background);
+    }
+    thread->state = static_cast<vm::RtThreadState>(state);
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_get_thread_state_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                             interp::RtStackObject* ret) noexcept
+{
+    intptr_t thread_handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    vm::RtInternalThread* thread = get_coreclr_internal_thread_from_handle(thread_handle);
+    int32_t state = thread != nullptr ? static_cast<int32_t>(thread->state) : static_cast<int32_t>(vm::RtThreadState::Stopped);
+    interp::EvalStackOp::set_return(ret, state);
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_set_priority_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                         interp::RtStackObject*) noexcept
+{
+    auto thread_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    int32_t priority = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    if (thread_slot == nullptr || *thread_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtInternalThread*, thread, get_coreclr_internal_thread(*thread_slot));
+    thread->priority = priority;
+    set_instance_int32_field_if_present(*thread_slot, "_priority", priority);
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_start_internal_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                           interp::RtStackObject*) noexcept
+{
+    intptr_t thread_handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 1);
+    int32_t priority = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    int32_t is_thread_pool = interp::EvalStackOp::get_param<int32_t>(params, 3);
+    (void)interp::EvalStackOp::get_param<Utf16Char*>(params, 4);
+    vm::RtInternalThread* thread = get_coreclr_internal_thread_from_handle(thread_handle);
+    if (thread == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    int32_t state = static_cast<int32_t>(thread->state);
+    state &= ~static_cast<int32_t>(vm::RtThreadState::Unstarted);
+    thread->state = static_cast<vm::RtThreadState>(state);
+    thread->priority = priority;
+    thread->threadpool_thread = is_thread_pool != 0;
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_inform_thread_name_change_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                      const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    (void)interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    (void)interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 2);
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_sleep_internal_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                           interp::RtStackObject*) noexcept
+{
+    int32_t milliseconds = interp::EvalStackOp::get_param<int32_t>(params, 0);
+    vm::Thread::sleep(milliseconds);
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_spin_wait_internal_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                               interp::RtStackObject*) noexcept
+{
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 0);
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_yield_internal_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                           interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, vm::Thread::yield_internal() ? 1 : 0);
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_get_current_os_thread_id_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                     interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<uint64_t>(1));
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_interrupt_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                      interp::RtStackObject*) noexcept
+{
+    (void)interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_join_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                 interp::RtStackObject* ret) noexcept
+{
+    (void)interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 1);
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(1));
+    RET_VOID_OK();
+}
+
+RtResultVoid thread_poll_gc_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*, interp::RtStackObject*) noexcept
+{
     RET_VOID_OK();
 }
 
@@ -1679,6 +1951,120 @@ RtResultVoid kernel32_get_file_type_invoker(metadata::RtManagedMethodPointer, co
         vm::Marshal::set_last_win32_error(error);
     }
     interp::EvalStackOp::set_return(ret, file_type);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_initialize_critical_section_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                          const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    void* critical_section = interp::EvalStackOp::get_param<void*>(params, 0);
+    platform::Kernel32::initialize_critical_section(critical_section);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_delete_critical_section_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                      interp::RtStackObject*) noexcept
+{
+    void* critical_section = interp::EvalStackOp::get_param<void*>(params, 0);
+    platform::Kernel32::delete_critical_section(critical_section);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_enter_critical_section_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                     interp::RtStackObject*) noexcept
+{
+    void* critical_section = interp::EvalStackOp::get_param<void*>(params, 0);
+    platform::Kernel32::enter_critical_section(critical_section);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_leave_critical_section_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                     interp::RtStackObject*) noexcept
+{
+    void* critical_section = interp::EvalStackOp::get_param<void*>(params, 0);
+    platform::Kernel32::leave_critical_section(critical_section);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_initialize_condition_variable_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                            const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    void* condition_variable = interp::EvalStackOp::get_param<void*>(params, 0);
+    platform::Kernel32::initialize_condition_variable(condition_variable);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_sleep_condition_variable_cs_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    void* condition_variable = interp::EvalStackOp::get_param<void*>(params, 0);
+    void* critical_section = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t milliseconds = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    int32_t result = platform::Kernel32::sleep_condition_variable_cs(condition_variable, critical_section, milliseconds) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_wake_condition_variable_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                       const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    void* condition_variable = interp::EvalStackOp::get_param<void*>(params, 0);
+    platform::Kernel32::wake_condition_variable(condition_variable);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_create_io_completion_port_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                        const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t file_handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    intptr_t existing_completion_port = interp::EvalStackOp::get_param<intptr_t>(params, 1);
+    uintptr_t completion_key = interp::EvalStackOp::get_param<uintptr_t>(params, 2);
+    int32_t number_of_concurrent_threads = interp::EvalStackOp::get_param<int32_t>(params, 3);
+    intptr_t result = platform::Kernel32::create_io_completion_port(file_handle, existing_completion_port, completion_key,
+                                                                    number_of_concurrent_threads);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_post_queued_completion_status_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t completion_port = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    uint32_t number_of_bytes_transferred = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    uintptr_t completion_key = interp::EvalStackOp::get_param<uintptr_t>(params, 2);
+    intptr_t overlapped = interp::EvalStackOp::get_param<intptr_t>(params, 3);
+    int32_t result =
+        platform::Kernel32::post_queued_completion_status(completion_port, number_of_bytes_transferred, completion_key, overlapped) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_queued_completion_status_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t completion_port = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    uint32_t* number_of_bytes_transferred = interp::EvalStackOp::get_param<uint32_t*>(params, 1);
+    uintptr_t* completion_key = interp::EvalStackOp::get_param<uintptr_t*>(params, 2);
+    intptr_t* overlapped = interp::EvalStackOp::get_param<intptr_t*>(params, 3);
+    int32_t milliseconds = interp::EvalStackOp::get_param<int32_t>(params, 4);
+    int32_t result = platform::Kernel32::get_queued_completion_status(completion_port, number_of_bytes_transferred, completion_key, overlapped,
+                                                                      milliseconds) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_queued_completion_status_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                              const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t completion_port = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    void* completion_port_entries = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t count = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    int32_t* number_of_entries_removed = interp::EvalStackOp::get_param<int32_t*>(params, 3);
+    int32_t milliseconds = interp::EvalStackOp::get_param<int32_t>(params, 4);
+    int32_t alertable = interp::EvalStackOp::get_param<int32_t>(params, 5);
+    int32_t result = platform::Kernel32::get_queued_completion_status_ex(completion_port, completion_port_entries, count, number_of_entries_removed,
+                                                                         milliseconds, alertable) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
     RET_VOID_OK();
 }
 
@@ -2814,6 +3200,85 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Threading.Thread::GetCurrentThread(System.Runtime.CompilerServices.ObjectHandleOnStack)", nullptr,
                                    get_current_thread_invoker);
     vm::PInvokes::register_pinvoke("System.Threading.Thread::GetCurrentThread", nullptr, get_current_thread_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::Initialize(System.Runtime.CompilerServices.ObjectHandleOnStack)", nullptr,
+                                   thread_initialize_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::Initialize", nullptr, thread_initialize_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Initialize(System.Runtime.CompilerServices.ObjectHandleOnStack)", nullptr,
+                                   thread_initialize_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Initialize", nullptr, thread_initialize_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::GetIsBackground(System.Threading.ThreadHandle)", nullptr,
+                                   thread_get_is_background_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::GetIsBackground", nullptr, thread_get_is_background_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_GetIsBackground(System.Threading.ThreadHandle)", nullptr, thread_get_is_background_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_GetIsBackground", nullptr, thread_get_is_background_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::SetIsBackground(System.Threading.ThreadHandle,Interop/BOOL)", nullptr,
+                                   thread_set_is_background_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::SetIsBackground", nullptr, thread_set_is_background_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_SetIsBackground(System.Threading.ThreadHandle,Interop/BOOL)", nullptr,
+                                   thread_set_is_background_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_SetIsBackground", nullptr, thread_set_is_background_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::GetThreadState(System.Threading.ThreadHandle)", nullptr,
+                                   thread_get_thread_state_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::GetThreadState", nullptr, thread_get_thread_state_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_GetThreadState(System.Threading.ThreadHandle)", nullptr, thread_get_thread_state_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_GetThreadState", nullptr, thread_get_thread_state_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::SetPriority(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)", nullptr,
+                                   thread_set_priority_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::SetPriority", nullptr, thread_set_priority_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_SetPriority(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)", nullptr,
+                                   thread_set_priority_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_SetPriority", nullptr, thread_set_priority_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Threading.Thread::StartInternal(System.Threading.ThreadHandle,System.Int32,System.Int32,Interop/BOOL,System.Char*)", nullptr,
+        thread_start_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::StartInternal", nullptr, thread_start_internal_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Start(System.Threading.ThreadHandle,System.Int32,System.Int32,Interop/BOOL,System.Char*)", nullptr,
+                                   thread_start_internal_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Start", nullptr, thread_start_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::InformThreadNameChange(System.Threading.ThreadHandle,System.String,System.Int32)", nullptr,
+                                   thread_inform_thread_name_change_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::InformThreadNameChange(System.Threading.ThreadHandle,System.Char*,System.Int32)", nullptr,
+                                   thread_inform_thread_name_change_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::InformThreadNameChange", nullptr, thread_inform_thread_name_change_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Threading.Thread::<InformThreadNameChange>g____PInvoke|32_0(System.Threading.ThreadHandle,System.UInt16*,System.Int32)", nullptr,
+        thread_inform_thread_name_change_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::<InformThreadNameChange>g____PInvoke|32_0", nullptr,
+                                   thread_inform_thread_name_change_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_InformThreadNameChange(System.Threading.ThreadHandle,System.String,System.Int32)", nullptr,
+                                   thread_inform_thread_name_change_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_InformThreadNameChange(System.Threading.ThreadHandle,System.Char*,System.Int32)", nullptr,
+                                   thread_inform_thread_name_change_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_InformThreadNameChange", nullptr, thread_inform_thread_name_change_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::SleepInternal(System.Int32)", nullptr, thread_sleep_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::SleepInternal", nullptr, thread_sleep_internal_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Sleep(System.Int32)", nullptr, thread_sleep_internal_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Sleep", nullptr, thread_sleep_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::SpinWaitInternal(System.Int32)", nullptr, thread_spin_wait_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::SpinWaitInternal", nullptr, thread_spin_wait_internal_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_SpinWait(System.Int32)", nullptr, thread_spin_wait_internal_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_SpinWait", nullptr, thread_spin_wait_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::YieldInternal()", nullptr, thread_yield_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::YieldInternal", nullptr, thread_yield_internal_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_YieldThread()", nullptr, thread_yield_internal_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_YieldThread", nullptr, thread_yield_internal_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::GetCurrentOSThreadId()", nullptr, thread_get_current_os_thread_id_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::GetCurrentOSThreadId", nullptr, thread_get_current_os_thread_id_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_GetCurrentOSThreadId()", nullptr, thread_get_current_os_thread_id_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_GetCurrentOSThreadId", nullptr, thread_get_current_os_thread_id_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::Interrupt(System.Threading.ThreadHandle)", nullptr, thread_interrupt_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::Interrupt", nullptr, thread_interrupt_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Interrupt(System.Threading.ThreadHandle)", nullptr, thread_interrupt_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Interrupt", nullptr, thread_interrupt_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::Join(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)", nullptr,
+                                   thread_join_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::Join", nullptr, thread_join_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Join(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)", nullptr, thread_join_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_Join", nullptr, thread_join_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::PollGCInternal()", nullptr, thread_poll_gc_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::PollGCInternal", nullptr, thread_poll_gc_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_PollGC()", nullptr, thread_poll_gc_invoker);
+    vm::PInvokes::register_pinvoke("ThreadNative_PollGC", nullptr, thread_poll_gc_invoker);
     vm::PInvokes::register_pinvoke("System.Diagnostics.Debugger::IsManagedDebuggerAttached()", nullptr, is_managed_debugger_attached_invoker);
     vm::PInvokes::register_pinvoke("System.Diagnostics.Debugger::IsManagedDebuggerAttached", nullptr, is_managed_debugger_attached_invoker);
     vm::PInvokes::register_pinvoke("System.Diagnostics.Debugger::<LogInternal>g____PInvoke|10_0", nullptr, debugger_log_invoker);
@@ -2889,6 +3354,186 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Kernel32::<GetFileType>g____PInvoke|140_0", nullptr, kernel32_get_file_type_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::<GetFileType>g____PInvoke|140_0(System.IntPtr)", nullptr, kernel32_get_file_type_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::<GetFileType>g____PInvoke|140_0", nullptr, kernel32_get_file_type_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::InitializeCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_initialize_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::InitializeCriticalSection", nullptr, kernel32_initialize_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::InitializeCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_initialize_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::InitializeCriticalSection", nullptr, kernel32_initialize_critical_section_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::InitializeCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_initialize_critical_section_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::InitializeCriticalSection", nullptr, kernel32_initialize_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::DeleteCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_delete_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::DeleteCriticalSection", nullptr, kernel32_delete_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::DeleteCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_delete_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::DeleteCriticalSection", nullptr, kernel32_delete_critical_section_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::DeleteCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_delete_critical_section_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::DeleteCriticalSection", nullptr, kernel32_delete_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::EnterCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_enter_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::EnterCriticalSection", nullptr, kernel32_enter_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::EnterCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_enter_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::EnterCriticalSection", nullptr, kernel32_enter_critical_section_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::EnterCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_enter_critical_section_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::EnterCriticalSection", nullptr, kernel32_enter_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::LeaveCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_leave_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::LeaveCriticalSection", nullptr, kernel32_leave_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::LeaveCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_leave_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::LeaveCriticalSection", nullptr, kernel32_leave_critical_section_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::LeaveCriticalSection(Interop/Kernel32/CRITICAL_SECTION*)", nullptr,
+                                   kernel32_leave_critical_section_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::LeaveCriticalSection", nullptr, kernel32_leave_critical_section_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::InitializeConditionVariable(Interop/Kernel32/CONDITION_VARIABLE*)", nullptr,
+                                   kernel32_initialize_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::InitializeConditionVariable", nullptr,
+                                   kernel32_initialize_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::InitializeConditionVariable(Interop/Kernel32/CONDITION_VARIABLE*)", nullptr,
+                                   kernel32_initialize_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::InitializeConditionVariable", nullptr, kernel32_initialize_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::InitializeConditionVariable(Interop/Kernel32/CONDITION_VARIABLE*)", nullptr,
+                                   kernel32_initialize_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::InitializeConditionVariable", nullptr, kernel32_initialize_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<SleepConditionVariableCS>g____PInvoke|57_0(Interop/Kernel32/CONDITION_VARIABLE*,Interop/Kernel32/CRITICAL_SECTION*,System.Int32)",
+        nullptr, kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<SleepConditionVariableCS>g____PInvoke|57_0", nullptr,
+                                   kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<SleepConditionVariableCS>g____PInvoke|57_0(Interop/Kernel32/CONDITION_VARIABLE*,Interop/Kernel32/CRITICAL_SECTION*,System.Int32)",
+        nullptr, kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<SleepConditionVariableCS>g____PInvoke|57_0", nullptr,
+                                   kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<SleepConditionVariableCS>g____PInvoke|57_0(Interop/Kernel32/CONDITION_VARIABLE*,Interop/Kernel32/CRITICAL_SECTION*,System.Int32)",
+        nullptr, kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<SleepConditionVariableCS>g____PInvoke|57_0", nullptr,
+                                   kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::SleepConditionVariableCS(Interop/Kernel32/CONDITION_VARIABLE*,Interop/Kernel32/CRITICAL_SECTION*,System.Int32)",
+        nullptr, kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::SleepConditionVariableCS", nullptr, kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::SleepConditionVariableCS(Interop/Kernel32/CONDITION_VARIABLE*,Interop/Kernel32/CRITICAL_SECTION*,System.Int32)",
+        nullptr, kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::SleepConditionVariableCS", nullptr, kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::SleepConditionVariableCS(Interop/Kernel32/CONDITION_VARIABLE*,Interop/Kernel32/CRITICAL_SECTION*,System.Int32)",
+        nullptr, kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::SleepConditionVariableCS", nullptr, kernel32_sleep_condition_variable_cs_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::WakeConditionVariable(Interop/Kernel32/CONDITION_VARIABLE*)", nullptr,
+                                   kernel32_wake_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::WakeConditionVariable", nullptr, kernel32_wake_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::WakeConditionVariable(Interop/Kernel32/CONDITION_VARIABLE*)", nullptr,
+                                   kernel32_wake_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::WakeConditionVariable", nullptr, kernel32_wake_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::WakeConditionVariable(Interop/Kernel32/CONDITION_VARIABLE*)", nullptr,
+                                   kernel32_wake_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::WakeConditionVariable", nullptr, kernel32_wake_condition_variable_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<CreateIoCompletionPort>g____PInvoke|49_0(System.IntPtr,System.IntPtr,System.UIntPtr,System.Int32)", nullptr,
+        kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<CreateIoCompletionPort>g____PInvoke|49_0", nullptr,
+                                   kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<CreateIoCompletionPort>g____PInvoke|49_0(System.IntPtr,System.IntPtr,System.UIntPtr,System.Int32)",
+                                   nullptr, kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<CreateIoCompletionPort>g____PInvoke|49_0", nullptr,
+                                   kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<CreateIoCompletionPort>g____PInvoke|49_0(System.IntPtr,System.IntPtr,System.UIntPtr,System.Int32)",
+                                   nullptr, kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<CreateIoCompletionPort>g____PInvoke|49_0", nullptr,
+                                   kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::CreateIoCompletionPort(System.IntPtr,System.IntPtr,System.UIntPtr,System.Int32)", nullptr,
+                                   kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::CreateIoCompletionPort", nullptr, kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::CreateIoCompletionPort(System.IntPtr,System.IntPtr,System.UIntPtr,System.Int32)", nullptr,
+                                   kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::CreateIoCompletionPort", nullptr, kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::CreateIoCompletionPort(System.IntPtr,System.IntPtr,System.UIntPtr,System.Int32)", nullptr,
+                                   kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::CreateIoCompletionPort", nullptr, kernel32_create_io_completion_port_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<PostQueuedCompletionStatus>g____PInvoke|50_0(System.IntPtr,System.UInt32,System.UIntPtr,System.IntPtr)", nullptr,
+        kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<PostQueuedCompletionStatus>g____PInvoke|50_0", nullptr,
+                                   kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<PostQueuedCompletionStatus>g____PInvoke|50_0(System.IntPtr,System.UInt32,System.UIntPtr,System.IntPtr)",
+                                   nullptr, kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<PostQueuedCompletionStatus>g____PInvoke|50_0", nullptr,
+                                   kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<PostQueuedCompletionStatus>g____PInvoke|50_0(System.IntPtr,System.UInt32,System.UIntPtr,System.IntPtr)",
+                                   nullptr, kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<PostQueuedCompletionStatus>g____PInvoke|50_0", nullptr,
+                                   kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::PostQueuedCompletionStatus(System.IntPtr,System.UInt32,System.UIntPtr,System.IntPtr)", nullptr,
+                                   kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::PostQueuedCompletionStatus", nullptr, kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::PostQueuedCompletionStatus(System.IntPtr,System.UInt32,System.UIntPtr,System.IntPtr)", nullptr,
+                                   kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::PostQueuedCompletionStatus", nullptr, kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::PostQueuedCompletionStatus(System.IntPtr,System.UInt32,System.UIntPtr,System.IntPtr)", nullptr,
+                                   kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::PostQueuedCompletionStatus", nullptr, kernel32_post_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<GetQueuedCompletionStatus>g____PInvoke|51_0(System.IntPtr,System.UInt32*,System.UIntPtr*,System.IntPtr*,System.Int32)",
+        nullptr, kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetQueuedCompletionStatus>g____PInvoke|51_0", nullptr,
+                                   kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<GetQueuedCompletionStatus>g____PInvoke|51_0(System.IntPtr,System.UInt32*,System.UIntPtr*,System.IntPtr*,System.Int32)",
+        nullptr, kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetQueuedCompletionStatus>g____PInvoke|51_0", nullptr,
+                                   kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<GetQueuedCompletionStatus>g____PInvoke|51_0(System.IntPtr,System.UInt32*,System.UIntPtr*,System.IntPtr*,System.Int32)",
+        nullptr, kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetQueuedCompletionStatus>g____PInvoke|51_0", nullptr,
+                                   kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetQueuedCompletionStatus(System.IntPtr,System.UInt32*,System.UIntPtr*,System.IntPtr*,System.Int32)",
+                                   nullptr, kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetQueuedCompletionStatus", nullptr, kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetQueuedCompletionStatus(System.IntPtr,System.UInt32*,System.UIntPtr*,System.IntPtr*,System.Int32)",
+                                   nullptr, kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetQueuedCompletionStatus", nullptr, kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetQueuedCompletionStatus(System.IntPtr,System.UInt32*,System.UIntPtr*,System.IntPtr*,System.Int32)",
+                                   nullptr, kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetQueuedCompletionStatus", nullptr, kernel32_get_queued_completion_status_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<GetQueuedCompletionStatusEx>g____PInvoke|52_0(System.IntPtr,Interop/Kernel32/OVERLAPPED_ENTRY*,System.Int32,System.Int32*,System.Int32,System.Int32)",
+        nullptr, kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetQueuedCompletionStatusEx>g____PInvoke|52_0", nullptr,
+                                   kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<GetQueuedCompletionStatusEx>g____PInvoke|52_0(System.IntPtr,Interop/Kernel32/OVERLAPPED_ENTRY*,System.Int32,System.Int32*,System.Int32,System.Int32)",
+        nullptr, kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetQueuedCompletionStatusEx>g____PInvoke|52_0", nullptr,
+                                   kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<GetQueuedCompletionStatusEx>g____PInvoke|52_0(System.IntPtr,Interop/Kernel32/OVERLAPPED_ENTRY*,System.Int32,System.Int32*,System.Int32,System.Int32)",
+        nullptr, kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetQueuedCompletionStatusEx>g____PInvoke|52_0", nullptr,
+                                   kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::GetQueuedCompletionStatusEx(System.IntPtr,Interop/Kernel32/OVERLAPPED_ENTRY*,System.Int32,System.Int32*,System.Int32,System.Int32)",
+        nullptr, kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetQueuedCompletionStatusEx", nullptr,
+                                   kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::GetQueuedCompletionStatusEx(System.IntPtr,Interop/Kernel32/OVERLAPPED_ENTRY*,System.Int32,System.Int32*,System.Int32,System.Int32)",
+        nullptr, kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetQueuedCompletionStatusEx", nullptr,
+                                   kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::GetQueuedCompletionStatusEx(System.IntPtr,Interop/Kernel32/OVERLAPPED_ENTRY*,System.Int32,System.Int32*,System.Int32,System.Int32)",
+        nullptr, kernel32_get_queued_completion_status_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetQueuedCompletionStatusEx", nullptr,
+                                   kernel32_get_queued_completion_status_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetEnvironmentVariable(System.String,System.Char&,System.UInt32)", nullptr,
                                    kernel32_get_environment_variable_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetEnvironmentVariable", nullptr, kernel32_get_environment_variable_invoker);
