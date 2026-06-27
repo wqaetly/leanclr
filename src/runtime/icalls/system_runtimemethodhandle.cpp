@@ -31,11 +31,35 @@ bool is_type_named(const metadata::RtClass* klass, const char* namespaze, const 
            std::strcmp(klass->name, name) == 0;
 }
 
+bool is_method_metadata_pointer(const metadata::RtMethodInfo* method) noexcept
+{
+    if (method == nullptr || method->parent == nullptr || method->parent->methods == nullptr)
+    {
+        return false;
+    }
+
+    for (uint16_t i = 0; i < method->parent->method_count; ++i)
+    {
+        if (method->parent->methods[i] == method)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 RtResult<const metadata::RtMethodInfo*> get_method_from_handle_arg(const void* method_arg) noexcept
 {
     if (method_arg == nullptr)
     {
         RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto direct_method = reinterpret_cast<const metadata::RtMethodInfo*>(method_arg);
+    if (is_method_metadata_pointer(direct_method))
+    {
+        RET_OK(direct_method);
     }
 
     const auto& corlib_types = vm::Class::get_corlib_types();

@@ -636,6 +636,13 @@ static RtResultVoid get_module_invoker(metadata::RtManagedMethodPointer methodPt
     RET_VOID_OK();
 }
 
+static RtResultVoid get_module_if_exists_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                 const interp::RtStackObject*, interp::RtStackObject* ret) noexcept
+{
+    EvalStackOp::set_return<vm::RtReflectionModule*>(ret, nullptr);
+    RET_VOID_OK();
+}
+
 /// @icall:
 /// System.RuntimeTypeHandle::internal_from_name(System.String,System.Threading.StackCrawlMark&,System.Reflection.Assembly,System.Boolean,System.Boolean,System.Boolean)
 static RtResultVoid internal_from_name_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
@@ -700,6 +707,10 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] 
     {"System.RuntimeTypeHandle::GetAttributes", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_attributes, get_attributes_invoker},
     {"System.RuntimeTypeHandle::GetMetadataToken(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_metadata_token,
      get_metadata_token_invoker_system_runtimetypehandle},
+    {"System.RuntimeTypeHandle::GetToken(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_metadata_token,
+     get_metadata_token_invoker_system_runtimetypehandle},
+    {"System.RuntimeTypeHandle::GetToken", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_metadata_token,
+     get_metadata_token_invoker_system_runtimetypehandle},
     {"System.RuntimeTypeHandle::GetCorElementType", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_cor_element_type, get_cor_element_type_invoker},
     {"System.RuntimeTypeHandle::HasInstantiation", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::has_instantiation, has_instantiation_invoker},
     {"System.RuntimeTypeHandle::IsComObject(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_com_object, is_com_object_invoker},
@@ -723,6 +734,8 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] 
     {"System.RuntimeTypeHandle::GetGenericTypeDefinition_impl", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_generic_type_definition_impl,
      get_generic_type_definition_impl_invoker},
     {"System.RuntimeTypeHandle::GetModule(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_module, get_module_invoker},
+    {"System.RuntimeTypeHandle::GetModuleIfExists(System.RuntimeType)", nullptr, get_module_if_exists_invoker},
+    {"System.RuntimeTypeHandle::GetModuleIfExists", nullptr, get_module_if_exists_invoker},
     {"System.RuntimeTypeHandle::internal_from_name(System.String,System.Threading.StackCrawlMark&,System.Reflection.Assembly,System.Boolean,System.Boolean,"
      "System.Boolean)",
      (vm::InternalCallFunction)&SystemRuntimeTypeHandle::internal_from_name, internal_from_name_invoker},

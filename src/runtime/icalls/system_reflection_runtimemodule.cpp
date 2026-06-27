@@ -31,6 +31,42 @@ static RtResult<intptr_t> get_metadata_import(vm::RtReflectionModule* module) no
     RET_OK(reinterpret_cast<intptr_t>(module->native_handle));
 }
 
+struct MetadataConstArray
+{
+    int32_t length;
+    intptr_t data;
+};
+
+static RtResult<int32_t> metadata_import_get_property_props(metadata::RtModuleDef* module, int32_t md_token, void** name,
+                                                            int32_t* property_attributes, MetadataConstArray* signature) noexcept
+{
+    if (module == nullptr || name == nullptr || property_attributes == nullptr || signature == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(md_token));
+    if (token.table_type != metadata::TableType::Property)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    auto row = module->get_cli_image().read_property(token.rid);
+    if (!row)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, property_name, module->get_string(row->name));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(utils::BinaryReader, blob_reader, module->get_decoded_blob_reader(row->type_));
+
+    *name = const_cast<char*>(property_name);
+    *property_attributes = static_cast<int32_t>(row->flags);
+    signature->length = static_cast<int32_t>(blob_reader.length());
+    signature->data = reinterpret_cast<intptr_t>(blob_reader.data());
+    RET_OK(0);
+}
+
 /// @icall: System.Reflection.RuntimeModule::get_MetadataToken(System.Reflection.Module)
 static RtResultVoid get_metadata_token_invoker_system_reflection_runtimemodule(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -48,6 +84,21 @@ static RtResultVoid get_metadata_import_invoker(metadata::RtManagedMethodPointer
     auto module = EvalStackOp::get_param<vm::RtReflectionModule*>(params, 0);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(intptr_t, metadata_import, get_metadata_import(module));
     EvalStackOp::set_return(ret, metadata_import);
+    RET_VOID_OK();
+}
+
+/// @icall: System.Reflection.MetadataImport::GetPropertyProps
+static RtResultVoid metadata_import_get_property_props_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                               const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto module = EvalStackOp::get_param<metadata::RtModuleDef*>(params, 5);
+    auto md_token = EvalStackOp::get_param<int32_t>(params, 1);
+    auto name = EvalStackOp::get_param<void**>(params, 2);
+    auto property_attributes = EvalStackOp::get_param<int32_t*>(params, 3);
+    auto signature = EvalStackOp::get_param<MetadataConstArray*>(params, 4);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, hr,
+                                            metadata_import_get_property_props(module, md_token, name, property_attributes, signature));
+    EvalStackOp::set_return(ret, hr);
     RET_VOID_OK();
 }
 
@@ -555,6 +606,7 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeModule::get_internal_c
          (vm::InternalCallFunction)&SystemReflectionRuntimeModule::get_metadata_token, get_metadata_token_invoker_system_reflection_runtimemodule},
         {"System.Reflection.MetadataImport::GetMetadataImport(System.Reflection.RuntimeModule)", nullptr, get_metadata_import_invoker},
         {"System.Reflection.MetadataImport::GetMetadataImport", nullptr, get_metadata_import_invoker},
+        {"System.Reflection.MetadataImport::GetPropertyProps", nullptr, metadata_import_get_property_props_invoker},
         {"System.Reflection.RuntimeModule::GetMDStreamVersion(System.IntPtr)", (vm::InternalCallFunction)&SystemReflectionRuntimeModule::get_md_stream_version,
          get_md_stream_version_invoker},
         {"System.Reflection.RuntimeModule::InternalGetTypes(System.IntPtr)", (vm::InternalCallFunction)&SystemReflectionRuntimeModule::internal_get_types,

@@ -25,6 +25,96 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunType(typeof(Tests.CSharp.Delegates.TC_Delegate_OpenClose));
         }
 
+        public static void RunRuntimeReflection()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Reflection));
+        }
+
+        public static void RunRuntimeReflectionConstString()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_string");
+        }
+
+        public static void RunRuntimeReflectionConstByte()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_byte");
+        }
+
+        public static void RunRuntimeReflectionConstSByte()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_sbyte");
+        }
+
+        public static void RunRuntimeReflectionConstSByte2()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_sbyte2");
+        }
+
+        public static void RunRuntimeReflectionConstShort()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_short");
+        }
+
+        public static void RunRuntimeReflectionConstShort2()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_short2");
+        }
+
+        public static void RunRuntimeReflectionConstInt()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_int");
+        }
+
+        public static void RunRuntimeReflectionConstInt2()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_int2");
+        }
+
+        public static void RunRuntimeReflectionConstLong()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_long");
+        }
+
+        public static void RunRuntimeReflectionConstLong2()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_long2");
+        }
+
+        public static void RunRuntimeReflectionConstFloat()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_float");
+        }
+
+        public static void RunRuntimeReflectionConstDouble()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_double");
+        }
+
+        public static void RunRuntimeReflectionProperty()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "property");
+        }
+
+        public static void RunRuntimeReflectionGetExecutingAssembly()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "GetExecutingAssembly");
+        }
+
+        public static void RunRuntimeReflectionGetCurrentMethod()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "GetMethodBaseCurrentMethod");
+        }
+
+        public static void RunRuntimeReflectionGetNotCtorCCtorMethods()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "GetNotCtorCCtorMethods");
+        }
+
+        public static void RunRuntimeReflectionGetCCtorMethod()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "GetCCtorMethod");
+        }
+
         public static void RunRuntimeDelegateReflectionProbe()
         {
             System.Span<byte> utf8Name = stackalloc byte[3];

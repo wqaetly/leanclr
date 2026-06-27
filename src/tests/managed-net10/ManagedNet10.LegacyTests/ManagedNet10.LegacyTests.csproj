@@ -107,6 +107,7 @@
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_2022_9_27.cs" Link="Regression\Bug_2022_9_27.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_ValueTypeToString_2022_7_22.cs" Link="Regression\Bug_ValueTypeToString_2022_7_22.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_Assembly.cs" Link="Runtime\TC_Assembly.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_ArrayGenericInterface.cs" Link="Runtime\TC_ArrayGenericInterface.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_OpenClose.cs" Link="Runtime\TC_Delegate_OpenClose.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Enum.cs" Link="Runtime\TC_Enum.cs" />
@@ -114,6 +115,7 @@
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_foreach.cs" Link="Runtime\TC_foreach.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Interlocked.cs" Link="Runtime\TC_Interlocked.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Nullable.cs" Link="Runtime\TC_Nullable.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_Reflection.cs" Link="Runtime\TC_Reflection.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_String.cs" Link="Runtime\TC_String.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_using.cs" Link="Runtime\TC_using.cs" />
   </ItemGroup>

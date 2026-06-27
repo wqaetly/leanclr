@@ -54,8 +54,14 @@ bool should_skip_legacy_il_internal_call(const metadata::RtMethodInfo* method) n
         return false;
     }
 
-    return std::strcmp(klass->namespaze, "System") == 0 && std::strcmp(klass->name, "Object") == 0 &&
-           std::strcmp(method->name, "GetType") == 0 && method->parameter_count == 0;
+    if (std::strcmp(klass->namespaze, "System") == 0 && std::strcmp(klass->name, "Object") == 0 &&
+        std::strcmp(method->name, "GetType") == 0 && method->parameter_count == 0)
+    {
+        return true;
+    }
+
+    return std::strcmp(klass->namespaze, "System.Reflection") == 0 && std::strcmp(klass->name, "MethodBase") == 0 &&
+           std::strcmp(method->name, "GetCurrentMethod") == 0 && method->parameter_count == 0;
 }
 
 // Not implemented internal call invoker
@@ -249,6 +255,17 @@ RtResult<InvokeTypeAndMethod> Shim::get_invoker(const metadata::RtMethodInfo* me
 
     // Determine invoker based on method implementation type
     metadata::RtMethodImplAttribute code_type = Method::get_code_type(method);
+
+    if (Method::is_pinvoke(method))
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(const PInvokeRegistry*, entry, PInvokes::get_pinvoke_by_method(method));
+        if (entry)
+        {
+            RET_OK(InvokeTypeAndMethod(RtInvokerType::PInvoke, entry->invoker));
+        }
+
+        RET_OK(InvokeTypeAndMethod(RtInvokerType::PInvoke, fn_not_implemented_pinvoke_invoker));
+    }
 
     switch (code_type)
     {
