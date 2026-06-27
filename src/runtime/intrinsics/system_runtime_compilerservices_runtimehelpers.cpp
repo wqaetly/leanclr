@@ -169,6 +169,13 @@ RtResult<const metadata::RtClass*> SystemRuntimeCompilerServicesRuntimeHelpers::
     RET_OK(obj->klass);
 }
 
+RtResult<uint32_t> SystemRuntimeCompilerServicesRuntimeHelpers::get_num_instance_field_bytes(const void* method_table) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass, get_class_from_method_table_or_typesig(method_table));
+    RET_ERR_ON_FAIL(vm::Class::initialize_fields(const_cast<metadata::RtClass*>(klass)));
+    RET_OK(vm::Class::get_instance_size_without_object_header(klass));
+}
+
 RtResult<metadata::RtElementType> SystemRuntimeCompilerServicesRuntimeHelpers::get_primitive_cor_element_type(const void* method_table) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass, get_class_from_method_table_or_typesig(method_table));
@@ -250,6 +257,20 @@ static RtResultVoid get_method_table_invoker(metadata::RtManagedMethodPointer me
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.Runtime.CompilerServices.MethodTable::GetNumInstanceFieldBytes()
+static RtResultVoid get_num_instance_field_bytes_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    const void* method_table = interp::EvalStackOp::get_param<const void*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(uint32_t, size,
+                                            SystemRuntimeCompilerServicesRuntimeHelpers::get_num_instance_field_bytes(method_table));
+    interp::EvalStackOp::set_return(ret, size);
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.Runtime.CompilerServices.MethodTable::GetPrimitiveCorElementType()
 static RtResultVoid get_primitive_cor_element_type_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -306,6 +327,9 @@ static RtResultVoid is_reference_or_contains_references_invoker(metadata::RtMana
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_runtimehelpers[] = {
     {"System.Runtime.CompilerServices.RuntimeHelpers::GetMethodTable(System.Object)",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table, get_method_table_invoker},
+    {"System.Runtime.CompilerServices.MethodTable::GetNumInstanceFieldBytes()",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_num_instance_field_bytes,
+     get_num_instance_field_bytes_invoker},
     {"System.Runtime.CompilerServices.MethodTable::GetPrimitiveCorElementType()",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_primitive_cor_element_type, get_primitive_cor_element_type_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::CreateSpan<>(System.RuntimeFieldHandle)",

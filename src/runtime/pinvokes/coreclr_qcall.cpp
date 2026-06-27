@@ -1,5 +1,7 @@
 #include "coreclr_qcall.h"
 
+#include <cstring>
+
 #include "icalls/system_enum.h"
 #include "interp/eval_stack_op.h"
 #include "interp/machine_state.h"
@@ -85,6 +87,114 @@ struct StackFrameData
     int32_t column_number;
     bool is_last_frame_from_foreign_exception_stack_trace;
 };
+
+static bool is_value_type_fast_compare_blocked_field_type(metadata::RtElementType element_type) noexcept
+{
+    switch (element_type)
+    {
+    case metadata::RtElementType::R4:
+    case metadata::RtElementType::R8:
+    case metadata::RtElementType::Ptr:
+    case metadata::RtElementType::FnPtr:
+    case metadata::RtElementType::Object:
+    case metadata::RtElementType::String:
+    case metadata::RtElementType::Class:
+    case metadata::RtElementType::Array:
+    case metadata::RtElementType::SZArray:
+        return true;
+    default:
+        return false;
+    }
+}
+
+RtResult<bool> declares_value_type_equals_or_get_hash_code(const metadata::RtClass* klass) noexcept
+{
+    RET_ERR_ON_FAIL(vm::Class::initialize_methods(const_cast<metadata::RtClass*>(klass)));
+    for (uint16_t i = 0; i < klass->method_count; ++i)
+    {
+        const metadata::RtMethodInfo* method = klass->methods[i];
+        if (method == nullptr || method->name == nullptr)
+        {
+            continue;
+        }
+
+        if ((std::strcmp(method->name, "Equals") == 0 && method->parameter_count == 1) ||
+            (std::strcmp(method->name, "GetHashCode") == 0 && method->parameter_count == 0))
+        {
+            RET_OK(true);
+        }
+    }
+
+    RET_OK(false);
+}
+
+RtResult<bool> can_compare_bits_or_use_fast_get_hash_code(const metadata::RtClass* klass) noexcept
+{
+    if (klass == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    if (!vm::Class::is_value_type(klass))
+    {
+        RET_OK(false);
+    }
+
+    if (vm::Class::is_enum_type(klass))
+    {
+        RET_OK(true);
+    }
+
+    if (vm::Class::is_explicit_layout(klass))
+    {
+        RET_OK(false);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, declares_override, declares_value_type_equals_or_get_hash_code(klass));
+    if (declares_override)
+    {
+        RET_OK(false);
+    }
+
+    RET_ERR_ON_FAIL(vm::Class::initialize_fields(const_cast<metadata::RtClass*>(klass)));
+    if (vm::Class::get_has_references(klass))
+    {
+        RET_OK(false);
+    }
+
+    for (uint16_t i = 0; i < klass->field_count; ++i)
+    {
+        const metadata::RtFieldInfo* field = &klass->fields[i];
+        if (!vm::Field::is_instance(field))
+        {
+            continue;
+        }
+
+        metadata::RtElementType element_type = field->type_sig->ele_type;
+        if (is_value_type_fast_compare_blocked_field_type(element_type))
+        {
+            RET_OK(false);
+        }
+
+        if (element_type == metadata::RtElementType::ValueType || element_type == metadata::RtElementType::GenericInst)
+        {
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, field_klass, vm::Class::get_class_from_typesig(field->type_sig));
+            if (!vm::Class::is_value_type(field_klass))
+            {
+                RET_OK(false);
+            }
+
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, nested_can_compare,
+                                                    can_compare_bits_or_use_fast_get_hash_code(field_klass));
+            if (!nested_can_compare)
+            {
+                RET_OK(false);
+            }
+        }
+    }
+
+    RET_OK(true);
+}
 
 RtResult<const metadata::RtTypeSig*> get_type_sig_from_qcall_type_handle(void* qcall_type_handle, void* native_handle) noexcept
 {
@@ -1153,6 +1263,17 @@ RtResultVoid enum_get_values_and_names_invoker(metadata::RtManagedMethodPointer,
     RET_VOID_OK();
 }
 
+RtResultVoid method_table_can_compare_bits_or_use_fast_get_hash_code_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                             const interp::RtStackObject* params,
+                                                                             interp::RtStackObject* ret) noexcept
+{
+    auto method_table = interp::EvalStackOp::get_param<const metadata::RtClass*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, can_compare,
+                                            can_compare_bits_or_use_fast_get_hash_code(method_table));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(can_compare));
+    RET_VOID_OK();
+}
+
 RtResultVoid bcrypt_gen_random_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                        interp::RtStackObject* ret) noexcept
 {
@@ -1183,6 +1304,27 @@ RtResultVoid ntdll_rtl_get_version_invoker(metadata::RtManagedMethodPointer, con
     version->dwBuildNumber = 0;
     version->dwPlatformId = 2; // VER_PLATFORM_WIN32_NT
     interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid ntdll_nt_query_system_information_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 0);
+    void* system_information = interp::EvalStackOp::get_param<void*>(params, 1);
+    uint32_t system_information_length = interp::EvalStackOp::get_param<uint32_t>(params, 2);
+    uint32_t* return_length = interp::EvalStackOp::get_param<uint32_t*>(params, 3);
+
+    if (system_information != nullptr && system_information_length != 0)
+    {
+        std::memset(system_information, 0, system_information_length);
+    }
+    if (return_length != nullptr)
+    {
+        *return_length = 0;
+    }
+
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(-1));
     RET_VOID_OK();
 }
 
@@ -1708,6 +1850,13 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.Enum::GetEnumValuesAndNames(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)",
         nullptr, enum_get_values_and_names_invoker);
     vm::PInvokes::register_pinvoke("System.Enum::GetEnumValuesAndNames", nullptr, enum_get_values_and_names_invoker);
+    vm::PInvokes::register_pinvoke("MethodTable_CanCompareBitsOrUseFastGetHashCode", nullptr,
+                                   method_table_can_compare_bits_or_use_fast_get_hash_code_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.ValueType::<CanCompareBitsOrUseFastGetHashCodeHelper>g____PInvoke|2_0(System.Runtime.CompilerServices.MethodTable*)",
+        nullptr, method_table_can_compare_bits_or_use_fast_get_hash_code_invoker);
+    vm::PInvokes::register_pinvoke("System.ValueType::<CanCompareBitsOrUseFastGetHashCodeHelper>g____PInvoke|2_0", nullptr,
+                                   method_table_can_compare_bits_or_use_fast_get_hash_code_invoker);
     vm::PInvokes::register_pinvoke("BCrypt::BCryptGenRandom(System.IntPtr,System.Byte*,System.Int32,System.Int32)", nullptr,
                                    bcrypt_gen_random_invoker);
     vm::PInvokes::register_pinvoke("BCrypt::BCryptGenRandom", nullptr, bcrypt_gen_random_invoker);
@@ -1718,6 +1867,13 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("NtDll::<RtlGetVersion>g____PInvoke|22_0", nullptr, ntdll_rtl_get_version_invoker);
     vm::PInvokes::register_pinvoke("Interop/NtDll::RtlGetVersion", nullptr, ntdll_rtl_get_version_invoker);
     vm::PInvokes::register_pinvoke("NtDll::RtlGetVersion", nullptr, ntdll_rtl_get_version_invoker);
+    vm::PInvokes::register_pinvoke("Interop/NtDll::NtQuerySystemInformation(System.Int32,System.Void*,System.UInt32,System.UInt32*)",
+                                   nullptr, ntdll_nt_query_system_information_invoker);
+    vm::PInvokes::register_pinvoke("Interop/NtDll::NtQuerySystemInformation", nullptr,
+                                   ntdll_nt_query_system_information_invoker);
+    vm::PInvokes::register_pinvoke("NtDll::NtQuerySystemInformation(System.Int32,System.Void*,System.UInt32,System.UInt32*)", nullptr,
+                                   ntdll_nt_query_system_information_invoker);
+    vm::PInvokes::register_pinvoke("NtDll::NtQuerySystemInformation", nullptr, ntdll_nt_query_system_information_invoker);
     vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<Enable>g____PInvoke|0_0", nullptr, eventpipe_enable_invoker);
     vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<Disable>g____PInvoke|1_0", nullptr, eventpipe_void_invoker);
     vm::PInvokes::register_pinvoke("System.Diagnostics.Tracing.EventPipeInternal::<CreateProvider>g____PInvoke|4_0", nullptr,

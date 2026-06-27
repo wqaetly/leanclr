@@ -2,6 +2,7 @@
 #include "system_activator.h"
 #include "system_array.h"
 #include "system_buffer.h"
+#include "system_datetime.h"
 #include "system_object.h"
 #include "system_reflection_customattribute.h"
 #include "system_reflection_rtfieldinfo.h"
@@ -14,6 +15,7 @@
 #include "system_runtimetype.h"
 #include "system_runtimetypehandle.h"
 #include "system_type.h"
+#include "system_valuetype.h"
 #include "intrinsics/system_string.h"
 #include "system_mathf.h"
 #include "system_threading_interlocked.h"
@@ -38,6 +40,7 @@ void IntrinsicStubs::get_intrinsic_entries(utils::Vector<vm::IntrinsicEntry>& en
     Append(entries, SystemActivator::get_intrinsic_entries());
     Append(entries, SystemArray::get_intrinsic_entries());
     Append(entries, SystemBuffer::get_intrinsic_entries());
+    Append(entries, SystemDateTime::get_intrinsic_entries());
     Append(entries, SystemObject::get_intrinsic_entries());
     Append(entries, SystemReflectionCustomAttribute::get_intrinsic_entries());
     Append(entries, SystemReflectionRtFieldInfo::get_intrinsic_entries());
@@ -50,6 +53,7 @@ void IntrinsicStubs::get_intrinsic_entries(utils::Vector<vm::IntrinsicEntry>& en
     Append(entries, SystemRuntimeType::get_intrinsic_entries());
     Append(entries, SystemRuntimeTypeHandle::get_intrinsic_entries());
     Append(entries, SystemType::get_intrinsic_entries());
+    Append(entries, SystemValueType::get_intrinsic_entries());
     Append(entries, SystemString::get_intrinsic_entries());
     Append(entries, SystemMathF::get_intrinsic_entries());
     Append(entries, SystemThreadingInterlocked::get_intrinsic_entries());
