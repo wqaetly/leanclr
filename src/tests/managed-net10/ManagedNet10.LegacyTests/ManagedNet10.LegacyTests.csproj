@@ -21,6 +21,7 @@
     <Compile Include="MemoryTestEntries.cs" />
     <Compile Include="ObjectMiscTestEntries.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="RuntimeTestEntries.cs" />
     <Compile Include="ArrayCopyRegressionTestEntries.cs" />
     <Compile Include="CorlibToStringTestEntries.cs" />
     <Compile Include="ToStringRegressionTestEntries.cs" />
@@ -104,6 +105,9 @@
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_2022_9_27.cs" Link="Regression\Bug_2022_9_27.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_ValueTypeToString_2022_7_22.cs" Link="Regression\Bug_ValueTypeToString_2022_7_22.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_Enum.cs" Link="Runtime\TC_Enum.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_String.cs" Link="Runtime\TC_String.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_using.cs" Link="Runtime\TC_using.cs" />
   </ItemGroup>
 
 </Project>

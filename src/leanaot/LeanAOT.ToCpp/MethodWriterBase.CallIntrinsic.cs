@@ -171,14 +171,6 @@ namespace LeanAOT.ToCpp
             {
                 return false;
             }
-            switch (methodDef.FullName)
-            {
-            case "System.Void System.String::.ctor(System.SByte*,System.Int32,System.Int32,System.Text.Encoding)":
-            {
-                redirectedMethod = GetRedirectedCtorMethod(methodDef.DeclaringType, methodDef);
-                return true;
-            }
-            }
             return false;
         }
 
@@ -263,6 +255,11 @@ namespace LeanAOT.ToCpp
                 icallsFuncName = "SystemString::newobj_utf8chars_range";
                 break;
             }
+            case "System.Void System.String::.ctor(System.SByte*,System.Int32,System.Int32,System.Text.Encoding)":
+            {
+                icallsFuncName = "SystemString::newobj_utf8chars_range_encoding";
+                break;
+            }
             case "System.Void System.String::.ctor(System.Char,System.Int32)":
             {
                 icallsFuncName = "SystemString::newobj_char_count";
@@ -274,10 +271,6 @@ namespace LeanAOT.ToCpp
                 argsStr = $"*(leanclr::vm::RtReadOnlySpan<leanclr::Utf16Char>*)&{argsStr}";
                 break;
             }
-            //case "System.Void System.String::.ctor(System.SByte*,System.Int32,System.Int32,System.Text.Encoding)":
-            //{
-            //    return false;
-            //}
             default:
             {
                 return false;

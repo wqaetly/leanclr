@@ -38,5 +38,10 @@
     "name": "System.String::.ctor(System.SByte*,System.Int32,System.Int32)",
     "func": "newobj_utf8chars_range",
     "header": "icalls/system_string.h"
+  },
+  {
+    "name": "System.String::.ctor(System.SByte*,System.Int32,System.Int32,System.Text.Encoding)",
+    "func": "newobj_utf8chars_range_encoding",
+    "header": "icalls/system_string.h"
   }
 ]
