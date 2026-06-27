@@ -94,6 +94,71 @@ static RtResult<bool> is_bitwise_equatable_by_typesig(const metadata::RtTypeSig*
     }
 }
 
+static bool is_valid_element_type(metadata::RtElementType element_type) noexcept
+{
+    switch (element_type)
+    {
+    case metadata::RtElementType::Void:
+    case metadata::RtElementType::Boolean:
+    case metadata::RtElementType::Char:
+    case metadata::RtElementType::I1:
+    case metadata::RtElementType::U1:
+    case metadata::RtElementType::I2:
+    case metadata::RtElementType::U2:
+    case metadata::RtElementType::I4:
+    case metadata::RtElementType::U4:
+    case metadata::RtElementType::I8:
+    case metadata::RtElementType::U8:
+    case metadata::RtElementType::R4:
+    case metadata::RtElementType::R8:
+    case metadata::RtElementType::String:
+    case metadata::RtElementType::Ptr:
+    case metadata::RtElementType::ByRef:
+    case metadata::RtElementType::ValueType:
+    case metadata::RtElementType::Class:
+    case metadata::RtElementType::Var:
+    case metadata::RtElementType::Array:
+    case metadata::RtElementType::GenericInst:
+    case metadata::RtElementType::TypedByRef:
+    case metadata::RtElementType::I:
+    case metadata::RtElementType::U:
+    case metadata::RtElementType::FnPtr:
+    case metadata::RtElementType::Object:
+    case metadata::RtElementType::SZArray:
+    case metadata::RtElementType::MVar:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool looks_like_leanclr_type_sig(const metadata::RtTypeSig* type_sig) noexcept
+{
+    if (type_sig == nullptr)
+    {
+        return false;
+    }
+
+    return is_valid_element_type(type_sig->ele_type) && type_sig->field_or_param_attrs == 0 && !type_sig->pinned && type_sig->num_mods == 0;
+}
+
+static RtResult<const metadata::RtClass*> get_class_from_method_table_or_typesig(const void* method_table) noexcept
+{
+    if (method_table == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto type_sig = reinterpret_cast<const metadata::RtTypeSig*>(method_table);
+    if (looks_like_leanclr_type_sig(type_sig))
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+        RET_OK(klass);
+    }
+
+    RET_OK(reinterpret_cast<const metadata::RtClass*>(method_table));
+}
+
 RtResult<const metadata::RtClass*> SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table(vm::RtObject* obj) noexcept
 {
     if (obj == nullptr)
@@ -104,20 +169,16 @@ RtResult<const metadata::RtClass*> SystemRuntimeCompilerServicesRuntimeHelpers::
     RET_OK(obj->klass);
 }
 
-RtResult<metadata::RtElementType> SystemRuntimeCompilerServicesRuntimeHelpers::get_primitive_cor_element_type(
-    const metadata::RtClass* method_table) noexcept
+RtResult<metadata::RtElementType> SystemRuntimeCompilerServicesRuntimeHelpers::get_primitive_cor_element_type(const void* method_table) noexcept
 {
-    if (method_table == nullptr)
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass, get_class_from_method_table_or_typesig(method_table));
+
+    if (vm::Class::is_enum_type(klass))
     {
-        RET_ERR(RtErr::ArgumentNull);
+        RET_OK(klass->element_class->by_val->ele_type);
     }
 
-    if (vm::Class::is_enum_type(method_table))
-    {
-        RET_OK(method_table->element_class->by_val->ele_type);
-    }
-
-    RET_OK(method_table->by_val->ele_type);
+    RET_OK(klass->by_val->ele_type);
 }
 
 RtResult<vm::RtReadOnlySpan<uint8_t>> SystemRuntimeCompilerServicesRuntimeHelpers::create_span(const metadata::RtMethodInfo* method,
@@ -195,7 +256,7 @@ static RtResultVoid get_primitive_cor_element_type_invoker(metadata::RtManagedMe
 {
     (void)methodPtr;
     (void)method;
-    const metadata::RtClass* method_table = interp::EvalStackOp::get_param<const metadata::RtClass*>(params, 0);
+    const void* method_table = interp::EvalStackOp::get_param<const void*>(params, 0);
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtElementType, element_type,
                                             SystemRuntimeCompilerServicesRuntimeHelpers::get_primitive_cor_element_type(method_table));

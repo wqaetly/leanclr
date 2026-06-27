@@ -358,6 +358,23 @@ RtResult<bool> SystemRuntimeType::get_is_actual_interface(vm::RtReflectionRuntim
     RET_OK(vm::Class::is_interface(klass));
 }
 
+RtResult<bool> SystemRuntimeType::get_is_actual_enum(vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    if (type_sig->by_ref)
+    {
+        RET_OK(false);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_OK(vm::Class::is_enum_type(klass));
+}
+
 RtResult<bool> SystemRuntimeType::is_delegate(vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
     if (runtime_type == nullptr)
@@ -485,6 +502,17 @@ static RtResultVoid get_parent_type_invoker(metadata::RtManagedMethodPointer, co
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.RuntimeType::get_IsActualEnum()
+static RtResultVoid get_is_actual_enum_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                               interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, is_enum, SystemRuntimeType::get_is_actual_enum(runtime_type));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(is_enum));
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.RuntimeType::get_IsActualInterface()
 static RtResultVoid get_is_actual_interface_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                     interp::RtStackObject* ret) noexcept
@@ -571,6 +599,7 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_runtimetype[] = {
     {"System.RuntimeType::get_BaseType", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
     {"System.RuntimeType::GetBaseType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
     {"System.RuntimeType::GetParentType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
+    {"System.RuntimeType::get_IsActualEnum", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_actual_enum, get_is_actual_enum_invoker},
     {"System.RuntimeType::get_IsActualInterface", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_actual_interface, get_is_actual_interface_invoker},
     {"System.RuntimeType::IsDelegate()", (vm::IntrinsicFunction)&SystemRuntimeType::is_delegate, is_delegate_invoker},
     {"System.RuntimeType::get_IsGenericType", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_generic_type, get_is_generic_type_invoker},

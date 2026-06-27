@@ -134,6 +134,7 @@ struct EventKeyEqual
 
 static utils::HashMap<const metadata::RtTypeSig*, RtReflectionType*, metadata::TypeSigIgnoreAttrsHasher, metadata::TypeSigIgnoreAttrsEqual>
     s_class_reflection_type_map;
+static utils::HashMap<const metadata::RtClass*, RtReflectionType*> s_klass_reflection_type_map;
 static utils::HashMap<MethodKey, RtReflectionMethod*, MethodKeyHash, MethodKeyEqual> s_method_reflection_map;
 static utils::HashMap<MethodKey, RtArray*, MethodKeyHash, MethodKeyEqual> s_method_params_map;
 static utils::HashMap<FieldKey, RtReflectionField*, FieldKeyHash, FieldKeyEqual> s_field_reflection_map;
@@ -245,15 +246,24 @@ RtResult<RtReflectionType*> Reflection::get_type_reflection_object(const metadat
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ref_obj_raw, LEANCLR_NEWOBJ_INTERNAL(runtime_type_klass, "Reflection::get_type_reflection_object"));
     auto ref_obj = reinterpret_cast<RtReflectionType*>(ref_obj_raw);
 
-    s_class_reflection_type_map.emplace(pooled_type_sig, ref_obj);
     ref_obj->type_handle = pooled_type_sig;
     ref_obj->cache = nullptr;
-    RET_OK(ref_obj);
+
+    auto inserted = s_class_reflection_type_map.emplace(pooled_type_sig, ref_obj);
+    RET_OK(inserted.first->second);
 }
 
 RtResult<RtReflectionType*> Reflection::get_klass_reflection_object(const metadata::RtClass* klass)
 {
-    return get_type_reflection_object(Class::get_by_val_type_sig(klass));
+    auto found = s_klass_reflection_type_map.find(klass);
+    if (found != s_klass_reflection_type_map.end())
+    {
+        RET_OK(found->second);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, ref_type, get_type_reflection_object(Class::get_by_val_type_sig(klass)));
+    auto inserted = s_klass_reflection_type_map.emplace(klass, ref_type);
+    RET_OK(inserted.first->second);
 }
 
 RtResult<RtReflectionMethod*> Reflection::get_method_reflection_object(const metadata::RtMethodInfo* method, const metadata::RtClass* reflection_at_klass)
@@ -564,6 +574,7 @@ static void visit_object_hashmap(const utils::HashMap<TKey, TValue, THash, TEqua
 static void visit_reflection_object_roots(gc::GcVisitObjectRoot visit, void* userdata)
 {
     visit_object_hashmap(s_class_reflection_type_map, visit, userdata);
+    visit_object_hashmap(s_klass_reflection_type_map, visit, userdata);
     visit_object_hashmap(s_method_reflection_map, visit, userdata);
     visit_object_hashmap(s_method_params_map, visit, userdata);
     visit_object_hashmap(s_field_reflection_map, visit, userdata);

@@ -44,6 +44,65 @@ RtResultVoid SystemArray::set_generic_value_impl(vm::RtArray* arr, int32_t index
     RET_VOID_OK();
 }
 
+static metadata::RtElementType get_normalized_integral_array_element_type(metadata::RtElementType element_type) noexcept
+{
+    switch (element_type)
+    {
+    case metadata::RtElementType::U1:
+        return metadata::RtElementType::I1;
+    case metadata::RtElementType::U2:
+        return metadata::RtElementType::I2;
+    case metadata::RtElementType::U4:
+        return metadata::RtElementType::I4;
+    case metadata::RtElementType::U8:
+        return metadata::RtElementType::I8;
+    case metadata::RtElementType::U:
+        return metadata::RtElementType::I;
+    default:
+        return element_type;
+    }
+}
+
+static metadata::RtElementType get_array_copy_element_type(const metadata::RtClass* klass) noexcept
+{
+    if (vm::Class::is_enum_type(klass))
+    {
+        klass = klass->element_class;
+    }
+
+    switch (klass->by_val->ele_type)
+    {
+    case metadata::RtElementType::I1:
+    case metadata::RtElementType::U1:
+    case metadata::RtElementType::I2:
+    case metadata::RtElementType::U2:
+    case metadata::RtElementType::I4:
+    case metadata::RtElementType::U4:
+    case metadata::RtElementType::I8:
+    case metadata::RtElementType::U8:
+    case metadata::RtElementType::I:
+    case metadata::RtElementType::U:
+        return get_normalized_integral_array_element_type(klass->by_val->ele_type);
+    default:
+        return klass->by_val->ele_type;
+    }
+}
+
+static bool is_value_array_copy_compatible(const metadata::RtClass* source_element_class, const metadata::RtClass* destination_element_class) noexcept
+{
+    if (source_element_class == destination_element_class)
+    {
+        return true;
+    }
+
+    if (!vm::Class::is_enum_type(source_element_class) && !vm::Class::is_enum_type(destination_element_class))
+    {
+        return false;
+    }
+
+    return get_array_copy_element_type(source_element_class) == get_array_copy_element_type(destination_element_class);
+}
+
 RtResultVoid SystemArray::copy(vm::RtArray* source_array, int32_t source_index, vm::RtArray* destination_array, int32_t destination_index,
                                int32_t length) noexcept
 {
@@ -79,8 +138,17 @@ RtResultVoid SystemArray::copy(vm::RtArray* source_array, int32_t source_index, 
 
     if (source_class != destination_class)
     {
-        if (vm::Class::is_value_type(source_element_class) || vm::Class::is_value_type(destination_element_class) ||
-            !vm::Class::is_assignable_from(source_element_class, destination_element_class))
+        bool compatible = false;
+        if (vm::Class::is_value_type(source_element_class) || vm::Class::is_value_type(destination_element_class))
+        {
+            compatible = is_value_array_copy_compatible(source_element_class, destination_element_class);
+        }
+        else
+        {
+            compatible = vm::Class::is_assignable_from(source_element_class, destination_element_class);
+        }
+
+        if (!compatible)
         {
             RET_ERR(RtErr::ArrayTypeMismatch);
         }

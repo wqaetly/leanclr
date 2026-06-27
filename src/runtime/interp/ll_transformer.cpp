@@ -7,6 +7,7 @@
 #include "vm/rt_string.h"
 #include "vm/assembly.h"
 #include "vm/array_class.h"
+#include "vm/reflection.h"
 #include "metadata/metadata_const.h"
 #include "metadata/module_def.h"
 #include "utils/platform.h"
@@ -1563,7 +1564,15 @@ RtResultVoid Transformer::transform_instructions()
             case hl::OpCodeEnum::LdToken:
             {
                 ll_inst->set_opcode(OpCodeEnum::LdToken);
-                setup_inst_resolved_data(ll_inst, (const void*)hl_inst->get_runtime_handle().get_handle_without_type());
+                metadata::RtRuntimeHandle handle = metadata::RtEncodedRuntimeHandle::decode(hl_inst->get_runtime_handle());
+                const void* token_data = handle.value;
+                if (handle.is_type())
+                {
+                    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, ref_type,
+                                                            vm::Reflection::get_type_reflection_object(handle.typeSig));
+                    token_data = ref_type;
+                }
+                setup_inst_resolved_data(ll_inst, token_data);
                 break;
             }
             case hl::OpCodeEnum::Ckfinite:

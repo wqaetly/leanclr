@@ -8,15 +8,49 @@ namespace leanclr
 {
 namespace intrinsics
 {
+namespace
+{
 
-RtResult<vm::RtReflectionRuntimeType*> SystemType::get_type_from_handle(const metadata::RtTypeSig* type_handle) noexcept
+bool is_plausible_pointer(const void* value) noexcept
+{
+    auto address = reinterpret_cast<uintptr_t>(value);
+    return address >= 0x10000 && (address % alignof(void*) == 0);
+}
+
+bool is_runtime_type_object(const void* value, const metadata::RtClass* runtime_type_klass) noexcept
+{
+    if (!is_plausible_pointer(value))
+    {
+        return false;
+    }
+
+    auto obj = reinterpret_cast<const vm::RtObject*>(value);
+    return obj->klass == runtime_type_klass;
+}
+
+} // namespace
+
+RtResult<vm::RtReflectionRuntimeType*> SystemType::get_type_from_handle(const void* type_handle) noexcept
 {
     if (type_handle == nullptr)
     {
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_handle));
+    auto runtime_type_klass = vm::Class::get_corlib_types().cls_runtimetype;
+    if (is_runtime_type_object(type_handle, runtime_type_klass))
+    {
+        RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(const_cast<void*>(type_handle)));
+    }
+
+    auto type_object = *reinterpret_cast<void* const*>(type_handle);
+    if (is_runtime_type_object(type_object, runtime_type_klass))
+    {
+        RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(type_object));
+    }
+
+    auto type_sig = reinterpret_cast<const metadata::RtTypeSig*>(type_handle);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, ref_type, vm::Reflection::get_klass_reflection_object(klass));
     RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(ref_type));
 }
@@ -37,7 +71,7 @@ static RtResultVoid get_type_from_handle_invoker(metadata::RtManagedMethodPointe
 {
     (void)methodPtr;
     (void)method;
-    const metadata::RtTypeSig* type_handle = interp::EvalStackOp::get_param<const metadata::RtTypeSig*>(params, 0);
+    const void* type_handle = interp::EvalStackOp::get_param<const void*>(params, 0);
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, runtime_type, SystemType::get_type_from_handle(type_handle));
     interp::EvalStackOp::set_return(ret, runtime_type);

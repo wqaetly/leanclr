@@ -11,6 +11,7 @@
 #include "utils/rt_vector.h"
 #include "utils/string_builder.h"
 #include "vm/assembly.h"
+#include "vm/array_class.h"
 #include "vm/class.h"
 #include "vm/delegate.h"
 #include "vm/field.h"
@@ -25,6 +26,7 @@
 #include "vm/rt_array.h"
 #include "vm/rt_string.h"
 #include "vm/rt_thread.h"
+#include "vm/type.h"
 
 namespace leanclr
 {
@@ -140,6 +142,69 @@ RtResult<metadata::RtModuleDef*> get_module_from_qcall_module(void* qcall_module
     RET_OK(runtime_module->native_handle);
 }
 
+RtResult<metadata::RtAssembly*> get_assembly_from_qcall_assembly(void* qcall_assembly, void* native_handle) noexcept
+{
+    if (native_handle != nullptr)
+    {
+        RET_OK(reinterpret_cast<metadata::RtAssembly*>(native_handle));
+    }
+
+    if (qcall_assembly == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto runtime_assembly_klass = vm::Class::get_corlib_types().cls_reflection_assembly;
+    auto direct_assembly = reinterpret_cast<vm::RtReflectionAssembly*>(qcall_assembly);
+    if (direct_assembly->klass == runtime_assembly_klass)
+    {
+        RET_OK(direct_assembly->assembly);
+    }
+
+    auto runtime_assembly = *reinterpret_cast<vm::RtReflectionAssembly**>(qcall_assembly);
+    if (runtime_assembly == nullptr || runtime_assembly->klass != runtime_assembly_klass)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    RET_OK(runtime_assembly->assembly);
+}
+
+RtResult<vm::RtArray*> create_array_instance(void* qcall_type_handle, void* native_handle, int32_t rank, int32_t* lengths,
+                                             int32_t* lower_bounds, bool from_array_type) noexcept
+{
+    if (rank <= 0 || rank > static_cast<int32_t>(metadata::RT_MAX_ARRAY_RANK) || lengths == nullptr)
+    {
+        RET_ERR(RtErr::Argument);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            get_type_sig_from_qcall_type_handle(qcall_type_handle, native_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+
+    if (from_array_type)
+    {
+        if (!vm::Class::is_array_or_szarray(klass))
+        {
+            RET_ERR(RtErr::Argument);
+        }
+
+        if (rank == 1 && (lower_bounds == nullptr || lower_bounds[0] == 0) && vm::Class::is_szarray_class(klass))
+        {
+            return LEANCLR_NEW_SZARRAY_FROM_ARRAY_KLASS_INTERNAL(klass, lengths[0], "Array_CreateInstance");
+        }
+
+        return LEANCLR_NEW_MDARRAY_FROM_ARRAY_KLASS_INTERNAL(klass, lengths, lower_bounds, "Array_CreateInstance");
+    }
+
+    if (rank == 1 && (lower_bounds == nullptr || lower_bounds[0] == 0))
+    {
+        return LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(klass, lengths[0], "Array_CreateInstance");
+    }
+
+    return LEANCLR_NEW_MDARRAY_FROM_ELE_KLASS_INTERNAL(klass, rank, lengths, lower_bounds, "Array_CreateInstance");
+}
+
 RtResultVoid append_basic_type_name(utils::Utf8StringBuilder& sb, const metadata::RtTypeSig* type_sig) noexcept
 {
     switch (type_sig->ele_type)
@@ -208,6 +273,70 @@ RtResult<vm::RtString*> construct_type_name(void* qcall_type_handle, void* nativ
     }
 
     RET_OK(vm::String::create_string_from_utf8chars(sb.get_const_chars(), static_cast<int32_t>(sb.length())));
+}
+
+RtResult<vm::RtReflectionType*> get_runtime_assembly_type_core(metadata::RtAssembly* assembly, const char* type_name,
+                                                               void** nested_type_names, int32_t nested_type_names_length, bool ignore_case) noexcept
+{
+    if (assembly == nullptr || assembly->mod == nullptr || type_name == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+    if (nested_type_names_length < 0 || (nested_type_names_length > 0 && nested_type_names == nullptr))
+    {
+        RET_ERR(RtErr::Argument);
+    }
+
+    utils::Utf8StringBuilder full_name;
+    full_name.append_cstr(type_name);
+    for (int32_t i = 0; i < nested_type_names_length; ++i)
+    {
+        auto nested_type_name = reinterpret_cast<const char*>(nested_type_names[i]);
+        if (nested_type_name == nullptr)
+        {
+            RET_ERR(RtErr::ArgumentNull);
+        }
+        full_name.append_char('+');
+        full_name.append_cstr(nested_type_name);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        const metadata::RtTypeSig*, resolved_type_sig,
+        vm::Type::resolve_assembly_qualified_name(assembly->mod, full_name.get_const_chars(), full_name.length(), ignore_case));
+    if (resolved_type_sig == nullptr)
+    {
+        RET_OK(nullptr);
+    }
+
+    return vm::Reflection::get_type_reflection_object(resolved_type_sig);
+}
+
+RtResult<vm::RtReflectionType*> get_runtime_assembly_type_core_ignore_case(metadata::RtAssembly* assembly, const Utf16Char* type_name,
+                                                                           void** nested_type_names, int32_t nested_type_names_length) noexcept
+{
+    if (type_name == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+    if (nested_type_names_length < 0 || (nested_type_names_length > 0 && nested_type_names == nullptr))
+    {
+        RET_ERR(RtErr::Argument);
+    }
+
+    utils::Utf8StringBuilder full_name(type_name);
+    for (int32_t i = 0; i < nested_type_names_length; ++i)
+    {
+        auto nested_type_name = reinterpret_cast<const Utf16Char*>(nested_type_names[i]);
+        if (nested_type_name == nullptr)
+        {
+            RET_ERR(RtErr::ArgumentNull);
+        }
+        full_name.append_char('+');
+        full_name.append_utf16_str(nested_type_name, static_cast<size_t>(utils::StringUtil::get_utf16chars_length(nested_type_name)));
+    }
+
+    full_name.sure_null_terminator_but_not_append();
+    return get_runtime_assembly_type_core(assembly, full_name.get_const_chars(), nullptr, 0, true);
 }
 
 RtResult<int32_t> get_cor_element_type(void* type_handle) noexcept
@@ -995,6 +1124,23 @@ RtResultVoid method_base_get_current_method_invoker(metadata::RtManagedMethodPoi
     RET_VOID_OK();
 }
 
+RtResultVoid array_create_instance_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                           interp::RtStackObject*) noexcept
+{
+    auto qcall_type_handle = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t rank = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    auto lengths = interp::EvalStackOp::get_param<int32_t*>(params, 3);
+    auto lower_bounds = interp::EvalStackOp::get_param<int32_t*>(params, 4);
+    bool from_array_type = interp::EvalStackOp::get_param<int32_t>(params, 5) != 0;
+    auto ret_array = interp::EvalStackOp::get_param<vm::RtArray**>(params, 6);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, array,
+                                            create_array_instance(qcall_type_handle, native_handle, rank, lengths, lower_bounds, from_array_type));
+    *ret_array = array;
+    RET_VOID_OK();
+}
+
 RtResultVoid enum_get_values_and_names_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                interp::RtStackObject*) noexcept
 {
@@ -1295,6 +1441,51 @@ RtResultVoid get_module_types_invoker(metadata::RtManagedMethodPointer, const me
     RET_VOID_OK();
 }
 
+RtResultVoid assembly_get_type_core_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                            interp::RtStackObject*) noexcept
+{
+    auto qcall_assembly = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto type_name = interp::EvalStackOp::get_param<const char*>(params, 2);
+    auto nested_type_names = interp::EvalStackOp::get_param<void**>(params, 3);
+    int32_t nested_type_names_length = interp::EvalStackOp::get_param<int32_t>(params, 4);
+    auto ret_type = interp::EvalStackOp::get_param<vm::RtReflectionType**>(params, 5);
+    if (ret_type == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly,
+                                            get_assembly_from_qcall_assembly(qcall_assembly, native_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        vm::RtReflectionType*, type, get_runtime_assembly_type_core(assembly, type_name, nested_type_names, nested_type_names_length, false));
+    *ret_type = type;
+    RET_VOID_OK();
+}
+
+RtResultVoid assembly_get_type_core_ignore_case_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                        const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto qcall_assembly = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto type_name = interp::EvalStackOp::get_param<const Utf16Char*>(params, 2);
+    auto nested_type_names = interp::EvalStackOp::get_param<void**>(params, 3);
+    int32_t nested_type_names_length = interp::EvalStackOp::get_param<int32_t>(params, 4);
+    auto ret_type = interp::EvalStackOp::get_param<vm::RtReflectionType**>(params, 5);
+    if (ret_type == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly,
+                                            get_assembly_from_qcall_assembly(qcall_assembly, native_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, type,
+                                            get_runtime_assembly_type_core_ignore_case(assembly, type_name, nested_type_names,
+                                                                                       nested_type_names_length));
+    *ret_type = type;
+    RET_VOID_OK();
+}
+
 RtResultVoid metadata_import_enum_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                           interp::RtStackObject*) noexcept
 {
@@ -1506,6 +1697,12 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Reflection.MethodBase::GetCurrentMethod(System.Runtime.CompilerServices.StackCrawlMarkHandle)", nullptr,
                                    method_base_get_current_method_invoker);
     vm::PInvokes::register_pinvoke("System.Reflection.MethodBase::GetCurrentMethod", nullptr, method_base_get_current_method_invoker);
+    vm::PInvokes::register_pinvoke("Array_CreateInstance", nullptr, array_create_instance_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Array::<InternalCreate>g____PInvoke|0_0(System.Runtime.CompilerServices.QCallTypeHandle,System.Int32,System.Int32*,System.Int32*,System.Boolean,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, array_create_instance_invoker);
+    vm::PInvokes::register_pinvoke("System.Array::<InternalCreate>g____PInvoke|0_0", nullptr, array_create_instance_invoker);
+    vm::PInvokes::register_pinvoke("System.Array::InternalCreate", nullptr, array_create_instance_invoker);
     vm::PInvokes::register_pinvoke("Enum_GetValuesAndNames", nullptr, enum_get_values_and_names_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Enum::GetEnumValuesAndNames(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)",
@@ -1593,6 +1790,18 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.Reflection.RuntimeModule::GetTypes(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, get_module_types_invoker);
     vm::PInvokes::register_pinvoke("System.Reflection.RuntimeModule::GetTypes", nullptr, get_module_types_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_GetTypeCore", nullptr, assembly_get_type_core_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeAssembly::<GetTypeCore>g____PInvoke|25_0(System.Runtime.CompilerServices.QCallAssembly,System.Byte*,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, assembly_get_type_core_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeAssembly::<GetTypeCore>g____PInvoke|25_0", nullptr,
+                                   assembly_get_type_core_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_GetTypeCoreIgnoreCase", nullptr, assembly_get_type_core_ignore_case_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeAssembly::<GetTypeCoreIgnoreCase>g____PInvoke|26_0(System.Runtime.CompilerServices.QCallAssembly,System.UInt16*,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, assembly_get_type_core_ignore_case_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeAssembly::<GetTypeCoreIgnoreCase>g____PInvoke|26_0", nullptr,
+                                   assembly_get_type_core_ignore_case_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Reflection.MetadataImport::<Enum>g____PInvoke|8_0(System.IntPtr,System.Int32,System.Int32,System.Int32*,System.Int32*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, metadata_import_enum_invoker);

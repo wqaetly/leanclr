@@ -73,7 +73,7 @@ namespace ManagedNet10.LegacyTests
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Legacy test failed: " + type.FullName + "." + method.Name, ex);
+                    throw CreateFailure(type, method.Name, ex);
                 }
                 executed++;
             }
@@ -100,8 +100,13 @@ namespace ManagedNet10.LegacyTests
             }
             catch (Exception ex)
             {
-                throw new Exception("Legacy test failed: " + type.FullName + "." + methodName, ex);
+                throw CreateFailure(type, methodName, ex);
             }
+        }
+
+        private static Exception CreateFailure(Type type, string methodName, Exception ex)
+        {
+            return new Exception("Legacy test failed: " + type.FullName + "." + methodName, ex);
         }
     }
 }
