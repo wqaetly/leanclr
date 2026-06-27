@@ -169,6 +169,16 @@ RtResult<const metadata::RtClass*> SystemRuntimeCompilerServicesRuntimeHelpers::
     RET_OK(obj->klass);
 }
 
+RtResult<bool> SystemRuntimeCompilerServicesRuntimeHelpers::object_has_component_size(vm::RtObject* obj) noexcept
+{
+    if (obj == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    RET_OK(vm::Class::is_array_or_szarray(obj->klass) || vm::Class::is_string_class(obj->klass));
+}
+
 RtResult<uint32_t> SystemRuntimeCompilerServicesRuntimeHelpers::get_num_instance_field_bytes(const void* method_table) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass, get_class_from_method_table_or_typesig(method_table));
@@ -257,6 +267,20 @@ static RtResultVoid get_method_table_invoker(metadata::RtManagedMethodPointer me
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::ObjectHasComponentSize(System.Object)
+static RtResultVoid object_has_component_size_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                                      const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    vm::RtObject* obj = interp::EvalStackOp::get_param<vm::RtObject*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result,
+                                            SystemRuntimeCompilerServicesRuntimeHelpers::object_has_component_size(obj));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.Runtime.CompilerServices.MethodTable::GetNumInstanceFieldBytes()
 static RtResultVoid get_num_instance_field_bytes_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -327,6 +351,9 @@ static RtResultVoid is_reference_or_contains_references_invoker(metadata::RtMana
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_runtimehelpers[] = {
     {"System.Runtime.CompilerServices.RuntimeHelpers::GetMethodTable(System.Object)",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table, get_method_table_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::ObjectHasComponentSize(System.Object)",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::object_has_component_size,
+     object_has_component_size_invoker},
     {"System.Runtime.CompilerServices.MethodTable::GetNumInstanceFieldBytes()",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_num_instance_field_bytes,
      get_num_instance_field_bytes_invoker},

@@ -12,6 +12,7 @@ class SystemRuntimeCompilerServicesRuntimeHelpers
     static utils::Span<vm::IntrinsicEntry> get_intrinsic_entries() noexcept;
 
     static RtResult<const metadata::RtClass*> get_method_table(vm::RtObject* obj) noexcept;
+    static RtResult<bool> object_has_component_size(vm::RtObject* obj) noexcept;
     static RtResult<uint32_t> get_num_instance_field_bytes(const void* method_table) noexcept;
     static RtResult<metadata::RtElementType> get_primitive_cor_element_type(const void* method_table) noexcept;
     static RtResult<vm::RtReadOnlySpan<uint8_t>> create_span(const metadata::RtMethodInfo* method, const metadata::RtFieldInfo* field) noexcept;

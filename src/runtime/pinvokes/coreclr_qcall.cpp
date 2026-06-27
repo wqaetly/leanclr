@@ -1225,6 +1225,37 @@ RtResultVoid environment_get_processor_count_invoker(metadata::RtManagedMethodPo
     RET_VOID_OK();
 }
 
+RtResultVoid gc_collect_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                interp::RtStackObject*) noexcept
+{
+    (void)params;
+    // LeanCLR's current managed execution path cannot safely force a collection.
+    // Match the .NET 10 contract shape while keeping this smoke-only call non-throwing.
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_helpers_run_class_constructor_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto qcall_type_handle = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            get_type_sig_from_qcall_type_handle(qcall_type_handle, native_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Runtime::run_class_static_constructor(klass));
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_helpers_run_module_constructor_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                            const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto qcall_module = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, module, get_module_from_qcall_module(qcall_module, native_handle));
+    RET_ERR_ON_FAIL(vm::Runtime::run_module_static_constructor(module));
+    RET_VOID_OK();
+}
+
 RtResultVoid method_base_get_current_method_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                     const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -1835,6 +1866,24 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Advapi32::EventSetInformation", nullptr, advapi32_event_set_information_invoker);
     vm::PInvokes::register_pinvoke("System.Environment::GetProcessorCount()", nullptr, environment_get_processor_count_invoker);
     vm::PInvokes::register_pinvoke("System.Environment::GetProcessorCount", nullptr, environment_get_processor_count_invoker);
+    vm::PInvokes::register_pinvoke("System.GC::<_Collect>g____PInvoke|8_0(System.Int32,System.Int32,System.Byte)", nullptr,
+                                   gc_collect_invoker);
+    vm::PInvokes::register_pinvoke("System.GC::<_Collect>g____PInvoke|8_0", nullptr, gc_collect_invoker);
+    vm::PInvokes::register_pinvoke("System.GC::_Collect", nullptr, gc_collect_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.CompilerServices.RuntimeHelpers::RunClassConstructor(System.Runtime.CompilerServices.QCallTypeHandle)", nullptr,
+        runtime_helpers_run_class_constructor_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.RuntimeHelpers::RunClassConstructor", nullptr,
+                                   runtime_helpers_run_class_constructor_invoker);
+    vm::PInvokes::register_pinvoke("ReflectionInvocation_RunClassConstructor", nullptr,
+                                   runtime_helpers_run_class_constructor_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.CompilerServices.RuntimeHelpers::RunModuleConstructor(System.Runtime.CompilerServices.QCallModule)", nullptr,
+        runtime_helpers_run_module_constructor_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.RuntimeHelpers::RunModuleConstructor", nullptr,
+                                   runtime_helpers_run_module_constructor_invoker);
+    vm::PInvokes::register_pinvoke("ReflectionInvocation_RunModuleConstructor", nullptr,
+                                   runtime_helpers_run_module_constructor_invoker);
     vm::PInvokes::register_pinvoke("MethodBase_GetCurrentMethod", nullptr, method_base_get_current_method_invoker);
     vm::PInvokes::register_pinvoke("System.Reflection.MethodBase::GetCurrentMethod(System.Runtime.CompilerServices.StackCrawlMarkHandle)", nullptr,
                                    method_base_get_current_method_invoker);

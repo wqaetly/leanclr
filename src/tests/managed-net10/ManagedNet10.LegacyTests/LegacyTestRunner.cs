@@ -106,7 +106,10 @@ namespace ManagedNet10.LegacyTests
 
         private static Exception CreateFailure(Type type, string methodName, Exception ex)
         {
-            return new Exception("Legacy test failed: " + type.FullName + "." + methodName, ex);
+            Exception cause = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;
+            return new Exception(
+                "Legacy test failed: " + type.FullName + "." + methodName + ": " + cause.GetType().FullName + ": " + cause.Message,
+                ex);
         }
     }
 }

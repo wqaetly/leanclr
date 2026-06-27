@@ -424,7 +424,17 @@ RtResult<vm::RtObject*> SystemRuntimeType::create_instance(vm::RtReflectionRunti
         RET_ERR(RtErr::NullReference);
     }
 
-    return LEANCLR_CREATE_INSTANCE_INTERNAL(runtime_type->reflection_type.type_handle, "SystemRuntimeType::create_instance");
+    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_all(klass));
+
+    const metadata::RtMethodInfo* ctor = vm::Method::find_matched_method_in_class_by_name_and_param_count(klass, ".ctor", 0);
+    if (ctor != nullptr && !vm::Class::is_value_type(klass))
+    {
+        return vm::Runtime::invoke_object_arguments_without_run_cctor(ctor, nullptr, nullptr, 0);
+    }
+
+    return LEANCLR_CREATE_INSTANCE_INTERNAL(type_sig, "SystemRuntimeType::create_instance");
 }
 
 RtResultVoid SystemRuntimeType::call_default_struct_constructor(vm::RtReflectionRuntimeType* runtime_type, void* data) noexcept
