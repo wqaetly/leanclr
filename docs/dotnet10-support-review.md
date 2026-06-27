@@ -21,6 +21,17 @@
 5. 将后续主线转向真实纯逻辑 DLL smoke、Unity/Godot host bridge ABI、opaque handle registry 和主线程 dispatcher。
 6. 原作者 managed / Mono 测试资产采用“分阶段迁移、最终全量跑通”的策略；P0/P1/P2/P3 只用于排障排序，不用于缩减最终合格线。
 
+2026-06-27 LCLR 作者建议评估：直接删除旧 `icalls` / `pinvokes` / `intrinsics` 对 `.NET 10` 适配有帮助，因为它能减少旧 Mono profile 语义对当前实现和 AI 辅助分析的干扰。但本仓库当前仍需要保留分派骨架、符号解析、错误诊断和部分已验证的运行时桥接，因此本阶段先把旧 Mono-only internal call 从 `System.Private.CoreLib` 查询路径中隔离出来：`.NET 10` 主路径命中 `Mono.*`、`System.IO.Mono*`、`System.Mono*`、`System.Reflection.Mono*`、`System.Runtime.Remoting*` 这类入口时直接视为未实现，让缺口 fail-fast，而不是继续调用可能带有 Mono 布局假设的旧实现。后续物理删除应按 profile catalog 分批推进，确保每批清理后都有 smoke 结果支撑。
+
+本阶段验证命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release
+powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunAll"
+```
+
+两条命令均已通过，说明 Mono-only icall 隔离没有破坏当前 `ManagedNet10.Smoke` 主入口和已迁移的 legacy 反射扫描入口。
+
 ## 官方基线
 
 本次审查按以下官方信息作为外部基线：
