@@ -1,10 +1,12 @@
 #include "coreclr_qcall.h"
 
+#include "icalls/system_enum.h"
 #include "interp/eval_stack_op.h"
 #include "interp/machine_state.h"
 #include "metadata/metadata_name.h"
 #include "metadata/metadata_cache.h"
 #include "metadata/module_def.h"
+#include "platform/bcrypt.h"
 #include "platform/rt_sys.h"
 #include "utils/rt_vector.h"
 #include "utils/string_builder.h"
@@ -993,6 +995,31 @@ RtResultVoid method_base_get_current_method_invoker(metadata::RtManagedMethodPoi
     RET_VOID_OK();
 }
 
+RtResultVoid enum_get_values_and_names_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                               interp::RtStackObject*) noexcept
+{
+    auto qcall_type_handle = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto values = interp::EvalStackOp::get_param<vm::RtArray**>(params, 2);
+    auto names = interp::EvalStackOp::get_param<vm::RtArray**>(params, 3);
+    bool get_names = interp::EvalStackOp::get_param<int32_t>(params, 4) != 0;
+    RET_ERR_ON_FAIL(icalls::SystemEnum::get_enum_values_and_names_qcall(qcall_type_handle, native_handle, values, names, get_names));
+    RET_VOID_OK();
+}
+
+RtResultVoid bcrypt_gen_random_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                       interp::RtStackObject* ret) noexcept
+{
+    intptr_t algo_handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    auto buffer = interp::EvalStackOp::get_param<uint8_t*>(params, 1);
+    int32_t length = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    int32_t flags = interp::EvalStackOp::get_param<int32_t>(params, 3);
+
+    platform::Bcrypt::gen_random(algo_handle, buffer, length, flags);
+    interp::EvalStackOp::set_return(ret, static_cast<uint32_t>(0));
+    RET_VOID_OK();
+}
+
 RtResultVoid ntdll_rtl_get_version_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                            interp::RtStackObject* ret) noexcept
 {
@@ -1479,6 +1506,17 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Reflection.MethodBase::GetCurrentMethod(System.Runtime.CompilerServices.StackCrawlMarkHandle)", nullptr,
                                    method_base_get_current_method_invoker);
     vm::PInvokes::register_pinvoke("System.Reflection.MethodBase::GetCurrentMethod", nullptr, method_base_get_current_method_invoker);
+    vm::PInvokes::register_pinvoke("Enum_GetValuesAndNames", nullptr, enum_get_values_and_names_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Enum::GetEnumValuesAndNames(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)",
+        nullptr, enum_get_values_and_names_invoker);
+    vm::PInvokes::register_pinvoke("System.Enum::GetEnumValuesAndNames", nullptr, enum_get_values_and_names_invoker);
+    vm::PInvokes::register_pinvoke("BCrypt::BCryptGenRandom(System.IntPtr,System.Byte*,System.Int32,System.Int32)", nullptr,
+                                   bcrypt_gen_random_invoker);
+    vm::PInvokes::register_pinvoke("BCrypt::BCryptGenRandom", nullptr, bcrypt_gen_random_invoker);
+    vm::PInvokes::register_pinvoke("Interop/BCrypt::BCryptGenRandom(System.IntPtr,System.Byte*,System.Int32,System.Int32)", nullptr,
+                                   bcrypt_gen_random_invoker);
+    vm::PInvokes::register_pinvoke("Interop/BCrypt::BCryptGenRandom", nullptr, bcrypt_gen_random_invoker);
     vm::PInvokes::register_pinvoke("Interop/NtDll::<RtlGetVersion>g____PInvoke|22_0", nullptr, ntdll_rtl_get_version_invoker);
     vm::PInvokes::register_pinvoke("NtDll::<RtlGetVersion>g____PInvoke|22_0", nullptr, ntdll_rtl_get_version_invoker);
     vm::PInvokes::register_pinvoke("Interop/NtDll::RtlGetVersion", nullptr, ntdll_rtl_get_version_invoker);
