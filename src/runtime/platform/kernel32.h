@@ -38,6 +38,8 @@ class Kernel32
     static intptr_t load_library_ex(vm::RtString* lib_filename, intptr_t reserved, int32_t flags);
 
     static bool close_handle(intptr_t handle);
+    static bool query_performance_frequency(int64_t* frequency);
+    static bool query_performance_counter(int64_t* counter);
     static int32_t copy_file2(vm::RtString* existing, vm::RtString* new_file, void* extended_parameters);
     static bool copy_file_ex_private(vm::RtString* src, vm::RtString* dst, intptr_t progress_routine, intptr_t progress_data, int32_t* cancel, int32_t flags);
     static bool create_directory_private(vm::RtString* path, void* security_attributes);

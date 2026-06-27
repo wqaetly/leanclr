@@ -30,6 +30,7 @@
     <Compile Include="CorlibCoreObjectValueTestEntries.cs" />
     <Compile Include="CorlibEnvironmentTestEntries.cs" />
     <Compile Include="CorlibRuntimeServicesTestEntries.cs" />
+    <Compile Include="CorlibDiagnosticsTestEntries.cs" />
     <Compile Include="CorlibStringTestEntries.cs" />
     <Compile Include="ToStringRegressionTestEntries.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
@@ -114,6 +115,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Array.cs" Link="CorlibTests\InternalCall\TC_System_Array.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Buffer.cs" Link="CorlibTests\InternalCall\TC_System_Buffer.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_DateTime.cs" Link="CorlibTests\InternalCall\TC_System_DateTime.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Diagnostics_StopWatch.cs" Link="CorlibTests\InternalCall\TC_System_Diagnostics_StopWatch.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Enum.cs" Link="CorlibTests\InternalCall\TC_System_Enum.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Environment.cs" Link="CorlibTests\InternalCall\TC_System_Environment.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_GC.cs" Link="CorlibTests\InternalCall\TC_System_GC.cs" />

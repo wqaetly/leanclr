@@ -274,6 +274,28 @@ bool Kernel32::close_handle(intptr_t handle)
     return ::CloseHandle(reinterpret_cast<HANDLE>(handle)) != 0;
 }
 
+bool Kernel32::query_performance_frequency(int64_t* frequency)
+{
+    if (frequency == nullptr)
+        return false;
+    LARGE_INTEGER value{};
+    if (::QueryPerformanceFrequency(&value) == 0)
+        return false;
+    *frequency = static_cast<int64_t>(value.QuadPart);
+    return true;
+}
+
+bool Kernel32::query_performance_counter(int64_t* counter)
+{
+    if (counter == nullptr)
+        return false;
+    LARGE_INTEGER value{};
+    if (::QueryPerformanceCounter(&value) == 0)
+        return false;
+    *counter = static_cast<int64_t>(value.QuadPart);
+    return true;
+}
+
 int32_t Kernel32::copy_file2(vm::RtString* existing, vm::RtString* new_file, void* extended_parameters)
 {
     const HRESULT hr = ::CopyFile2(reinterpret_cast<PCWSTR>(vm::String::get_chars_ptr(existing)), reinterpret_cast<PCWSTR>(vm::String::get_chars_ptr(new_file)),

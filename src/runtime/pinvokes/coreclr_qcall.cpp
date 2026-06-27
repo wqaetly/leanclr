@@ -9,6 +9,7 @@
 #include "metadata/metadata_cache.h"
 #include "metadata/module_def.h"
 #include "platform/bcrypt.h"
+#include "platform/kernel32.h"
 #include "platform/rt_sys.h"
 #include "utils/rt_vector.h"
 #include "utils/string_builder.h"
@@ -1168,6 +1169,34 @@ RtResultVoid kernel32_set_last_error_invoker(metadata::RtManagedMethodPointer, c
     RET_VOID_OK();
 }
 
+RtResultVoid kernel32_query_performance_frequency_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    int64_t* frequency = interp::EvalStackOp::get_param<int64_t*>(params, 0);
+#if LEANCLR_PLATFORM_WIN
+    int32_t result = platform::Kernel32::query_performance_frequency(frequency) ? 1 : 0;
+#else
+    (void)frequency;
+    int32_t result = 0;
+#endif
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_query_performance_counter_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                        const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    int64_t* counter = interp::EvalStackOp::get_param<int64_t*>(params, 0);
+#if LEANCLR_PLATFORM_WIN
+    int32_t result = platform::Kernel32::query_performance_counter(counter) ? 1 : 0;
+#else
+    (void)counter;
+    int32_t result = 0;
+#endif
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_get_environment_variable_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                        const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -1997,6 +2026,23 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Interop/Kernel32::SetLastError", nullptr, kernel32_set_last_error_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::SetLastError(System.Int32)", nullptr, kernel32_set_last_error_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::SetLastError", nullptr, kernel32_set_last_error_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::QueryPerformanceFrequency(System.Int64*)", nullptr,
+                                   kernel32_query_performance_frequency_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::QueryPerformanceFrequency", nullptr, kernel32_query_performance_frequency_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::QueryPerformanceFrequency(System.Int64*)", nullptr,
+                                   kernel32_query_performance_frequency_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::QueryPerformanceFrequency", nullptr, kernel32_query_performance_frequency_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::QueryPerformanceFrequency(System.Int64*)", nullptr,
+                                   kernel32_query_performance_frequency_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::QueryPerformanceFrequency", nullptr, kernel32_query_performance_frequency_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::QueryPerformanceCounter(System.Int64*)", nullptr,
+                                   kernel32_query_performance_counter_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::QueryPerformanceCounter", nullptr, kernel32_query_performance_counter_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::QueryPerformanceCounter(System.Int64*)", nullptr, kernel32_query_performance_counter_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::QueryPerformanceCounter", nullptr, kernel32_query_performance_counter_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::QueryPerformanceCounter(System.Int64*)", nullptr,
+                                   kernel32_query_performance_counter_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::QueryPerformanceCounter", nullptr, kernel32_query_performance_counter_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetEnvironmentVariable(System.String,System.Char&,System.UInt32)", nullptr,
                                    kernel32_get_environment_variable_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetEnvironmentVariable", nullptr, kernel32_get_environment_variable_invoker);

@@ -935,6 +935,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunAll"` 通过并输出 `ok!`。
 - 本机已复验默认 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 通过并输出 `ok!`。
 
+2026-06-27 已迁移 diagnostics Stopwatch 旧用例：
+
+- `ManagedNet10.LegacyTests` 新增 `CorlibDiagnosticsTestEntries`，并链接旧 `CorlibTests.InternalCall.TC_System_Diagnostics_StopWatch`，让 `Stopwatch.ElapsedTicks` / `ElapsedMilliseconds` 纳入程序集级反射扫描主验证口。
+- 该切片暴露出 .NET 10 `Stopwatch` 在 Windows 上会走 `Kernel32.QueryPerformanceFrequency` / `QueryPerformanceCounter` P/Invoke；已在 `coreclr_qcall` P/Invoke registry 和 `platform::Kernel32` 中补齐最小桥接。
+- 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunCorlibDiagnosticsStopwatch"` 通过并输出 `ok!`。
+- 本机已复验 `ManagedNet10.LegacyTests.Program::RunAll` 和默认 `ManagedNet10.Smoke` 均通过并输出 `ok!`。
+
 仍未完成：
 
 - `minimal-net10` API 白名单尚未形成正式清单。
