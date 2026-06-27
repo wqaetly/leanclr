@@ -28,7 +28,7 @@ namespace ManagedNet10.LegacyTests
             Type[] types = assembly.GetTypes();
             for (int i = 0; i < types.Length; i++)
             {
-                executed += RunType(types[i]);
+                executed += RunType(types[i], skipNet10ReplacedLegacyTests: true);
             }
 
             if (executed == 0)
@@ -40,6 +40,11 @@ namespace ManagedNet10.LegacyTests
         }
 
         public static int RunType(Type type)
+        {
+            return RunType(type, skipNet10ReplacedLegacyTests: false);
+        }
+
+        private static int RunType(Type type, bool skipNet10ReplacedLegacyTests)
         {
             if (Attribute.IsDefined(type, typeof(IgnoreTestAttribute), inherit: true))
             {
@@ -57,6 +62,10 @@ namespace ManagedNet10.LegacyTests
                 {
                     continue;
                 }
+                if (skipNet10ReplacedLegacyTests && IsNet10ReplacedLegacyTest(type, method.Name))
+                {
+                    continue;
+                }
                 if (method.ReturnType != typeof(void) || method.GetParameters().Length != 0)
                 {
                     continue;
@@ -67,14 +76,7 @@ namespace ManagedNet10.LegacyTests
                     instance = Activator.CreateInstance(type);
                 }
 
-                try
-                {
-                    method.Invoke(instance, null);
-                }
-                catch (Exception ex)
-                {
-                    throw CreateFailure(type, method.Name, ex);
-                }
+                method.Invoke(instance, null);
                 executed++;
             }
 
@@ -94,22 +96,15 @@ namespace ManagedNet10.LegacyTests
             }
 
             object instance = method.IsStatic ? null : Activator.CreateInstance(type);
-            try
-            {
-                method.Invoke(instance, null);
-            }
-            catch (Exception ex)
-            {
-                throw CreateFailure(type, methodName, ex);
-            }
+            method.Invoke(instance, null);
         }
 
-        private static Exception CreateFailure(Type type, string methodName, Exception ex)
+        private static bool IsNet10ReplacedLegacyTest(Type type, string methodName)
         {
-            Exception cause = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;
-            return new Exception(
-                "Legacy test failed: " + type.FullName + "." + methodName + ": " + cause.GetType().FullName + ": " + cause.Message,
-                ex);
+            // The linked legacy source still carries Mono/mscorlib expectations for this case.
+            // RunAssembly uses the net10-specific replacement in CorlibStringNet10Semantics instead.
+            return type == typeof(CorlibTests.InternalCall.TC_System_String) &&
+                methodName == "LastIndexOf_EmptyString";
         }
     }
 }

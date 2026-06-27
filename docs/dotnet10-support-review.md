@@ -916,6 +916,14 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 为 .NET 10 的 `Assembly.GetTypes()` / `RuntimeModule.GetTypes()` 反射链路补齐 `System.Reflection.RuntimeModule::GetTypes` QCall/PInvoke 桥接，复用现有 `Assembly::get_types` 从 LeanCLR 模块元数据生成 `RuntimeType[]`。
 - 本机已重新验证程序集级入口：`powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunAll"` 通过并输出 `ok!`；默认 `ManagedNet10.Smoke` 与 `managed-net10.sln` Release 构建仍通过。
 
+2026-06-27 已校准程序集级反射扫描中的 net10 替换用例：
+
+- `LegacyTestRunner` 不再在 `MethodInfo.Invoke` 失败时重新拼接包装异常，避免测试基建在失败路径额外触发 `Exception.Message`、`Type.FullName` 和字符串拼接等 runtime surface；保留原始托管异常栈后，LeanCLR 可直接打印失败断言所在测试方法。
+- `RunAssembly` 增加 net10 替换用例过滤：当前旧 `CorlibTests.InternalCall.TC_System_String.LastIndexOf_EmptyString` 仍带 Mono/mscorlib 预期，而 net10 项目中已有 `CorlibStringNet10Semantics.LastIndexOf_EmptyString` 覆盖 .NET 10 行为，因此程序集级反射扫描跳过旧方法并执行 net10 版本。
+- 本机已验证直接 leanrun 调用 `ManagedNet10.LegacyTests.Program::RunAll` 输出 `ok!`。
+- 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunAll"` 通过并输出 `ok!`。
+- 本机已复验默认 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 通过并输出 `ok!`。
+
 仍未完成：
 
 - `minimal-net10` API 白名单尚未形成正式清单。
