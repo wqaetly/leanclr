@@ -11,6 +11,7 @@ class SystemReflectionRuntimePropertyInfo
 {
   public:
     static utils::Span<vm::InternalCallEntry> get_internal_call_entries() noexcept;
+    static utils::Span<vm::NewobjInternalCallEntry> get_newobj_internal_call_entries() noexcept;
 
     // Get property reflection object from property handle and optional type
     static RtResult<vm::RtReflectionProperty*> internal_from_handle_type(metadata::RtPropertyInfo* property, const metadata::RtTypeSig* type_sig) noexcept;
@@ -26,6 +27,11 @@ class SystemReflectionRuntimePropertyInfo
 
     // Get metadata token
     static RtResult<int32_t> get_metadata_token(vm::RtReflectionProperty* property) noexcept;
+
+    static RtResult<vm::RtObject*> create_net10_property_info(const metadata::RtPropertyInfo* property,
+                                                              vm::RtReflectionRuntimeType* declaring_type,
+                                                              vm::RtObject* reflected_type_cache,
+                                                              bool* is_private) noexcept;
 };
 
 } // namespace icalls

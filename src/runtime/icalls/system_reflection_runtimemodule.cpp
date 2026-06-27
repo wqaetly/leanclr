@@ -67,6 +67,30 @@ static RtResult<int32_t> metadata_import_get_property_props(metadata::RtModuleDe
     RET_OK(0);
 }
 
+static RtResult<int32_t> metadata_import_get_field_def_props(metadata::RtModuleDef* module, int32_t md_token,
+                                                             int32_t* field_attributes) noexcept
+{
+    if (module == nullptr || field_attributes == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(md_token));
+    if (token.table_type != metadata::TableType::Field)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    auto row = module->get_cli_image().read_field(token.rid);
+    if (!row)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    *field_attributes = static_cast<int32_t>(row->flags);
+    RET_OK(0);
+}
+
 static RtResult<int32_t> metadata_import_get_signature_from_token(metadata::RtModuleDef* module, int32_t md_token,
                                                                   MetadataConstArray* signature) noexcept
 {
@@ -347,6 +371,19 @@ static RtResultVoid metadata_import_get_property_props_invoker(metadata::RtManag
     auto signature = EvalStackOp::get_param<MetadataConstArray*>(params, 4);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, hr,
                                             metadata_import_get_property_props(module, md_token, name, property_attributes, signature));
+    EvalStackOp::set_return(ret, hr);
+    RET_VOID_OK();
+}
+
+/// @icall: System.Reflection.MetadataImport::GetFieldDefProps(System.IntPtr,System.Int32,System.Int32&)
+static RtResultVoid metadata_import_get_field_def_props_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto module = EvalStackOp::get_param<metadata::RtModuleDef*>(params, 0);
+    auto md_token = EvalStackOp::get_param<int32_t>(params, 1);
+    auto field_attributes = EvalStackOp::get_param<int32_t*>(params, 2);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, hr,
+                                            metadata_import_get_field_def_props(module, md_token, field_attributes));
     EvalStackOp::set_return(ret, hr);
     RET_VOID_OK();
 }
@@ -905,6 +942,9 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeModule::get_internal_c
          metadata_import_get_namespace_invoker},
         {"System.Reflection.MetadataImport::GetPropertyProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&,System.Reflection.ConstArray&)", nullptr,
          metadata_import_get_property_props_invoker},
+        {"System.Reflection.MetadataImport::GetFieldDefProps(System.IntPtr,System.Int32,System.Int32&)", nullptr,
+         metadata_import_get_field_def_props_invoker},
+        {"System.Reflection.MetadataImport::GetFieldDefProps", nullptr, metadata_import_get_field_def_props_invoker},
         {"System.Reflection.MetadataImport::GetSignatureFromToken(System.IntPtr,System.Int32,System.Reflection.ConstArray&)", nullptr,
          metadata_import_get_signature_from_token_invoker},
         {"System.Reflection.MetadataImport::IsValidToken(System.IntPtr,System.Int32)", nullptr, metadata_import_is_valid_token_invoker},

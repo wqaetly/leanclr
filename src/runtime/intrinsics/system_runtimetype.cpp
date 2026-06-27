@@ -5,11 +5,14 @@
 
 #include "interp/eval_stack_op.h"
 #include "utils/string_builder.h"
+#include "icalls/system_reflection_runtimepropertyinfo.h"
+#include "metadata/module_def.h"
 #include "vm/class.h"
 #include "vm/customattribute.h"
 #include "vm/field.h"
 #include "vm/method.h"
 #include "vm/object.h"
+#include "vm/property.h"
 #include "vm/reflection.h"
 #include "vm/runtime.h"
 #include "vm/rt_array.h"
@@ -140,6 +143,95 @@ static bool method_matches_binding_flags(const metadata::RtMethodInfo* method, c
     }
 
     return true;
+}
+
+static bool property_matches_binding_flags(const metadata::RtPropertyInfo* property, const metadata::RtClass* declaring_klass,
+                                           const metadata::RtClass* target_klass, int32_t binding_flags) noexcept
+{
+    if (vm::Property::is_public(property))
+    {
+        if ((binding_flags & BINDING_FLAGS_PUBLIC) == 0)
+        {
+            return false;
+        }
+    }
+    else
+    {
+        if ((binding_flags & BINDING_FLAGS_NON_PUBLIC) == 0)
+        {
+            return false;
+        }
+        if (vm::Property::is_private(property) && declaring_klass != target_klass)
+        {
+            return false;
+        }
+    }
+
+    if (vm::Property::is_static(property))
+    {
+        if ((binding_flags & BINDING_FLAGS_STATIC) == 0)
+        {
+            return false;
+        }
+        if (declaring_klass != target_klass && (binding_flags & BINDING_FLAGS_FLATTEN_HIERARCHY) == 0)
+        {
+            return false;
+        }
+    }
+    else if ((binding_flags & BINDING_FLAGS_INSTANCE) == 0)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+static RtResult<vm::RtObject*> get_or_create_runtime_type_cache(vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    if (runtime_type->reflection_type.cache != nullptr)
+    {
+        RET_OK(reinterpret_cast<vm::RtObject*>(runtime_type->reflection_type.cache));
+    }
+
+    metadata::RtModuleDef* corlib = metadata::RtModuleDef::get_corlib_module();
+    if (corlib == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, cache_klass,
+                                            corlib->get_class_by_nested_full_name("System.RuntimeType+RuntimeTypeCache", false, true));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, cache_obj,
+                                            LEANCLR_NEWOBJ_INTERNAL(cache_klass, "SystemRuntimeType::get_or_create_runtime_type_cache"));
+
+    const metadata::RtFieldInfo* runtime_type_field = vm::Class::get_field_for_name(cache_klass, "m_runtimeType", true);
+    if (runtime_type_field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+    RET_ERR_ON_FAIL(vm::Field::set_instance_value(runtime_type_field, cache_obj, &runtime_type));
+
+    const metadata::RtFieldInfo* type_code_field = vm::Class::get_field_for_name(cache_klass, "m_typeCode", true);
+    if (type_code_field != nullptr)
+    {
+        int32_t type_code_empty = 0;
+        RET_ERR_ON_FAIL(vm::Field::set_instance_value(type_code_field, cache_obj, &type_code_empty));
+    }
+
+    const metadata::RtFieldInfo* is_global_field = vm::Class::get_field_for_name(cache_klass, "m_isGlobal", true);
+    if (is_global_field != nullptr)
+    {
+        bool is_global = false;
+        RET_ERR_ON_FAIL(vm::Field::set_instance_value(is_global_field, cache_obj, &is_global));
+    }
+
+    runtime_type->reflection_type.cache = cache_obj;
+    RET_OK(cache_obj);
 }
 
 static RtResult<bool> is_generic_type_by_typesig(const metadata::RtTypeSig* type_sig) noexcept
@@ -291,6 +383,70 @@ RtResult<vm::RtArray*> SystemRuntimeType::get_methods(vm::RtReflectionRuntimeTyp
     RET_OK(result);
 }
 
+RtResult<vm::RtArray*> SystemRuntimeType::get_properties(vm::RtReflectionRuntimeType* runtime_type, int32_t binding_flags) noexcept
+{
+    if (runtime_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    const auto& corlib_types = vm::Class::get_corlib_types();
+    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    if (type_sig->by_ref)
+    {
+        return LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(corlib_types.cls_reflection_property,
+                                                               "SystemRuntimeType::get_properties");
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_super_types(klass));
+
+    utils::Vector<const metadata::RtPropertyInfo*> properties;
+    utils::Vector<const metadata::RtClass*> declaring_classes;
+    const metadata::RtClass* current_klass = klass;
+    while (current_klass != nullptr)
+    {
+        RET_ERR_ON_FAIL(vm::Class::initialize_properties(const_cast<metadata::RtClass*>(current_klass)));
+        for (uint32_t i = 0; i < current_klass->property_count; ++i)
+        {
+            const metadata::RtPropertyInfo* property = current_klass->properties + i;
+            if (!property_matches_binding_flags(property, current_klass, klass, binding_flags))
+            {
+                continue;
+            }
+
+            properties.push_back(property);
+            declaring_classes.push_back(current_klass);
+        }
+
+        if ((binding_flags & BINDING_FLAGS_DECLARED_ONLY) != 0)
+        {
+            break;
+        }
+        current_klass = current_klass->parent;
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        vm::RtArray*, result,
+        LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_reflection_property, static_cast<int32_t>(properties.size()),
+                                                    "SystemRuntimeType::get_properties"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, reflected_type_cache, get_or_create_runtime_type_cache(runtime_type));
+    for (int32_t i = 0; i < static_cast<int32_t>(properties.size()); ++i)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, declaring_type,
+                                                vm::Reflection::get_klass_reflection_object(declaring_classes[static_cast<size_t>(i)]));
+        bool is_private = false;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+            vm::RtObject*, property_info,
+            icalls::SystemReflectionRuntimePropertyInfo::create_net10_property_info(
+                properties[static_cast<size_t>(i)], reinterpret_cast<vm::RtReflectionRuntimeType*>(declaring_type), reflected_type_cache,
+                &is_private));
+        vm::Array::set_array_data_at<vm::RtObject*>(result, i, property_info);
+    }
+
+    RET_OK(result);
+}
+
 RtResult<vm::RtArray*> SystemRuntimeType::get_custom_attributes(vm::RtReflectionRuntimeType* runtime_type,
                                                                 vm::RtReflectionRuntimeType* attribute_type, bool inherit) noexcept
 {
@@ -332,6 +488,7 @@ RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeType::get_parent_type(vm::Rt
     }
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_super_types(klass));
     if (klass->parent == nullptr)
     {
         RET_OK(nullptr);
@@ -339,6 +496,36 @@ RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeType::get_parent_type(vm::Rt
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, parent_type, vm::Reflection::get_klass_reflection_object(klass->parent));
     RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(parent_type));
+}
+
+RtResult<bool> SystemRuntimeType::is_subclass_of(vm::RtReflectionRuntimeType* runtime_type,
+                                                 vm::RtReflectionRuntimeType* target_type) noexcept
+{
+    if (runtime_type == nullptr || target_type == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+    const auto& corlib_types = vm::Class::get_corlib_types();
+    if (target_type->reflection_type.header.klass != corlib_types.cls_runtimetype)
+    {
+        RET_OK(false);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                            vm::Class::get_class_from_typesig(runtime_type->reflection_type.type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, target_klass,
+                                            vm::Class::get_class_from_typesig(target_type->reflection_type.type_handle));
+    if (klass == target_klass)
+    {
+        RET_OK(false);
+    }
+    if (target_klass == corlib_types.cls_object)
+    {
+        RET_OK(true);
+    }
+
+    RET_ERR_ON_FAIL(vm::Class::initialize_super_types(klass));
+    RET_OK(vm::Class::is_subclass_of_initialized(klass, target_klass, false));
 }
 
 RtResult<bool> SystemRuntimeType::get_is_actual_interface(vm::RtReflectionRuntimeType* runtime_type) noexcept
@@ -488,6 +675,18 @@ static RtResultVoid get_methods_invoker(metadata::RtManagedMethodPointer, const 
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.RuntimeType::GetProperties(System.Reflection.BindingFlags)
+static RtResultVoid get_properties_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                           interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+    int32_t binding_flags = interp::EvalStackOp::get_param<int32_t>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, properties, SystemRuntimeType::get_properties(runtime_type, binding_flags));
+    interp::EvalStackOp::set_return(ret, properties);
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.RuntimeType::GetCustomAttributes(System.Type,System.Boolean)
 static RtResultVoid get_custom_attributes_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                   interp::RtStackObject* ret) noexcept
@@ -509,6 +708,18 @@ static RtResultVoid get_parent_type_invoker(metadata::RtManagedMethodPointer, co
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, parent_type, SystemRuntimeType::get_parent_type(runtime_type));
     interp::EvalStackOp::set_return(ret, parent_type);
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.RuntimeType::IsSubclassOf(System.Type)
+static RtResultVoid is_subclass_of_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                           interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+    auto target_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeType::is_subclass_of(runtime_type, target_type));
+    interp::EvalStackOp::set_return(ret, result);
     RET_VOID_OK();
 }
 
@@ -604,12 +815,15 @@ static RtResultVoid call_default_struct_constructor_invoker(metadata::RtManagedM
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtimetype[] = {
     {"System.RuntimeType::GetField(System.String,System.Reflection.BindingFlags)", (vm::IntrinsicFunction)&SystemRuntimeType::get_field, get_field_invoker},
     {"System.RuntimeType::GetMethods(System.Reflection.BindingFlags)", (vm::IntrinsicFunction)&SystemRuntimeType::get_methods, get_methods_invoker},
+    {"System.RuntimeType::GetProperties(System.Reflection.BindingFlags)", (vm::IntrinsicFunction)&SystemRuntimeType::get_properties,
+     get_properties_invoker},
     {"System.RuntimeType::GetCustomAttributes(System.Type,System.Boolean)", (vm::IntrinsicFunction)&SystemRuntimeType::get_custom_attributes,
      get_custom_attributes_invoker},
     {"System.RuntimeType::get_BaseType", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
     {"System.RuntimeType::get_BaseType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
     {"System.RuntimeType::GetBaseType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
     {"System.RuntimeType::GetParentType()", (vm::IntrinsicFunction)&SystemRuntimeType::get_parent_type, get_parent_type_invoker},
+    {"System.RuntimeType::IsSubclassOf(System.Type)", (vm::IntrinsicFunction)&SystemRuntimeType::is_subclass_of, is_subclass_of_invoker},
     {"System.RuntimeType::get_IsActualEnum", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_actual_enum, get_is_actual_enum_invoker},
     {"System.RuntimeType::get_IsActualEnum()", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_actual_enum, get_is_actual_enum_invoker},
     {"System.RuntimeType::get_IsActualInterface", (vm::IntrinsicFunction)&SystemRuntimeType::get_is_actual_interface, get_is_actual_interface_invoker},

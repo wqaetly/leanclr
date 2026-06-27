@@ -12,7 +12,7 @@ namespace intrinsics
 namespace
 {
 
-RtResult<size_t> get_first_generic_arg_size(const metadata::RtMethodInfo* method) noexcept
+RtResult<interp::ReduceTypeAndSize> get_first_generic_arg_type_and_size(const metadata::RtMethodInfo* method) noexcept
 {
     if (method == nullptr || method->generic_method == nullptr || method->generic_method->generic_context.method_inst == nullptr)
     {
@@ -27,6 +27,12 @@ RtResult<size_t> get_first_generic_arg_size(const metadata::RtMethodInfo* method
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(interp::ReduceTypeAndSize, type_and_size,
                                             interp::InterpDefs::get_reduce_type_and_size_by_typesig(method_inst->generic_args[0]));
+    RET_OK(type_and_size);
+}
+
+RtResult<size_t> get_first_generic_arg_size(const metadata::RtMethodInfo* method) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(interp::ReduceTypeAndSize, type_and_size, get_first_generic_arg_type_and_size(method));
     RET_OK(type_and_size.byte_size);
 }
 
@@ -89,8 +95,89 @@ RtResultVoid SystemRuntimeCompilerServicesUnsafe::read_unaligned(const metadata:
                                                                  interp::RtStackObject* ret) noexcept
 {
     void* source = interp::EvalStackOp::get_param<void*>(params, 0);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(size_t, value_size, get_first_generic_arg_size(method));
-    std::memcpy(ret, source, value_size);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(interp::ReduceTypeAndSize, type_and_size, get_first_generic_arg_type_and_size(method));
+
+    switch (type_and_size.reduce_type)
+    {
+    case metadata::RtArgOrLocOrFieldReduceType::I1:
+    {
+        int8_t value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, static_cast<int32_t>(value));
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::U1:
+    {
+        uint8_t value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, static_cast<int32_t>(value));
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::I2:
+    {
+        int16_t value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, static_cast<int32_t>(value));
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::U2:
+    {
+        uint16_t value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, static_cast<int32_t>(value));
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::I4:
+    {
+        int32_t value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, value);
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::I8:
+    {
+        int64_t value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, value);
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::I:
+    {
+        intptr_t value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, value);
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::R4:
+    {
+        float value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, value);
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::R8:
+    {
+        double value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, value);
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::Ref:
+    {
+        void* value;
+        std::memcpy(&value, source, sizeof(value));
+        interp::EvalStackOp::set_return(ret, value);
+        break;
+    }
+    case metadata::RtArgOrLocOrFieldReduceType::Other:
+    {
+        std::memcpy(ret, source, type_and_size.byte_size);
+        break;
+    }
+    default:
+        RET_ERR(RtErr::ExecutionEngine);
+    }
+
     RET_VOID_OK();
 }
 

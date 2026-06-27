@@ -15,7 +15,9 @@ RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_runtime_type
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, ref_type, vm::Reflection::get_klass_reflection_object(method_table));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass,
+                                            vm::Reflection::get_class_from_net10_method_table(method_table));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, ref_type, vm::Reflection::get_klass_reflection_object(klass));
     RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(ref_type));
 }
 

@@ -11,6 +11,7 @@ class SystemReflectionRuntimeFieldInfo
 {
   public:
     static utils::Span<vm::InternalCallEntry> get_internal_call_entries() noexcept;
+    static utils::Span<vm::NewobjInternalCallEntry> get_newobj_internal_call_entries() noexcept;
 
     // Get metadata token of the field
     static RtResult<uint32_t> get_metadata_token(vm::RtReflectionField* field) noexcept;

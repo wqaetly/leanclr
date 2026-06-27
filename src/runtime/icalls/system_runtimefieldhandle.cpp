@@ -14,6 +14,43 @@ namespace leanclr
 {
 namespace icalls
 {
+namespace
+{
+static bool is_metadata_field_handle(const metadata::RtFieldInfo* field) noexcept
+{
+    if (field == nullptr || field->parent == nullptr || field->type_sig == nullptr)
+    {
+        return false;
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(field->token);
+    return token.table_type == metadata::TableType::Field && token.rid != 0;
+}
+
+static RtResult<const metadata::RtFieldInfo*> get_runtime_field_handle_internal_param(const interp::RtStackObject* params,
+                                                                                     size_t index) noexcept
+{
+    uintptr_t raw_value = EvalStackOp::get_param<uintptr_t>(params, index);
+    if (raw_value == 0)
+    {
+        RET_OK(nullptr);
+    }
+
+    auto direct = reinterpret_cast<const metadata::RtFieldInfo*>(raw_value);
+    if (is_metadata_field_handle(direct))
+    {
+        RET_OK(direct);
+    }
+
+    auto slot_field = reinterpret_cast<const metadata::RtFieldInfo*>(*reinterpret_cast<const uintptr_t*>(raw_value));
+    if (is_metadata_field_handle(slot_field))
+    {
+        RET_OK(slot_field);
+    }
+
+    RET_ERR(RtErr::BadImageFormat);
+}
+} // namespace
 
 RtResult<vm::RtObject*> SystemRuntimeFieldHandle::get_value_direct(vm::RtReflectionField* field, vm::RtReflectionRuntimeType* field_type, vm::RtTypedReference* typed_ref,
                                                                   vm::RtReflectionRuntimeType* context_type) noexcept
@@ -174,7 +211,7 @@ static RtResultVoid get_token_invoker(metadata::RtManagedMethodPointer, const me
 static RtResultVoid get_attributes_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                            interp::RtStackObject* ret) noexcept
 {
-    auto field = EvalStackOp::get_param<const metadata::RtFieldInfo*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field, get_runtime_field_handle_internal_param(params, 0));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(uint32_t, attributes, SystemRuntimeFieldHandle::get_attributes(field));
     EvalStackOp::set_return(ret, attributes);
     RET_VOID_OK();
@@ -184,7 +221,7 @@ static RtResultVoid get_attributes_invoker(metadata::RtManagedMethodPointer, con
 static RtResultVoid get_approx_declaring_method_table_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                               const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    auto field = EvalStackOp::get_param<const metadata::RtFieldInfo*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field, get_runtime_field_handle_internal_param(params, 0));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, method_table,
                                             SystemRuntimeFieldHandle::get_approx_declaring_method_table(field));
     EvalStackOp::set_return(ret, method_table);
@@ -195,7 +232,7 @@ static RtResultVoid get_approx_declaring_method_table_invoker(metadata::RtManage
 static RtResultVoid acquires_context_from_this_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                        const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    auto field = EvalStackOp::get_param<const metadata::RtFieldInfo*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field, get_runtime_field_handle_internal_param(params, 0));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeFieldHandle::acquires_context_from_this(field));
     EvalStackOp::set_return(ret, result);
     RET_VOID_OK();
@@ -205,7 +242,7 @@ static RtResultVoid acquires_context_from_this_invoker(metadata::RtManagedMethod
 static RtResultVoid get_utf8_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                           interp::RtStackObject* ret) noexcept
 {
-    auto field = EvalStackOp::get_param<const metadata::RtFieldInfo*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field, get_runtime_field_handle_internal_param(params, 0));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, name, SystemRuntimeFieldHandle::get_utf8_name(field));
     EvalStackOp::set_return(ret, name);
     RET_VOID_OK();

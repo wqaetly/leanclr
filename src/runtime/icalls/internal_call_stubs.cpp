@@ -177,6 +177,9 @@ void InternalCallStubs::get_newobj_internal_call_entries(utils::Vector<vm::Newob
     entries.reserve(200);
     // append all newobj internal call entries here
     Append(entries, SystemString::get_newobj_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeMethodInfo::get_newobj_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeFieldInfo::get_newobj_internal_call_entries());
+    Append(entries, SystemReflectionRuntimePropertyInfo::get_newobj_internal_call_entries());
 }
 
 } // namespace icalls

@@ -3,6 +3,7 @@
 #include "icall_base.h"
 #include "vm/class.h"
 #include "vm/method.h"
+#include "vm/object.h"
 #include "vm/reflection.h"
 #include "vm/rt_array.h"
 #include "vm/rt_exception.h"
@@ -534,6 +535,75 @@ static RtResultVoid method_base_invoker_interpreted_invoke_method_invoker(metada
     RET_VOID_OK();
 }
 
+/// @newobj: System.Reflection.RuntimeMethodInfo::.ctor(System.RuntimeMethodHandleInternal,System.RuntimeType,System.RuntimeType+RuntimeTypeCache,System.Reflection.MethodAttributes,System.Reflection.BindingFlags,System.Object)
+static RtResultVoid newobj_runtime_method_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* ctor,
+                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto method = EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    auto declaring_type = EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 1);
+    auto reflected_type_cache = EvalStackOp::get_param<vm::RtObject*>(params, 2);
+    int32_t method_attributes = EvalStackOp::get_param<int32_t>(params, 3);
+    int32_t binding_flags = EvalStackOp::get_param<int32_t>(params, 4);
+    auto keepalive = EvalStackOp::get_param<vm::RtObject*>(params, 5);
+    if (method == nullptr || declaring_type == nullptr || reflected_type_cache == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
+                                            LEANCLR_NEWOBJ_INTERNAL(ctor->parent, "RuntimeMethodInfo::.ctor newobj"));
+    auto method_obj = reinterpret_cast<vm::RtReflectionMethod*>(obj);
+    method_obj->method = method;
+    method_obj->reflected_type_cache = reflected_type_cache;
+    method_obj->name = nullptr;
+    method_obj->to_string = nullptr;
+    method_obj->parameters = nullptr;
+    method_obj->return_parameter = nullptr;
+    method_obj->binding_flags = binding_flags;
+    method_obj->method_attributes = method_attributes;
+    method_obj->signature = nullptr;
+    method_obj->declaring_type = declaring_type;
+    method_obj->keepalive = keepalive;
+    method_obj->invoker = nullptr;
+
+    EvalStackOp::set_return(ret, method_obj);
+    RET_VOID_OK();
+}
+
+/// @newobj: System.Reflection.RuntimeConstructorInfo::.ctor(System.RuntimeMethodHandleInternal,System.RuntimeType,System.RuntimeType+RuntimeTypeCache,System.Reflection.MethodAttributes,System.Reflection.BindingFlags)
+static RtResultVoid newobj_runtime_constructor_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* ctor,
+                                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto method = EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    auto declaring_type = EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 1);
+    auto reflected_type_cache = EvalStackOp::get_param<vm::RtObject*>(params, 2);
+    int32_t method_attributes = EvalStackOp::get_param<int32_t>(params, 3);
+    int32_t binding_flags = EvalStackOp::get_param<int32_t>(params, 4);
+    if (method == nullptr || declaring_type == nullptr || reflected_type_cache == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
+                                            LEANCLR_NEWOBJ_INTERNAL(ctor->parent, "RuntimeConstructorInfo::.ctor newobj"));
+    auto constructor_obj = reinterpret_cast<vm::RtReflectionConstructor*>(obj);
+    constructor_obj->declaring_type = declaring_type;
+    constructor_obj->reflected_type_cache = reflected_type_cache;
+    constructor_obj->to_string = nullptr;
+    constructor_obj->parameters = nullptr;
+    constructor_obj->empty1 = nullptr;
+    constructor_obj->empty2 = nullptr;
+    constructor_obj->empty3 = nullptr;
+    constructor_obj->method = method;
+    constructor_obj->method_attributes = method_attributes;
+    constructor_obj->binding_flags = binding_flags;
+    constructor_obj->signature = nullptr;
+    constructor_obj->invoker = nullptr;
+
+    EvalStackOp::set_return(ret, constructor_obj);
+    RET_VOID_OK();
+}
+
 // Internal call registry
 static vm::InternalCallEntry s_internal_call_entries_system_reflection_runtimemethodinfo[] = {
     {"System.Reflection.RuntimeMethodInfo::GetMethodBodyInternal(System.IntPtr)",
@@ -574,6 +644,20 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeMethodInfo::get_intern
 {
     return utils::Span<vm::InternalCallEntry>(s_internal_call_entries_system_reflection_runtimemethodinfo,
                                               sizeof(s_internal_call_entries_system_reflection_runtimemethodinfo) / sizeof(vm::InternalCallEntry));
+}
+
+static vm::NewobjInternalCallEntry s_newobj_internal_call_entries_system_reflection_runtimemethodinfo[] = {
+    {"System.Reflection.RuntimeMethodInfo::.ctor(System.RuntimeMethodHandleInternal,System.RuntimeType,System.RuntimeType/RuntimeTypeCache,System.Reflection.MethodAttributes,System.Reflection.BindingFlags,System.Object)",
+     newobj_runtime_method_info_invoker},
+    {"System.Reflection.RuntimeConstructorInfo::.ctor(System.RuntimeMethodHandleInternal,System.RuntimeType,System.RuntimeType/RuntimeTypeCache,System.Reflection.MethodAttributes,System.Reflection.BindingFlags)",
+     newobj_runtime_constructor_info_invoker},
+};
+
+utils::Span<vm::NewobjInternalCallEntry> SystemReflectionRuntimeMethodInfo::get_newobj_internal_call_entries() noexcept
+{
+    return utils::Span<vm::NewobjInternalCallEntry>(
+        s_newobj_internal_call_entries_system_reflection_runtimemethodinfo,
+        sizeof(s_newobj_internal_call_entries_system_reflection_runtimemethodinfo) / sizeof(vm::NewobjInternalCallEntry));
 }
 
 } // namespace icalls

@@ -13,6 +13,7 @@ class SystemType
 
     static RtResult<vm::RtReflectionRuntimeType*> get_type_from_handle(const void* type_handle) noexcept;
     static RtResult<bool> get_is_value_type(vm::RtReflectionRuntimeType* runtime_type) noexcept;
+    static RtResult<bool> equals(vm::RtReflectionRuntimeType* left, vm::RtReflectionRuntimeType* right) noexcept;
 };
 } // namespace intrinsics
 } // namespace leanclr

@@ -1,15 +1,148 @@
 #include "system_reflection_runtimepropertyinfo.h"
 #include "icall_base.h"
 #include "vm/class.h"
+#include "vm/field.h"
+#include "vm/object.h"
 #include "vm/property.h"
 #include "vm/reflection.h"
 #include "vm/rt_array.h"
 #include "vm/rt_string.h"
+#include "metadata/module_def.h"
 
 namespace leanclr
 {
 namespace icalls
 {
+namespace
+{
+constexpr int32_t METHOD_ATTRIBUTE_PRIVATE = 0x0001;
+constexpr int32_t METHOD_ATTRIBUTE_PUBLIC = 0x0006;
+constexpr int32_t METHOD_ATTRIBUTE_MEMBER_ACCESS_MASK = 0x0007;
+constexpr int32_t METHOD_ATTRIBUTE_STATIC = 0x0010;
+constexpr int32_t BINDING_FLAGS_INSTANCE = 0x0004;
+constexpr int32_t BINDING_FLAGS_STATIC = 0x0008;
+constexpr int32_t BINDING_FLAGS_PUBLIC = 0x0010;
+constexpr int32_t BINDING_FLAGS_NON_PUBLIC = 0x0020;
+
+static RtResultVoid set_instance_field_value(vm::RtObject* obj, const char* field_name, const void* value) noexcept
+{
+    const metadata::RtFieldInfo* field = vm::Class::get_field_for_name(obj->klass, field_name, true);
+    if (field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+
+    return vm::Field::set_instance_value(field, obj, value);
+}
+
+static int32_t get_method_binding_flags(const metadata::RtMethodInfo* method) noexcept
+{
+    if (method == nullptr)
+    {
+        return BINDING_FLAGS_NON_PUBLIC | BINDING_FLAGS_INSTANCE;
+    }
+
+    bool is_public = (method->flags & METHOD_ATTRIBUTE_MEMBER_ACCESS_MASK) == METHOD_ATTRIBUTE_PUBLIC;
+    bool is_static = (method->flags & METHOD_ATTRIBUTE_STATIC) != 0;
+    return (is_public ? BINDING_FLAGS_PUBLIC : BINDING_FLAGS_NON_PUBLIC) |
+           (is_static ? BINDING_FLAGS_STATIC : BINDING_FLAGS_INSTANCE);
+}
+
+static RtResult<vm::RtReflectionMethod*> create_runtime_method_info(const metadata::RtMethodInfo* method,
+                                                                    vm::RtReflectionRuntimeType* declaring_type,
+                                                                    vm::RtObject* reflected_type_cache) noexcept
+{
+    if (method == nullptr)
+    {
+        RET_OK(nullptr);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
+                                            LEANCLR_NEWOBJ_INTERNAL(vm::Class::get_corlib_types().cls_reflection_method,
+                                                                    "RuntimePropertyInfo::.ctor accessor"));
+    auto method_obj = reinterpret_cast<vm::RtReflectionMethod*>(obj);
+    method_obj->method = method;
+    method_obj->reflected_type_cache = reflected_type_cache;
+    method_obj->name = nullptr;
+    method_obj->to_string = nullptr;
+    method_obj->parameters = nullptr;
+    method_obj->return_parameter = nullptr;
+    method_obj->binding_flags = get_method_binding_flags(method);
+    method_obj->method_attributes = static_cast<int32_t>(method->flags);
+    method_obj->signature = nullptr;
+    method_obj->declaring_type = declaring_type;
+    method_obj->keepalive = nullptr;
+    method_obj->invoker = nullptr;
+    RET_OK(method_obj);
+}
+
+static RtResult<const metadata::RtPropertyInfo*> get_property_from_runtime_type(vm::RtReflectionRuntimeType* declaring_type,
+                                                                               int32_t property_token) noexcept
+{
+    if (declaring_type == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(property_token));
+    if (token.table_type != metadata::TableType::Property || token.rid == 0)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                            vm::Class::get_class_from_typesig(declaring_type->reflection_type.type_handle));
+    RET_ERR_ON_FAIL(vm::Class::initialize_properties(klass));
+    for (uint16_t i = 0; i < klass->property_count; ++i)
+    {
+        const metadata::RtPropertyInfo* property = klass->properties + i;
+        if (property->token == static_cast<metadata::EncodedTokenId>(property_token))
+        {
+            RET_OK(property);
+        }
+    }
+
+    RET_ERR(RtErr::MissingField);
+}
+
+static int32_t get_property_binding_flags(const metadata::RtPropertyInfo* property, bool* is_private) noexcept
+{
+    bool any_public = false;
+    bool any_static = false;
+    bool all_private = true;
+    const metadata::RtMethodInfo* methods[] = {property->get_method, property->set_method};
+    for (size_t i = 0; i < sizeof(methods) / sizeof(methods[0]); ++i)
+    {
+        const metadata::RtMethodInfo* method = methods[i];
+        if (method == nullptr)
+        {
+            continue;
+        }
+
+        int32_t visibility = method->flags & METHOD_ATTRIBUTE_MEMBER_ACCESS_MASK;
+        if (visibility == METHOD_ATTRIBUTE_PUBLIC)
+        {
+            any_public = true;
+            all_private = false;
+        }
+        else if (visibility != METHOD_ATTRIBUTE_PRIVATE)
+        {
+            all_private = false;
+        }
+        if ((method->flags & METHOD_ATTRIBUTE_STATIC) != 0)
+        {
+            any_static = true;
+        }
+    }
+
+    if (is_private != nullptr)
+    {
+        *is_private = all_private;
+    }
+    return (any_public ? BINDING_FLAGS_PUBLIC : BINDING_FLAGS_NON_PUBLIC) |
+           (any_static ? BINDING_FLAGS_STATIC : BINDING_FLAGS_INSTANCE);
+}
+} // namespace
 
 // ========== PInfo enum ==========
 enum class PInfo : int32_t
@@ -129,6 +262,51 @@ RtResult<int32_t> SystemReflectionRuntimePropertyInfo::get_metadata_token(vm::Rt
     RET_OK(static_cast<int32_t>(property->property->token));
 }
 
+RtResult<vm::RtObject*> SystemReflectionRuntimePropertyInfo::create_net10_property_info(
+    const metadata::RtPropertyInfo* property,
+    vm::RtReflectionRuntimeType* declaring_type,
+    vm::RtObject* reflected_type_cache,
+    bool* is_private) noexcept
+{
+    if (property == nullptr || declaring_type == nullptr || reflected_type_cache == nullptr || is_private == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethod*, getter,
+                                            create_runtime_method_info(property->get_method, declaring_type, reflected_type_cache));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethod*, setter,
+                                            create_runtime_method_info(property->set_method, declaring_type, reflected_type_cache));
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
+                                            LEANCLR_NEWOBJ_INTERNAL(vm::Class::get_corlib_types().cls_reflection_property,
+                                                                    "RuntimePropertyInfo::.ctor net10"));
+
+    int32_t token = static_cast<int32_t>(property->token);
+    vm::RtString* name = nullptr;
+    void* utf8_name = const_cast<char*>(property->name);
+    int32_t flags = static_cast<int32_t>(property->flags);
+    vm::RtArray* other_methods = nullptr;
+    int32_t binding_flags = get_property_binding_flags(property, is_private);
+    vm::RtObject* signature = nullptr;
+    vm::RtArray* parameters = nullptr;
+
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_token", &token));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_name", &name));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_utf8name", &utf8_name));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_flags", &flags));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_reflectedTypeCache", &reflected_type_cache));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_getterMethod", &getter));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_setterMethod", &setter));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_otherMethod", &other_methods));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_declaringType", &declaring_type));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_bindingFlags", &binding_flags));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_signature", &signature));
+    RET_ERR_ON_FAIL(set_instance_field_value(obj, "m_parameters", &parameters));
+
+    RET_OK(obj);
+}
+
 // ========== Invoker Functions ==========
 
 /// @icall: System.Reflection.RuntimePropertyInfo::internal_from_handle_type(System.IntPtr,System.IntPtr)
@@ -186,6 +364,28 @@ static RtResultVoid get_metadata_token_invoker_system_reflection_runtimeproperty
     RET_VOID_OK();
 }
 
+/// @newobj: System.Reflection.RuntimePropertyInfo::.ctor(System.Int32,System.RuntimeType,System.RuntimeType/RuntimeTypeCache,System.Boolean&)
+static RtResultVoid newobj_runtime_property_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* ctor,
+                                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    int32_t property_token = EvalStackOp::get_param<int32_t>(params, 0);
+    auto declaring_type = EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 1);
+    auto reflected_type_cache = EvalStackOp::get_param<vm::RtObject*>(params, 2);
+    auto is_private = EvalStackOp::get_param<bool*>(params, 3);
+    if (declaring_type == nullptr || reflected_type_cache == nullptr || is_private == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtPropertyInfo*, property,
+                                            get_property_from_runtime_type(declaring_type, property_token));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, property_obj_raw,
+                                            SystemReflectionRuntimePropertyInfo::create_net10_property_info(
+                                                property, declaring_type, reflected_type_cache, is_private));
+    EvalStackOp::set_return(ret, property_obj_raw);
+    RET_VOID_OK();
+}
+
 // ========== Registration ==========
 
 static vm::InternalCallEntry s_internal_call_entries_system_reflection_runtimepropertyinfo[] = {
@@ -206,6 +406,18 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimePropertyInfo::get_inte
     constexpr size_t entry_count =
         sizeof(s_internal_call_entries_system_reflection_runtimepropertyinfo) / sizeof(s_internal_call_entries_system_reflection_runtimepropertyinfo[0]);
     return utils::Span<vm::InternalCallEntry>(s_internal_call_entries_system_reflection_runtimepropertyinfo, entry_count);
+}
+
+static vm::NewobjInternalCallEntry s_newobj_internal_call_entries_system_reflection_runtimepropertyinfo[] = {
+    {"System.Reflection.RuntimePropertyInfo::.ctor(System.Int32,System.RuntimeType,System.RuntimeType/RuntimeTypeCache,System.Boolean&)",
+     newobj_runtime_property_info_invoker},
+};
+
+utils::Span<vm::NewobjInternalCallEntry> SystemReflectionRuntimePropertyInfo::get_newobj_internal_call_entries() noexcept
+{
+    constexpr size_t entry_count = sizeof(s_newobj_internal_call_entries_system_reflection_runtimepropertyinfo) /
+                                   sizeof(s_newobj_internal_call_entries_system_reflection_runtimepropertyinfo[0]);
+    return utils::Span<vm::NewobjInternalCallEntry>(s_newobj_internal_call_entries_system_reflection_runtimepropertyinfo, entry_count);
 }
 
 } // namespace icalls

@@ -28,6 +28,7 @@
 #include "utils/hash_util.h"
 #include "utils/hashmap.h"
 #include "utils/string_builder.h"
+#include "alloc/metadata_allocation.h"
 
 namespace leanclr
 {
@@ -153,6 +154,77 @@ static utils::HashMap<const metadata::RtAssembly*, RtReflectionAssembly*> s_asse
 static utils::HashMap<const metadata::RtModuleDef*, RtReflectionModule*> s_module_reflection_map;
 static utils::HashMap<const metadata::RtAssembly*, metadata::RtMonoAssemblyName*> s_assembly_name_map;
 
+struct Net10MethodTableFacade
+{
+    metadata::RtTypeSig type_sig;
+    const Net10MethodTableFacade* parent_method_table;
+    void* reserved_module;
+    struct Net10MethodTableAuxiliaryData* auxiliary_data;
+    const metadata::RtClass* klass;
+};
+
+struct Net10MethodTableAuxiliaryData
+{
+    uint32_t flags;
+    void* loader_module;
+    intptr_t exposed_class_object_raw;
+};
+
+static_assert(sizeof(metadata::RtTypeSig) == 0x10, "net10 MethodTable facade expects RtTypeSig in the first 16 bytes");
+static_assert(offsetof(Net10MethodTableFacade, parent_method_table) == 0x10,
+              "net10 MethodTable facade must expose ParentMethodTable at CoreLib's expected offset");
+static_assert(offsetof(Net10MethodTableFacade, auxiliary_data) == 0x20,
+              "net10 MethodTable facade must expose AuxiliaryData at CoreLib's expected offset");
+static_assert(offsetof(Net10MethodTableAuxiliaryData, exposed_class_object_raw) == 0x10,
+              "net10 MethodTable auxiliary data must expose ExposedClassObjectRaw at CoreLib's expected offset");
+
+static utils::HashMap<const metadata::RtTypeSig*, Net10MethodTableFacade*> s_net10_method_table_by_type_sig;
+static utils::HashMap<const void*, Net10MethodTableFacade*> s_net10_method_table_by_handle;
+
+static bool is_valid_type_sig_element_type(metadata::RtElementType element_type) noexcept
+{
+    switch (element_type)
+    {
+    case metadata::RtElementType::Void:
+    case metadata::RtElementType::Boolean:
+    case metadata::RtElementType::Char:
+    case metadata::RtElementType::I1:
+    case metadata::RtElementType::U1:
+    case metadata::RtElementType::I2:
+    case metadata::RtElementType::U2:
+    case metadata::RtElementType::I4:
+    case metadata::RtElementType::U4:
+    case metadata::RtElementType::I8:
+    case metadata::RtElementType::U8:
+    case metadata::RtElementType::R4:
+    case metadata::RtElementType::R8:
+    case metadata::RtElementType::String:
+    case metadata::RtElementType::Ptr:
+    case metadata::RtElementType::ByRef:
+    case metadata::RtElementType::ValueType:
+    case metadata::RtElementType::Class:
+    case metadata::RtElementType::Var:
+    case metadata::RtElementType::Array:
+    case metadata::RtElementType::GenericInst:
+    case metadata::RtElementType::TypedByRef:
+    case metadata::RtElementType::I:
+    case metadata::RtElementType::U:
+    case metadata::RtElementType::FnPtr:
+    case metadata::RtElementType::Object:
+    case metadata::RtElementType::SZArray:
+    case metadata::RtElementType::MVar:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool looks_like_leanclr_type_sig(const metadata::RtTypeSig* type_sig) noexcept
+{
+    return type_sig != nullptr && is_valid_type_sig_element_type(type_sig->ele_type) &&
+           type_sig->field_or_param_attrs == 0 && !type_sig->pinned && type_sig->num_mods == 0;
+}
+
 static RtResult<int32_t> unbox_i32(RtObject* obj, const metadata::RtClass* cls_i32)
 {
     if (obj == nullptr)
@@ -238,6 +310,136 @@ static bool has_legacy_reflection_field_layout(const metadata::RtClass* runtime_
 
 } // namespace
 
+static RtResultVoid ensure_net10_method_table_facade_initialized(Net10MethodTableFacade* method_table,
+                                                                 const metadata::RtTypeSig* pooled_type_sig) noexcept;
+
+RtResult<const metadata::RtTypeSig*> Reflection::get_net10_type_handle(const metadata::RtTypeSig* type_sig)
+{
+    if (type_sig == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto canon_type_sig = type_sig->to_canonized();
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, pooled_type_sig,
+                                            metadata::MetadataCache::get_pooled_typesig(canon_type_sig));
+
+    auto found = s_net10_method_table_by_type_sig.find(pooled_type_sig);
+    if (found != s_net10_method_table_by_type_sig.end())
+    {
+        RET_ERR_ON_FAIL(ensure_net10_method_table_facade_initialized(found->second, pooled_type_sig));
+        RET_OK(&found->second->type_sig);
+    }
+
+    auto method_table = alloc::MetadataAllocation::malloc_any_zeroed<Net10MethodTableFacade>();
+    auto auxiliary_data = alloc::MetadataAllocation::malloc_any_zeroed<Net10MethodTableAuxiliaryData>();
+    method_table->type_sig = *pooled_type_sig;
+    method_table->auxiliary_data = auxiliary_data;
+    s_net10_method_table_by_type_sig.emplace(pooled_type_sig, method_table);
+    s_net10_method_table_by_handle.emplace(method_table, method_table);
+    s_net10_method_table_by_handle.emplace(&method_table->type_sig, method_table);
+
+    RET_ERR_ON_FAIL(ensure_net10_method_table_facade_initialized(method_table, pooled_type_sig));
+
+    RET_OK(&method_table->type_sig);
+}
+
+static RtResultVoid ensure_net10_method_table_facade_initialized(Net10MethodTableFacade* method_table,
+                                                                 const metadata::RtTypeSig* pooled_type_sig) noexcept
+{
+    if (method_table == nullptr || pooled_type_sig == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    if (method_table->auxiliary_data == nullptr)
+    {
+        method_table->auxiliary_data = alloc::MetadataAllocation::malloc_any_zeroed<Net10MethodTableAuxiliaryData>();
+    }
+
+    if (method_table->klass == nullptr)
+    {
+        auto klass_ret = Class::get_class_from_typesig(pooled_type_sig);
+        if (klass_ret.is_ok())
+        {
+            method_table->klass = klass_ret.unwrap();
+        }
+    }
+
+    if (method_table->klass != nullptr)
+    {
+        RET_ERR_ON_FAIL(Class::initialize_super_types(const_cast<metadata::RtClass*>(method_table->klass)));
+        if (method_table->klass->parent != nullptr && method_table->parent_method_table == nullptr)
+        {
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, parent_handle,
+                                                    Reflection::get_net10_type_handle(Class::get_by_val_type_sig(method_table->klass->parent)));
+            method_table->parent_method_table = reinterpret_cast<const Net10MethodTableFacade*>(parent_handle);
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, parent_runtime_type,
+                                                    Reflection::get_klass_reflection_object(method_table->klass->parent));
+            (void)parent_runtime_type;
+        }
+    }
+
+    RET_VOID_OK();
+}
+
+RtResult<const metadata::RtTypeSig*> Reflection::get_type_sig_from_net10_type_handle(const void* type_handle)
+{
+    if (type_handle == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto found = s_net10_method_table_by_handle.find(type_handle);
+    if (found != s_net10_method_table_by_handle.end())
+    {
+        RET_OK(&found->second->type_sig);
+    }
+
+    auto type_sig = reinterpret_cast<const metadata::RtTypeSig*>(type_handle);
+    if (looks_like_leanclr_type_sig(type_sig))
+    {
+        RET_OK(type_sig);
+    }
+
+    auto klass = reinterpret_cast<const metadata::RtClass*>(type_handle);
+    if (klass != nullptr && klass->by_val != nullptr)
+    {
+        RET_OK(klass->by_val);
+    }
+
+    RET_ERR(RtErr::BadImageFormat);
+}
+
+RtResult<const metadata::RtClass*> Reflection::get_class_from_net10_method_table(const void* method_table)
+{
+    if (method_table == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    auto found = s_net10_method_table_by_handle.find(method_table);
+    if (found != s_net10_method_table_by_handle.end())
+    {
+        if (found->second->klass == nullptr)
+        {
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                                    Class::get_class_from_typesig(&found->second->type_sig));
+            found->second->klass = klass;
+        }
+        RET_OK(found->second->klass);
+    }
+
+    auto type_sig = reinterpret_cast<const metadata::RtTypeSig*>(method_table);
+    if (looks_like_leanclr_type_sig(type_sig))
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Class::get_class_from_typesig(type_sig));
+        RET_OK(klass);
+    }
+
+    RET_OK(reinterpret_cast<const metadata::RtClass*>(method_table));
+}
+
 RtResult<RtReflectionType*> Reflection::get_type_reflection_object(const metadata::RtTypeSig* type_sig)
 {
     auto canon_type_sig = type_sig->to_canonized();
@@ -254,8 +456,11 @@ RtResult<RtReflectionType*> Reflection::get_type_reflection_object(const metadat
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ref_obj_raw, LEANCLR_NEWOBJ_INTERNAL(runtime_type_klass, "Reflection::get_type_reflection_object"));
     auto ref_obj = reinterpret_cast<RtReflectionType*>(ref_obj_raw);
 
-    ref_obj->type_handle = pooled_type_sig;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, net10_type_handle, get_net10_type_handle(pooled_type_sig));
+    ref_obj->type_handle = net10_type_handle;
     ref_obj->cache = nullptr;
+    auto method_table = reinterpret_cast<Net10MethodTableFacade*>(const_cast<metadata::RtTypeSig*>(net10_type_handle));
+    method_table->auxiliary_data->exposed_class_object_raw = reinterpret_cast<intptr_t>(ref_obj);
 
     auto inserted = s_class_reflection_type_map.emplace(pooled_type_sig, ref_obj);
     RET_OK(inserted.first->second);
@@ -470,6 +675,17 @@ RtResult<const metadata::RtFieldInfo*> Reflection::get_field_info_from_reflectio
         RET_OK(field_obj->field);
     }
 
+    const metadata::RtFieldInfo* handle_field = Class::get_field_for_name(field_obj->header.klass, "m_fieldHandle", true);
+    if (handle_field != nullptr)
+    {
+        const metadata::RtFieldInfo* handle = nullptr;
+        RET_ERR_ON_FAIL(Field::get_instance_value(handle_field, field_obj, &handle));
+        if (handle != nullptr)
+        {
+            RET_OK(handle);
+        }
+    }
+
     RET_ERR(RtErr::Argument);
 }
 
@@ -489,6 +705,25 @@ RtResult<const metadata::RtClass*> Reflection::get_reflection_field_klass(RtRefl
     if (has_legacy_reflection_field_layout(field_obj->header.klass) && field_obj->klass != nullptr)
     {
         RET_OK(field_obj->klass);
+    }
+
+    const metadata::RtFieldInfo* declaring_type_field = Class::get_field_for_name(field_obj->header.klass, "m_declaringType", true);
+    if (declaring_type_field != nullptr)
+    {
+        RtReflectionRuntimeType* declaring_type = nullptr;
+        RET_ERR_ON_FAIL(Field::get_instance_value(declaring_type_field, field_obj, &declaring_type));
+        if (declaring_type != nullptr)
+        {
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                                    Class::get_class_from_typesig(declaring_type->reflection_type.type_handle));
+            RET_OK(klass);
+        }
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field, get_field_info_from_reflection_object(field_obj));
+    if (field->parent != nullptr)
+    {
+        RET_OK(field->parent);
     }
 
     RET_ERR(RtErr::Argument);

@@ -10,6 +10,7 @@ class SystemReflectionRuntimeMethodInfo
 {
   public:
     static utils::Span<vm::InternalCallEntry> get_internal_call_entries() noexcept;
+    static utils::Span<vm::NewobjInternalCallEntry> get_newobj_internal_call_entries() noexcept;
 
     static RtResult<vm::RtReflectionMethodBody*> get_method_body_internal(const metadata::RtMethodInfo* method) noexcept;
     static RtResult<vm::RtReflectionMethod*> get_method_from_handle_internal_type_native(const metadata::RtMethodInfo* method,

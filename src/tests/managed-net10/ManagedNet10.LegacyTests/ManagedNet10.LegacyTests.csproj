@@ -34,6 +34,7 @@
     <Compile Include="CorlibReflectionModuleTestEntries.cs" />
     <Compile Include="CorlibStringTestEntries.cs" />
     <Compile Include="ToStringRegressionTestEntries.cs" />
+    <Compile Include="Net10SpanRegressionTestEntries.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
     <Compile Include="..\..\managed\Common\CoversIcallAttribute.cs" Link="Common\CoversIcallAttribute.cs" />
     <Compile Include="..\..\managed\Common\GcUnitTestAttribute.cs" Link="Common\GcUnitTestAttribute.cs" />
@@ -46,6 +47,7 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTValueTypes.cs" Link="Fixtures\AOTValueTypes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\ArmHFAStructs.cs" Link="Fixtures\ArmHFAStructs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\CallDefs.cs" Link="Fixtures\CallDefs.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\CustomAttributes.cs" Link="Fixtures\CustomAttributes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdftnDefs.cs" Link="Fixtures\LdftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdvirftnDefs.cs" Link="Fixtures\LdvirftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\NullableTypeUtil.cs" Link="Fixtures\NullableTypeUtil.cs" />
@@ -145,6 +147,7 @@
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Assembly.cs" Link="Runtime\TC_Assembly.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_ArrayGenericInterface.cs" Link="Runtime\TC_ArrayGenericInterface.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_CustomAttribute.cs" Link="Runtime\TC_CustomAttribute.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_DynamicInvoke.cs" Link="Runtime\TC_Delegate_DynamicInvoke.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_OpenClose.cs" Link="Runtime\TC_Delegate_OpenClose.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Enum.cs" Link="Runtime\TC_Enum.cs" />

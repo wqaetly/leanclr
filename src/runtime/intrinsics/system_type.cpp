@@ -1,5 +1,6 @@
 #include "system_type.h"
 
+#include "metadata/metadata_compare.h"
 #include "vm/class.h"
 #include "vm/reflection.h"
 #include "vm/type.h"
@@ -65,6 +66,28 @@ RtResult<bool> SystemType::get_is_value_type(vm::RtReflectionRuntimeType* runtim
     return vm::Type::is_value_type(runtime_type->reflection_type.type_handle);
 }
 
+RtResult<bool> SystemType::equals(vm::RtReflectionRuntimeType* left, vm::RtReflectionRuntimeType* right) noexcept
+{
+    if (left == right)
+    {
+        RET_OK(true);
+    }
+    if (left == nullptr || right == nullptr)
+    {
+        RET_OK(false);
+    }
+    const auto& corlib_types = vm::Class::get_corlib_types();
+    if (left->reflection_type.header.klass != corlib_types.cls_runtimetype || right->reflection_type.header.klass != corlib_types.cls_runtimetype)
+    {
+        RET_OK(false);
+    }
+
+    RET_OK(metadata::MetadataCompare::is_typesig_equal_ignore_attrs(
+        left->reflection_type.type_handle,
+        right->reflection_type.type_handle,
+        false));
+}
+
 /// @intrinsic: System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)
 static RtResultVoid get_type_from_handle_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -91,12 +114,44 @@ static RtResultVoid get_is_value_type_invoker(metadata::RtManagedMethodPointer m
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.Type::op_Equality(System.Type,System.Type)
+static RtResultVoid equals_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                   const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    auto left = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+    auto right = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemType::equals(left, right));
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.Type::op_Inequality(System.Type,System.Type)
+static RtResultVoid not_equals_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    auto left = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+    auto right = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemType::equals(left, right));
+    interp::EvalStackOp::set_return(ret, !result);
+    RET_VOID_OK();
+}
+
 static vm::IntrinsicEntry s_intrinsic_entries_system_type[] = {
     {"System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)", (vm::IntrinsicFunction)&SystemType::get_type_from_handle,
      get_type_from_handle_invoker},
     {"System.Type::get_IsValueType", (vm::IntrinsicFunction)&SystemType::get_is_value_type, get_is_value_type_invoker},
     {"System.RuntimeType::get_IsValueType", (vm::IntrinsicFunction)&SystemType::get_is_value_type, get_is_value_type_invoker},
     {"System.RuntimeType::IsValueTypeImpl()", (vm::IntrinsicFunction)&SystemType::get_is_value_type, get_is_value_type_invoker},
+    {"System.Type::op_Equality(System.Type,System.Type)", (vm::IntrinsicFunction)&SystemType::equals, equals_invoker},
+    {"System.Type::op_Equality", (vm::IntrinsicFunction)&SystemType::equals, equals_invoker},
+    {"System.Type::op_Inequality(System.Type,System.Type)", (vm::IntrinsicFunction)&SystemType::equals, not_equals_invoker},
+    {"System.Type::op_Inequality", (vm::IntrinsicFunction)&SystemType::equals, not_equals_invoker},
 };
 
 utils::Span<vm::IntrinsicEntry> SystemType::get_intrinsic_entries() noexcept

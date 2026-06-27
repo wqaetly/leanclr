@@ -134,14 +134,16 @@ RtResult<int32_t> SystemRuntimeMethodHandle::get_impl_attributes(const vm::RtRef
     RET_OK(static_cast<int32_t>(method_info->iflags));
 }
 
-RtResult<const metadata::RtClass*> SystemRuntimeMethodHandle::get_method_table(const metadata::RtMethodInfo* method) noexcept
+RtResult<const void*> SystemRuntimeMethodHandle::get_method_table(const metadata::RtMethodInfo* method) noexcept
 {
     if (method == nullptr)
     {
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    RET_OK(method->parent);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, method_table,
+                                            vm::Reflection::get_net10_type_handle(vm::Class::get_by_val_type_sig(method->parent)));
+    RET_OK(method_table);
 }
 
 RtResult<int32_t> SystemRuntimeMethodHandle::get_slot(const metadata::RtMethodInfo* method) noexcept
@@ -325,7 +327,7 @@ static RtResultVoid get_method_table_invoker(metadata::RtManagedMethodPointer, c
 {
     auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, method_table, SystemRuntimeMethodHandle::get_method_table(method));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const void*, method_table, SystemRuntimeMethodHandle::get_method_table(method));
     EvalStackOp::set_return(ret, method_table);
     RET_VOID_OK();
 }

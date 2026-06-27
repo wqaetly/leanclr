@@ -1879,7 +1879,7 @@ RtResult<RtCustomAttributeRawData> RtModuleDef::get_custom_attribute_raw_data(ui
     RtToken constructorToken = RtMetadata::decode_custom_attribute_type_coded_index(row.type_);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const RtMethodInfo*, constructorMethod,
                                             get_method_by_token(constructorToken, RtGenericContainerContext{}, nullptr));
-    auto ret = RtCustomAttributeRawData{constructorMethod, row.value};
+    auto ret = RtCustomAttributeRawData{constructorMethod, constructorToken.to_encoded_id(), row.value};
     RET_OK(ret);
 }
 

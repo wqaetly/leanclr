@@ -6,6 +6,7 @@
 #include "interp/interp_defs.h"
 #include "vm/class.h"
 #include "vm/field.h"
+#include "vm/reflection.h"
 #include "vm/rt_array.h"
 
 namespace leanclr
@@ -151,6 +152,12 @@ static RtResult<const metadata::RtClass*> get_class_from_method_table_or_typesig
         RET_ERR(RtErr::ArgumentNull);
     }
 
+    auto klass_from_handle = vm::Reflection::get_class_from_net10_method_table(method_table);
+    if (klass_from_handle.is_ok())
+    {
+        RET_OK(klass_from_handle.unwrap());
+    }
+
     auto type_sig = reinterpret_cast<const metadata::RtTypeSig*>(method_table);
     if (looks_like_leanclr_type_sig(type_sig))
     {
@@ -158,17 +165,19 @@ static RtResult<const metadata::RtClass*> get_class_from_method_table_or_typesig
         RET_OK(klass);
     }
 
-    RET_OK(reinterpret_cast<const metadata::RtClass*>(method_table));
+    RET_ERR(klass_from_handle.unwrap_err());
 }
 
-RtResult<const metadata::RtClass*> SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table(vm::RtObject* obj) noexcept
+RtResult<const void*> SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table(vm::RtObject* obj) noexcept
 {
     if (obj == nullptr)
     {
         RET_ERR(RtErr::NullReference);
     }
 
-    RET_OK(obj->klass);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, method_table,
+                                            vm::Reflection::get_net10_type_handle(vm::Class::get_by_val_type_sig(obj->klass)));
+    RET_OK(method_table);
 }
 
 RtResult<bool> SystemRuntimeCompilerServicesRuntimeHelpers::object_has_component_size(vm::RtObject* obj) noexcept
@@ -339,7 +348,7 @@ static RtResultVoid get_method_table_invoker(metadata::RtManagedMethodPointer me
     (void)method;
     vm::RtObject* obj = interp::EvalStackOp::get_param<vm::RtObject*>(params, 0);
 
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, method_table,
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const void*, method_table,
                                             SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table(obj));
     interp::EvalStackOp::set_return(ret, method_table);
     RET_VOID_OK();

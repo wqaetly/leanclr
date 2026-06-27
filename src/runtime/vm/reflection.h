@@ -11,6 +11,9 @@ class Reflection
   public:
     static RtResult<RtReflectionType*> get_type_reflection_object(const metadata::RtTypeSig* type_sig);
     static RtResult<RtReflectionType*> get_klass_reflection_object(const metadata::RtClass* klass);
+    static RtResult<const metadata::RtTypeSig*> get_net10_type_handle(const metadata::RtTypeSig* type_sig);
+    static RtResult<const metadata::RtTypeSig*> get_type_sig_from_net10_type_handle(const void* type_handle);
+    static RtResult<const metadata::RtClass*> get_class_from_net10_method_table(const void* method_table);
     static RtResult<RtReflectionMethod*> get_method_reflection_object(const metadata::RtMethodInfo* method, const metadata::RtClass* reflection_at_klass);
     static RtResult<const metadata::RtMethodInfo*> get_method_info_from_reflection_object(RtReflectionMethod* method_obj);
     static RtResult<const metadata::RtClass*> get_reflection_method_klass(RtReflectionMethod* method_obj);

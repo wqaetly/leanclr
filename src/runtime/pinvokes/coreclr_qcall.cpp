@@ -1,7 +1,6 @@
 #include "coreclr_qcall.h"
 
 #include <cstring>
-#include <cstdio>
 #include <limits>
 
 #include "alloc/general_allocation.h"
@@ -116,6 +115,108 @@ struct RtIntPtrSpan
     int32_t length;
 };
 
+static bool is_metadata_field_handle(const metadata::RtFieldInfo* field) noexcept
+{
+    if (field == nullptr || field->parent == nullptr || field->type_sig == nullptr)
+    {
+        return false;
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(field->token);
+    return token.table_type == metadata::TableType::Field && token.rid != 0;
+}
+
+static RtResult<const metadata::RtFieldInfo*> get_field_handle_from_runtime_field_info_object(const void* value) noexcept
+{
+    if (value == nullptr)
+    {
+        RET_OK(nullptr);
+    }
+
+    auto obj = reinterpret_cast<vm::RtObject*>(const_cast<void*>(value));
+    const metadata::RtClass* obj_klass = obj->klass;
+    if (obj_klass == nullptr)
+    {
+        RET_OK(nullptr);
+    }
+
+    const auto& corlib_types = vm::Class::get_corlib_types();
+    bool is_runtime_field_info = obj_klass == corlib_types.cls_reflection_field;
+    if (!is_runtime_field_info)
+    {
+        const char* ns = obj_klass->namespaze != nullptr ? obj_klass->namespaze : "";
+        const char* name = obj_klass->name != nullptr ? obj_klass->name : "";
+        is_runtime_field_info = std::strcmp(ns, "System") == 0 && std::strcmp(name, "RuntimeFieldInfoStub") == 0;
+    }
+    if (!is_runtime_field_info)
+    {
+        RET_OK(nullptr);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field,
+                                            vm::Reflection::get_field_info_from_reflection_object(reinterpret_cast<vm::RtReflectionField*>(obj)));
+    RET_OK(is_metadata_field_handle(field) ? field : nullptr);
+}
+
+static RtResult<const metadata::RtFieldInfo*> get_runtime_field_handle_internal_param(const interp::RtStackObject* params,
+                                                                                     size_t index) noexcept
+{
+    uintptr_t raw_value = interp::EvalStackOp::get_param<uintptr_t>(params, index);
+    if (raw_value == 0)
+    {
+        RET_OK(nullptr);
+    }
+
+    auto direct = reinterpret_cast<const metadata::RtFieldInfo*>(raw_value);
+    if (is_metadata_field_handle(direct))
+    {
+        RET_OK(direct);
+    }
+
+    const void* raw = reinterpret_cast<const void*>(raw_value);
+    metadata::RtClass* runtime_field_handle_klass = nullptr;
+    metadata::RtModuleDef* corlib = metadata::RtModuleDef::get_corlib_module();
+    if (corlib != nullptr)
+    {
+        auto klass_ret = corlib->get_class_by_name("System.RuntimeFieldHandleInternal", false, false);
+        if (klass_ret.is_ok())
+        {
+            runtime_field_handle_klass = klass_ret.unwrap();
+        }
+    }
+
+    auto boxed_handle = reinterpret_cast<const vm::RtObject*>(raw);
+    if (runtime_field_handle_klass != nullptr && boxed_handle->klass == runtime_field_handle_klass)
+    {
+        const uint8_t* value_ptr = reinterpret_cast<const uint8_t*>(raw) + sizeof(vm::RtObject);
+        auto field = *reinterpret_cast<const metadata::RtFieldInfo* const*>(value_ptr);
+        RET_OK(is_metadata_field_handle(field) ? field : nullptr);
+    }
+
+    uintptr_t slot_value = *reinterpret_cast<const uintptr_t*>(raw);
+    auto slot_field = reinterpret_cast<const metadata::RtFieldInfo*>(slot_value);
+    if (is_metadata_field_handle(slot_field))
+    {
+        RET_OK(slot_field);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, slot_object_field,
+                                            get_field_handle_from_runtime_field_info_object(reinterpret_cast<const void*>(slot_value)));
+    if (slot_object_field != nullptr)
+    {
+        RET_OK(slot_object_field);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, raw_object_field,
+                                            get_field_handle_from_runtime_field_info_object(raw));
+    if (raw_object_field != nullptr)
+    {
+        RET_OK(raw_object_field);
+    }
+
+    RET_ERR(RtErr::BadImageFormat);
+}
+
 static bool is_value_type_fast_compare_blocked_field_type(metadata::RtElementType element_type) noexcept
 {
     switch (element_type)
@@ -228,7 +329,7 @@ RtResult<const metadata::RtTypeSig*> get_type_sig_from_qcall_type_handle(void* q
 {
     if (native_handle != nullptr)
     {
-        RET_OK(reinterpret_cast<const metadata::RtTypeSig*>(native_handle));
+        return vm::Reflection::get_type_sig_from_net10_type_handle(native_handle);
     }
 
     if (qcall_type_handle == nullptr)
@@ -546,6 +647,33 @@ RtResult<int32_t> get_runtime_type_fields(void* method_table, RtIntPtrSpan data,
     }
 
     RET_OK(1);
+}
+
+RtResult<vm::RtArray*> get_runtime_type_interfaces(void* method_table) noexcept
+{
+    if (method_table == nullptr)
+    {
+        return LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(vm::Class::get_corlib_types().cls_systemtype,
+                                                               "RuntimeTypeHandle_GetInterfaces");
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            get_type_sig_from_qcall_type_handle(method_table, method_table));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_interfaces(klass));
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        vm::RtArray*, interface_array,
+        LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(vm::Class::get_corlib_types().cls_systemtype, klass->interface_count,
+                                                    "RuntimeTypeHandle_GetInterfaces"));
+    for (uint32_t i = 0; i < klass->interface_count; ++i)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, interface_reflection,
+                                                vm::Reflection::get_klass_reflection_object(klass->interfaces[i]));
+        vm::Array::set_array_data_at<vm::RtReflectionType*>(interface_array, static_cast<int32_t>(i), interface_reflection);
+    }
+
+    RET_OK(interface_array);
 }
 
 RtResult<int32_t> get_rva_field_info(const metadata::RtFieldInfo* field, void** data, uint32_t* length) noexcept
@@ -2910,11 +3038,27 @@ RtResultVoid runtime_type_handle_get_fields_invoker(metadata::RtManagedMethodPoi
                                                     interp::RtStackObject* ret) noexcept
 {
     auto method_table = interp::EvalStackOp::get_param<void*>(params, 0);
-    auto data = interp::EvalStackOp::get_param<RtIntPtrSpan>(params, 1);
-    auto used_count = interp::EvalStackOp::get_param<int32_t*>(params, 3);
+    auto data_ptr = interp::EvalStackOp::get_param<void**>(params, 1);
+    auto used_count = interp::EvalStackOp::get_param<int32_t*>(params, 2);
+    RtIntPtrSpan data{data_ptr, used_count != nullptr ? *used_count : 0};
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, result, get_runtime_type_fields(method_table, data, used_count));
     interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_type_handle_get_interfaces_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                        const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto method_table = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto result_slot = interp::EvalStackOp::get_param<vm::RtArray**>(params, 1);
+    if (result_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, interfaces, get_runtime_type_interfaces(method_table));
+    *result_slot = interfaces;
     RET_VOID_OK();
 }
 
@@ -3129,7 +3273,7 @@ RtResultVoid signature_init_invoker(metadata::RtManagedMethodPointer, const meta
     auto signature_slot = interp::EvalStackOp::get_param<vm::RtSignature**>(params, 0);
     auto raw_sig = interp::EvalStackOp::get_param<void*>(params, 1);
     int32_t raw_sig_size = interp::EvalStackOp::get_param<int32_t>(params, 2);
-    auto field = interp::EvalStackOp::get_param<const metadata::RtFieldInfo*>(params, 3);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field, get_runtime_field_handle_internal_param(params, 3));
     auto method = interp::EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 4);
 
     vm::RtSignature* signature = signature_slot != nullptr ? *signature_slot : nullptr;
@@ -3902,8 +4046,18 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::GetFields(System.Runtime.CompilerServices.MethodTable*,System.Span`1<System.IntPtr>,System.Int32&)",
         nullptr, runtime_type_handle_get_fields_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeTypeHandle::<GetFields>g____PInvoke|67_0(System.Runtime.CompilerServices.MethodTable*,System.IntPtr*,System.Int32*)",
+        nullptr, runtime_type_handle_get_fields_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::<GetFields>g____PInvoke|67_0", nullptr,
+                                   runtime_type_handle_get_fields_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetFields", nullptr, runtime_type_handle_get_fields_invoker);
     vm::PInvokes::register_pinvoke("RuntimeTypeHandle_GetFields", nullptr, runtime_type_handle_get_fields_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeTypeHandle::GetInterfaces(System.Runtime.CompilerServices.MethodTable*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, runtime_type_handle_get_interfaces_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetInterfaces", nullptr, runtime_type_handle_get_interfaces_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_GetInterfaces", nullptr, runtime_type_handle_get_interfaces_invoker);
     vm::PInvokes::register_pinvoke("System.ModuleHandle::GetToken(System.Runtime.CompilerServices.QCallModule)", nullptr,
                                    module_handle_get_token_invoker);
     vm::PInvokes::register_pinvoke("System.ModuleHandle::GetToken", nullptr, module_handle_get_token_invoker);

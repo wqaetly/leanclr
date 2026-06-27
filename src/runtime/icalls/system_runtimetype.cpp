@@ -188,6 +188,8 @@ SystemRuntimeType::get_methods_by_name_native(vm::RtReflectionRuntimeType* runti
     const metadata::RtClass* current_klass = klass;
     while (current_klass != nullptr)
     {
+        RET_ERR_ON_FAIL(vm::Class::initialize_methods(const_cast<metadata::RtClass*>(current_klass)));
+
         for (uint32_t i = 0; i < current_klass->method_count; ++i)
         {
             const metadata::RtMethodInfo* method = current_klass->methods[i];
@@ -272,6 +274,8 @@ SystemRuntimeType::get_properties_by_name_native(vm::RtReflectionRuntimeType* ru
     const metadata::RtClass* current_klass = klass;
     while (current_klass != nullptr)
     {
+        RET_ERR_ON_FAIL(vm::Class::initialize_properties(const_cast<metadata::RtClass*>(current_klass)));
+
         for (uint32_t i = 0; i < current_klass->property_count; ++i)
         {
             const metadata::RtPropertyInfo* property = current_klass->properties + i;

@@ -32,6 +32,11 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Reflection));
         }
 
+        public static void RunRuntimeCustomAttribute()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.CustomeAttrites.TC_CustomAttribute));
+        }
+
         public static void RunRuntimeReflectionConstString()
         {
             LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_Reflection), "const_string");

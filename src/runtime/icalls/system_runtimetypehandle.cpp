@@ -160,6 +160,7 @@ RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_base_type(co
 {
     auto type_sig = runtime_type->reflection_type.type_handle;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_super_types(klass));
     auto base_klass = klass->parent;
     if (base_klass == nullptr)
     {

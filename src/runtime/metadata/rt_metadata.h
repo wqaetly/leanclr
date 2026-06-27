@@ -740,6 +740,7 @@ struct RtCustomAttributeRidRange
 struct RtCustomAttributeRawData
 {
     const RtMethodInfo* ctor;
+    EncodedTokenId ctor_token;
     uint32_t dataBlobIndex;
 };
 

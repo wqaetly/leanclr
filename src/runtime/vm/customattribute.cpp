@@ -1152,19 +1152,45 @@ RtResult<RtArray*> CustomAttribute::get_customattributes_data_on_target(RtObject
 }
 
 static const metadata::RtMethodInfo* s_customattribute_data_ctor = nullptr;
+static const metadata::RtClass* s_runtime_customattribute_data_class = nullptr;
+static const metadata::RtClass* s_metadata_token_class = nullptr;
+static const metadata::RtClass* s_const_array_class = nullptr;
+
+struct RuntimeMetadataConstArray
+{
+    int32_t length;
+    intptr_t data;
+};
 
 RtResult<const metadata::RtMethodInfo*> get_customattribute_data_ctor()
 {
     if (s_customattribute_data_ctor == nullptr)
     {
         const CorLibTypes& corlib_types = Class::get_corlib_types();
+        metadata::RtModuleDef* corlib = corlib_types.cls_customattributedata->image;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, runtime_customattribute_data_class,
+                                                corlib->get_class_by_name("System.Reflection.RuntimeCustomAttributeData", false, true));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, metadata_token_class,
+                                                corlib->get_class_by_name("System.Reflection.MetadataToken", false, true));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, const_array_class,
+                                                corlib->get_class_by_name("System.Reflection.ConstArray", false, true));
+
+        RET_ERR_ON_FAIL(Class::initialize_all(runtime_customattribute_data_class));
+        RET_ERR_ON_FAIL(Class::initialize_all(metadata_token_class));
+        RET_ERR_ON_FAIL(Class::initialize_all(const_array_class));
+
         const metadata::RtTypeSig* param_type_sigs[] = {
-            corlib_types.cls_runtimetype->by_val,
-            corlib_types.cls_array->by_val,
+            corlib_types.cls_reflection_module->by_val,
+            metadata_token_class->by_val,
+            const_array_class->by_ref,
         };
-        const metadata::RtMethodInfo* ctor = Method::find_matched_method_in_class_by_name_and_param_count(corlib_types.cls_customattributedata, STR_CTOR, 4);
+        const metadata::RtMethodInfo* ctor =
+            Method::find_matched_method_in_class_by_name_and_signature(runtime_customattribute_data_class, STR_CTOR, param_type_sigs, 3);
         if (!ctor)
             RET_ERR(RtErr::MissingMethod);
+        s_runtime_customattribute_data_class = runtime_customattribute_data_class;
+        s_metadata_token_class = metadata_token_class;
+        s_const_array_class = const_array_class;
         s_customattribute_data_ctor = ctor;
     }
     RET_OK(s_customattribute_data_ctor);
@@ -1182,28 +1208,32 @@ RtResult<RtArray*> CustomAttribute::get_customattributes_data_on_target_token(me
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(metadata::RtCustomAttributeRidRange, rid_range, mod->get_custom_attribute_rid_range(target_token));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(const metadata::RtMethodInfo*, ca_data_ctor, get_customattribute_data_ctor());
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(RtArray*, ca_data_arr, LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(types.cls_customattributedata, (int32_t)rid_range.count, "CustomAttribute::get_customattributes_data_on_target_token"));
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionAssembly*, assembly_obj, Reflection::get_assembly_reflection_object(mod->get_assembly()));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionModule*, module_obj, Reflection::get_module_reflection_object(mod));
     for (uint32_t i = 0; i < rid_range.count; ++i)
     {
         uint32_t ca_rid = rid_range.start_rid + i;
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtCustomAttributeRawData, raw_data, mod->get_custom_attribute_raw_data(ca_rid));
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ca, read_custom_attribute(mod, &raw_data));
 
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(utils::BinaryReader, reader, mod->get_decoded_blob_reader(raw_data.dataBlobIndex));
-        RtArray* typed_arg_arr = nullptr;
-        RtArray* named_arg_arr = nullptr;
-        RET_ERR_ON_FAIL(resolve_customattribute_data_arguments(&reader, mod, raw_data.ctor, &typed_arg_arr, &named_arg_arr));
+        RuntimeMetadataConstArray blob;
+        blob.length = static_cast<int32_t>(reader.length());
+        blob.data = reinterpret_cast<intptr_t>(reader.data());
 
-        const void* ctor_args[4];
-        UNWRAP_OR_RET_ERR_ON_FAIL(ctor_args[0], Reflection::get_method_reflection_object(raw_data.ctor, raw_data.ctor->parent));
-        const void* data_ptr = reader.data();
-        size_t data_len = reader.length();
-        ctor_args[1] = assembly_obj;
-        ctor_args[2] = &data_ptr;
-        ctor_args[3] = &data_len;
+        int32_t ctor_token = static_cast<int32_t>(raw_data.ctor_token);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ctor_token_obj,
+                                                LEANCLR_BOX_OBJECT_INTERNAL(s_metadata_token_class, &ctor_token,
+                                                                            "CustomAttribute::get_customattributes_data_on_target_token"));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, blob_obj,
+                                                LEANCLR_BOX_OBJECT_INTERNAL(s_const_array_class, &blob,
+                                                                            "CustomAttribute::get_customattributes_data_on_target_token"));
 
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ca_data_obj, LEANCLR_NEWOBJ_INTERNAL(ca_data_ctor->parent, "CustomAttribute::get_customattributes_data_on_target_token"));
-        RET_ERR_ON_FAIL(Runtime::invoke_with_run_cctor(ca_data_ctor, ca_data_obj, ctor_args));
+        RtObject* ctor_args[3] = {
+            reinterpret_cast<RtObject*>(module_obj),
+            ctor_token_obj,
+            blob_obj,
+        };
+        RET_ERR_ON_FAIL(Runtime::invoke_object_arguments_with_run_cctor(ca_data_ctor, ca_data_obj, ctor_args, 3));
 
         // gc::GarbageCollector::write_barrier((RtObject**)Array::get_array_data_start_as<RtObject*>(ca_data_arr) + i, ca_data_obj);
         Array::set_array_data_at<RtObject*>(ca_data_arr, (int32_t)i, ca_data_obj);
