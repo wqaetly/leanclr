@@ -107,6 +107,7 @@
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_2022_9_27.cs" Link="Regression\Bug_2022_9_27.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_ValueTypeToString_2022_7_22.cs" Link="Regression\Bug_ValueTypeToString_2022_7_22.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_ArrayGenericInterface.cs" Link="Runtime\TC_ArrayGenericInterface.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_OpenClose.cs" Link="Runtime\TC_Delegate_OpenClose.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Enum.cs" Link="Runtime\TC_Enum.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_event.cs" Link="Runtime\TC_event.cs" />

@@ -119,6 +119,19 @@ bool is_array_interface_count_method(const char* method_name) noexcept
            std::strcmp(method_name, "System.Collections.Generic.IReadOnlyCollection`1.get_Count") == 0;
 }
 
+bool is_array_interface_get_item_method(const char* method_name) noexcept
+{
+    return std::strcmp(method_name, "get_Item") == 0 ||
+           std::strcmp(method_name, "System.Collections.Generic.IList`1.get_Item") == 0 ||
+           std::strcmp(method_name, "System.Collections.Generic.IReadOnlyList`1.get_Item") == 0;
+}
+
+bool is_array_interface_set_item_method(const char* method_name) noexcept
+{
+    return std::strcmp(method_name, "set_Item") == 0 ||
+           std::strcmp(method_name, "System.Collections.Generic.IList`1.set_Item") == 0;
+}
+
 // Method pointer placeholder
 void fn_not_implemented_method_pointer() noexcept
 {
@@ -165,6 +178,16 @@ static metadata::RtInvokeMethodPointer try_setup_array_or_szarray_invoke(const m
         {
             assert(param_count == 0);
             return Array::szarray_interface_count_invoker;
+        }
+        else if (is_array_interface_get_item_method(method_name))
+        {
+            assert(param_count == 1);
+            return Array::szarray_get_invoker;
+        }
+        else if (is_array_interface_set_item_method(method_name))
+        {
+            assert(param_count == 2);
+            return Array::szarray_set_invoker;
         }
         else
         {

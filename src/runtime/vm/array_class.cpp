@@ -158,17 +158,51 @@ static bool is_net10_array_interface_count_method(const char* iface_name, const 
            (std::strcmp(iface_name, "ICollection`1") == 0 || std::strcmp(iface_name, "IReadOnlyCollection`1") == 0);
 }
 
+static bool is_net10_array_interface_get_item_method(const char* iface_name, const char* method_name)
+{
+    return std::strcmp(method_name, "get_Item") == 0 &&
+           (std::strcmp(iface_name, "IList`1") == 0 || std::strcmp(iface_name, "IReadOnlyList`1") == 0);
+}
+
+static bool is_net10_array_interface_set_item_method(const char* iface_name, const char* method_name)
+{
+    return std::strcmp(method_name, "set_Item") == 0 && std::strcmp(iface_name, "IList`1") == 0;
+}
+
+static const char* make_net10_array_interface_method_name(const char* iface_name, const char* method_name)
+{
+    Utf8StringBuilder sb(128);
+    sb.append_cstr("System.Collections.Generic.");
+    sb.append_cstr(iface_name);
+    sb.append_char('.');
+    sb.append_cstr(method_name);
+    return sb.dup_zero_terminated_chars();
+}
+
 static RtResult<const RtMethodInfo*> build_net10_array_interface_count_method(RtClass* klass, const char* iface_name)
 {
     const CorLibTypes& corlib = Class::get_corlib_types();
 
-    Utf8StringBuilder sb(128);
-    sb.append_cstr("System.Collections.Generic.");
-    sb.append_cstr(iface_name);
-    sb.append_cstr(".get_Count");
-    const char* method_name = sb.dup_zero_terminated_chars();
-
+    const char* method_name = make_net10_array_interface_method_name(iface_name, "get_Count");
     return build_array_method(klass, method_name, corlib.cls_int32->by_val, nullptr, 0);
+}
+
+static RtResult<const RtMethodInfo*> build_net10_array_interface_get_item_method(RtClass* klass, const char* iface_name,
+                                                                                const RtTypeSig* element_type_sig)
+{
+    const CorLibTypes& corlib = Class::get_corlib_types();
+    const char* method_name = make_net10_array_interface_method_name(iface_name, "get_Item");
+    const RtTypeSig* parameters[1] = {corlib.cls_int32->by_val};
+    return build_array_method(klass, method_name, element_type_sig, parameters, 1);
+}
+
+static RtResult<const RtMethodInfo*> build_net10_array_interface_set_item_method(RtClass* klass, const char* iface_name,
+                                                                                const RtTypeSig* element_type_sig)
+{
+    const CorLibTypes& corlib = Class::get_corlib_types();
+    const char* method_name = make_net10_array_interface_method_name(iface_name, "set_Item");
+    const RtTypeSig* parameters[2] = {corlib.cls_int32->by_val, element_type_sig};
+    return build_array_method(klass, method_name, corlib.cls_void->by_val, parameters, 2);
 }
 
 // Initialize array interface methods from System.Array
@@ -509,6 +543,20 @@ RtResultVoid ArrayClass::setup_vtables(metadata::RtClass* klass)
             {
                 DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, final_m,
                                                         build_net10_array_interface_count_method(klass, iface_name));
+                entry->method_impl = final_m;
+                found = true;
+            }
+            if (!found && is_net10_array_interface_get_item_method(iface_name, method_name))
+            {
+                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, final_m,
+                                                        build_net10_array_interface_get_item_method(klass, iface_name, element_type_sig));
+                entry->method_impl = final_m;
+                found = true;
+            }
+            if (!found && is_net10_array_interface_set_item_method(iface_name, method_name))
+            {
+                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, final_m,
+                                                        build_net10_array_interface_set_item_method(klass, iface_name, element_type_sig));
                 entry->method_impl = final_m;
                 found = true;
             }

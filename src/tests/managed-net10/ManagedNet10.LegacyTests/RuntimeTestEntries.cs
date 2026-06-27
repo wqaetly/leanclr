@@ -15,7 +15,8 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunTypes(
                 typeof(Tests.CSharp.TC_foreach),
                 typeof(Tests.CSharp.TC_event),
-                typeof(Tests.CSharp.TC_Nullable));
+                typeof(Tests.CSharp.TC_Nullable),
+                typeof(Tests.CSharp.TC_ArrayGenericInterface));
         }
 
         public static void RunRuntimeDelegates()
@@ -89,6 +90,31 @@ namespace ManagedNet10.LegacyTests
         public static void RunRuntimeNullable()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Nullable));
+        }
+
+        public static void RunRuntimeArrayGenericInterface()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_ArrayGenericInterface));
+        }
+
+        public static void RunRuntimeArrayGenericInterfaceClassGet()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_ArrayGenericInterface), "class_get_1");
+        }
+
+        public static void RunRuntimeArrayGenericInterfaceClassSet()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_ArrayGenericInterface), "class_set_1");
+        }
+
+        public static void RunRuntimeArrayGenericInterfaceStructGet()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_ArrayGenericInterface), "struct_get_1");
+        }
+
+        public static void RunRuntimeArrayGenericInterfaceStructSet()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_ArrayGenericInterface), "struct_set_1");
         }
 
         public static void RunRuntimeDelegateOpenClose()
