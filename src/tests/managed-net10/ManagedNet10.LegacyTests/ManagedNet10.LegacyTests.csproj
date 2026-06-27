@@ -26,6 +26,7 @@
     <Compile Include="CorlibToStringTestEntries.cs" />
     <Compile Include="CorlibThreadingTestEntries.cs" />
     <Compile Include="CorlibTypeSystemTestEntries.cs" />
+    <Compile Include="CorlibArrayBufferIntrinsicTestEntries.cs" />
     <Compile Include="ToStringRegressionTestEntries.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
     <Compile Include="..\..\managed\Common\CoversIcallAttribute.cs" Link="Common\CoversIcallAttribute.cs" />
@@ -106,11 +107,15 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\IcallReflection.cs" Link="CorlibTests\InternalCall\IcallReflection.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_Interop_Sys.cs" Link="CorlibTests\InternalCall\TC_Interop_Sys.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Diagnostics_StackTrace.cs" Link="CorlibTests\InternalCall\TC_System_Diagnostics_StackTrace.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Array.cs" Link="CorlibTests\InternalCall\TC_System_Array.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Buffer.cs" Link="CorlibTests\InternalCall\TC_System_Buffer.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Enum.cs" Link="CorlibTests\InternalCall\TC_System_Enum.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Runtime_InteropServices_RuntimeInformation.cs" Link="CorlibTests\InternalCall\TC_System_Runtime_InteropServices_RuntimeInformation.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Interlocked.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Interlocked.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Volatile.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Volatile.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Type.cs" Link="CorlibTests\InternalCall\TC_System_Type.cs" />
+    <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_String.cs" Link="CorlibTests\Intrinsic\TC_String.cs" />
+    <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_System_Object.cs" Link="CorlibTests\Intrinsic\TC_System_Object.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_2022_9_27.cs" Link="Regression\Bug_2022_9_27.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\Bug_ValueTypeToString_2022_7_22.cs" Link="Regression\Bug_ValueTypeToString_2022_7_22.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />

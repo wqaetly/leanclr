@@ -1,6 +1,7 @@
 #include "intrinsic_stubs.h"
 #include "system_activator.h"
 #include "system_array.h"
+#include "system_buffer.h"
 #include "system_object.h"
 #include "system_reflection_customattribute.h"
 #include "system_reflection_rtfieldinfo.h"
@@ -36,6 +37,7 @@ void IntrinsicStubs::get_intrinsic_entries(utils::Vector<vm::IntrinsicEntry>& en
     // append intrinsic entries from various classes
     Append(entries, SystemActivator::get_intrinsic_entries());
     Append(entries, SystemArray::get_intrinsic_entries());
+    Append(entries, SystemBuffer::get_intrinsic_entries());
     Append(entries, SystemObject::get_intrinsic_entries());
     Append(entries, SystemReflectionCustomAttribute::get_intrinsic_entries());
     Append(entries, SystemReflectionRtFieldInfo::get_intrinsic_entries());

@@ -174,6 +174,46 @@ RtResultVoid SystemArray::copy(vm::RtArray* source_array, vm::RtArray* destinati
     return copy(source_array, 0, destination_array, 0, length);
 }
 
+RtResultVoid SystemArray::clear(vm::RtArray* array, int32_t index, int32_t length) noexcept
+{
+    if (array == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+    if (index < 0 || length < 0)
+    {
+        RET_ERR(RtErr::IndexOutOfRange);
+    }
+
+    const uint32_t array_length = static_cast<uint32_t>(vm::Array::get_array_length(array));
+    const uint32_t index_u = static_cast<uint32_t>(index);
+    const uint32_t length_u = static_cast<uint32_t>(length);
+    if (index_u > array_length || length_u > array_length - index_u)
+    {
+        RET_ERR(RtErr::IndexOutOfRange);
+    }
+    if (length == 0)
+    {
+        RET_VOID_OK();
+    }
+
+    const size_t element_size = vm::Array::get_array_element_size(array);
+    uint8_t* destination = static_cast<uint8_t*>(vm::Array::get_array_data_start_as_ptr_void(array)) +
+                           static_cast<size_t>(index) * element_size;
+    std::memset(destination, 0, static_cast<size_t>(length) * element_size);
+    RET_VOID_OK();
+}
+
+RtResultVoid SystemArray::clear(vm::RtArray* array) noexcept
+{
+    if (array == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    return clear(array, 0, vm::Array::get_array_length(array));
+}
+
 /// @intrinsic: System.Array::get_Length
 static RtResultVoid get_length_invoker_intrinsics_system_array(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -254,6 +294,36 @@ static RtResultVoid copy_invoker(metadata::RtManagedMethodPointer methodPtr, con
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.Array::Clear(System.Array,System.Int32,System.Int32)
+static RtResultVoid clear_indexed_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    (void)ret;
+
+    vm::RtArray* array = interp::EvalStackOp::get_param<vm::RtArray*>(params, 0);
+    int32_t index = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    int32_t length = interp::EvalStackOp::get_param<int32_t>(params, 2);
+
+    RET_ERR_ON_FAIL(SystemArray::clear(array, index, length));
+    RET_VOID_OK();
+}
+
+/// @intrinsic: System.Array::Clear(System.Array)
+static RtResultVoid clear_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    (void)ret;
+
+    vm::RtArray* array = interp::EvalStackOp::get_param<vm::RtArray*>(params, 0);
+
+    RET_ERR_ON_FAIL(SystemArray::clear(array));
+    RET_VOID_OK();
+}
+
 // Intrinsic registry
 static vm::IntrinsicEntry s_intrinsic_entries_system_array[] = {
     {"System.Array::get_Length", (vm::IntrinsicFunction)&SystemArray::get_length, get_length_invoker_intrinsics_system_array},
@@ -265,6 +335,10 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_array[] = {
      copy_indexed_invoker},
     {"System.Array::Copy(System.Array,System.Array,System.Int32)",
      (vm::IntrinsicFunction)static_cast<RtResultVoid (*)(vm::RtArray*, vm::RtArray*, int32_t)>(&SystemArray::copy), copy_invoker},
+    {"System.Array::Clear(System.Array,System.Int32,System.Int32)",
+     (vm::IntrinsicFunction)static_cast<RtResultVoid (*)(vm::RtArray*, int32_t, int32_t)>(&SystemArray::clear), clear_indexed_invoker},
+    {"System.Array::Clear(System.Array)", (vm::IntrinsicFunction)static_cast<RtResultVoid (*)(vm::RtArray*)>(&SystemArray::clear),
+     clear_invoker},
 };
 
 utils::Span<vm::IntrinsicEntry> SystemArray::get_intrinsic_entries() noexcept

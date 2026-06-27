@@ -29,6 +29,10 @@ class SystemArray
                              int32_t length) noexcept;
     static RtResultVoid copy(vm::RtArray* source_array, vm::RtArray* destination_array, int32_t length) noexcept;
 
+    // Clears an array range using LeanCLR's runtime array layout.
+    static RtResultVoid clear(vm::RtArray* array, int32_t index, int32_t length) noexcept;
+    static RtResultVoid clear(vm::RtArray* array) noexcept;
+
     static utils::Span<vm::IntrinsicEntry> get_intrinsic_entries() noexcept;
 };
 } // namespace intrinsics
