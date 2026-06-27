@@ -207,11 +207,19 @@ RtString* String::intern_string(RtString* s)
     return s;
 }
 
-bool String::is_interned_string(RtString* s)
+RtString* String::get_interned_string(RtString* s)
 {
     if (s == nullptr)
-        return false;
-    return g_internTable.find(s) != g_internTable.end();
+        return nullptr;
+    auto it = g_internTable.find(s);
+    if (it == g_internTable.end())
+        return nullptr;
+    return *it;
+}
+
+bool String::is_interned_string(RtString* s)
+{
+    return get_interned_string(s) != nullptr;
 }
 
 } // namespace vm

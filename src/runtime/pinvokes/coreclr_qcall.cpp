@@ -28,6 +28,7 @@
 #include "vm/runtime.h"
 #include "vm/rt_array.h"
 #include "vm/rt_string.h"
+#include "vm/stacktrace.h"
 #include "vm/rt_thread.h"
 #include "vm/type.h"
 
@@ -1032,15 +1033,25 @@ RtResultVoid collect_exception_stack_frames(vm::RtException* exception, utils::V
     int32_t frame_count = vm::Array::get_array_length(exception->trace_ips);
     for (int32_t i = 0; i < frame_count; ++i)
     {
-        auto stack_frame = reinterpret_cast<vm::RtStackFrame*>(vm::Array::get_array_data_at<vm::RtObject*>(exception->trace_ips, i));
+        auto* stack_frame = vm::Array::get_array_data_at<vm::RtObject*>(exception->trace_ips, i);
         if (stack_frame == nullptr)
         {
             continue;
         }
 
-        const metadata::RtMethodInfo* method = stack_frame->method != nullptr ? stack_frame->method->method : nullptr;
-        result.push_back(StackFrameData{method, stack_frame->native_offset, stack_frame->il_offset, stack_frame->filename,
-                                        stack_frame->line, stack_frame->column, false});
+        vm::RtReflectionMethod* reflection_method = nullptr;
+        int32_t native_offset = -1;
+        int32_t il_offset = -1;
+        vm::RtString* file_name = nullptr;
+        int32_t line_number = 0;
+        int32_t column_number = 0;
+        bool is_last_frame_from_foreign_exception_stack_trace = false;
+        RET_ERR_ON_FAIL(vm::StackTrace::get_stack_frame_data(stack_frame, &reflection_method, &native_offset, &il_offset, &file_name, &line_number,
+                                                            &column_number, &is_last_frame_from_foreign_exception_stack_trace));
+
+        const metadata::RtMethodInfo* method = reflection_method != nullptr ? reflection_method->method : nullptr;
+        result.push_back(StackFrameData{method, native_offset, il_offset, file_name, line_number, column_number,
+                                        is_last_frame_from_foreign_exception_stack_trace});
     }
 
     RET_VOID_OK();
@@ -1204,6 +1215,101 @@ RtResultVoid kernel32_get_locale_info_ex_invoker(metadata::RtManagedMethodPointe
     int32_t result = platform::RtSys::get_locale_info_ex(locale_name != nullptr ? vm::String::get_chars_ptr(locale_name) : nullptr,
                                                          lc_type, locale_data, locale_data_length);
     interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_lc_map_string_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                               const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 0);
+    uint32_t map_flags = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    Utf16Char* source = interp::EvalStackOp::get_param<Utf16Char*>(params, 2);
+    int32_t source_length = interp::EvalStackOp::get_param<int32_t>(params, 3);
+    void* destination = interp::EvalStackOp::get_param<void*>(params, 4);
+    int32_t destination_length = interp::EvalStackOp::get_param<int32_t>(params, 5);
+    void* version_information = interp::EvalStackOp::get_param<void*>(params, 6);
+    void* reserved = interp::EvalStackOp::get_param<void*>(params, 7);
+    intptr_t sort_handle = interp::EvalStackOp::get_param<intptr_t>(params, 8);
+
+    int32_t result = platform::RtSys::lc_map_string_ex(locale_name, map_flags, source, source_length, destination, destination_length,
+                                                       version_information, reserved, sort_handle);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_find_nls_string_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 0);
+    uint32_t find_flags = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    Utf16Char* source = interp::EvalStackOp::get_param<Utf16Char*>(params, 2);
+    int32_t source_length = interp::EvalStackOp::get_param<int32_t>(params, 3);
+    Utf16Char* value = interp::EvalStackOp::get_param<Utf16Char*>(params, 4);
+    int32_t value_length = interp::EvalStackOp::get_param<int32_t>(params, 5);
+    int32_t* found_length = interp::EvalStackOp::get_param<int32_t*>(params, 6);
+    void* version_information = interp::EvalStackOp::get_param<void*>(params, 7);
+    void* reserved = interp::EvalStackOp::get_param<void*>(params, 8);
+    intptr_t sort_handle = interp::EvalStackOp::get_param<intptr_t>(params, 9);
+
+    int32_t result = platform::RtSys::find_nls_string_ex(locale_name, find_flags, source, source_length, value, value_length,
+                                                         found_length, version_information, reserved, sort_handle);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_find_string_ordinal_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    uint32_t find_flags = interp::EvalStackOp::get_param<uint32_t>(params, 0);
+    Utf16Char* source = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+    int32_t source_length = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    Utf16Char* value = interp::EvalStackOp::get_param<Utf16Char*>(params, 3);
+    int32_t value_length = interp::EvalStackOp::get_param<int32_t>(params, 4);
+    int32_t ignore_case = interp::EvalStackOp::get_param<int32_t>(params, 5);
+
+    int32_t result = platform::RtSys::find_string_ordinal(find_flags, source, source_length, value, value_length, ignore_case);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_compare_string_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 0);
+    uint32_t compare_flags = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    Utf16Char* string1 = interp::EvalStackOp::get_param<Utf16Char*>(params, 2);
+    int32_t string1_length = interp::EvalStackOp::get_param<int32_t>(params, 3);
+    Utf16Char* string2 = interp::EvalStackOp::get_param<Utf16Char*>(params, 4);
+    int32_t string2_length = interp::EvalStackOp::get_param<int32_t>(params, 5);
+    void* version_information = interp::EvalStackOp::get_param<void*>(params, 6);
+    void* reserved = interp::EvalStackOp::get_param<void*>(params, 7);
+    intptr_t sort_handle = interp::EvalStackOp::get_param<intptr_t>(params, 8);
+
+    int32_t result = platform::RtSys::compare_string_ex(locale_name, compare_flags, string1, string1_length, string2, string2_length,
+                                                        version_information, reserved, sort_handle);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid string_intern_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                   interp::RtStackObject*) noexcept
+{
+    auto string_slot = interp::EvalStackOp::get_param<vm::RtString**>(params, 0);
+    if (string_slot != nullptr && *string_slot != nullptr)
+    {
+        *string_slot = vm::String::intern_string(*string_slot);
+    }
+    RET_VOID_OK();
+}
+
+RtResultVoid string_is_interned_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                        interp::RtStackObject*) noexcept
+{
+    auto string_slot = interp::EvalStackOp::get_param<vm::RtString**>(params, 0);
+    if (string_slot != nullptr)
+    {
+        *string_slot = vm::String::get_interned_string(*string_slot);
+    }
     RET_VOID_OK();
 }
 
@@ -1947,6 +2053,65 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0", nullptr,
                                    kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<LCMapStringEx>g____PInvoke|27_0(System.UInt16*,System.UInt32,System.Char*,System.Int32,System.Void*,System.Int32,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<LCMapStringEx>g____PInvoke|27_0", nullptr,
+                                   kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<LCMapStringEx>g____PInvoke|27_0(System.UInt16*,System.UInt32,System.Char*,System.Int32,System.Void*,System.Int32,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<LCMapStringEx>g____PInvoke|27_0", nullptr,
+                                   kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<LCMapStringEx>g____PInvoke|27_0(System.UInt16*,System.UInt32,System.Char*,System.Int32,System.Void*,System.Int32,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<LCMapStringEx>g____PInvoke|27_0", nullptr,
+                                   kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::LCMapStringEx(System.UInt16*,System.UInt32,System.Char*,System.Int32,System.Void*,System.Int32,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::LCMapStringEx", nullptr, kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::LCMapStringEx(System.UInt16*,System.UInt32,System.Char*,System.Int32,System.Void*,System.Int32,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::LCMapStringEx", nullptr, kernel32_lc_map_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::FindNLSStringEx(System.Char*,System.UInt32,System.Char*,System.Int32,System.Char*,System.Int32,System.Int32*,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_find_nls_string_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::FindNLSStringEx", nullptr, kernel32_find_nls_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::FindNLSStringEx(System.Char*,System.UInt32,System.Char*,System.Int32,System.Char*,System.Int32,System.Int32*,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_find_nls_string_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::FindNLSStringEx", nullptr, kernel32_find_nls_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::FindNLSStringEx(System.Char*,System.UInt32,System.Char*,System.Int32,System.Char*,System.Int32,System.Int32*,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_find_nls_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::FindNLSStringEx", nullptr, kernel32_find_nls_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::FindStringOrdinal(System.UInt32,System.Char*,System.Int32,System.Char*,System.Int32,Interop/BOOL)",
+        nullptr, kernel32_find_string_ordinal_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::FindStringOrdinal", nullptr, kernel32_find_string_ordinal_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::FindStringOrdinal(System.UInt32,System.Char*,System.Int32,System.Char*,System.Int32,Interop/BOOL)",
+        nullptr, kernel32_find_string_ordinal_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::FindStringOrdinal", nullptr, kernel32_find_string_ordinal_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::FindStringOrdinal(System.UInt32,System.Char*,System.Int32,System.Char*,System.Int32,Interop/BOOL)",
+        nullptr, kernel32_find_string_ordinal_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::FindStringOrdinal", nullptr, kernel32_find_string_ordinal_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::CompareStringEx(System.Char*,System.UInt32,System.Char*,System.Int32,System.Char*,System.Int32,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_compare_string_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::CompareStringEx", nullptr, kernel32_compare_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::CompareStringEx(System.Char*,System.UInt32,System.Char*,System.Int32,System.Char*,System.Int32,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_compare_string_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::CompareStringEx", nullptr, kernel32_compare_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::CompareStringEx(System.Char*,System.UInt32,System.Char*,System.Int32,System.Char*,System.Int32,System.Void*,System.Void*,System.IntPtr)",
+        nullptr, kernel32_compare_string_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::CompareStringEx", nullptr, kernel32_compare_string_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetSystemInfo(Interop/Kernel32/SYSTEM_INFO*)", nullptr,
                                    kernel32_get_system_info_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetSystemInfo", nullptr, kernel32_get_system_info_invoker);
@@ -1985,6 +2150,12 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    gc_collect_invoker);
     vm::PInvokes::register_pinvoke("System.GC::<_Collect>g____PInvoke|8_0", nullptr, gc_collect_invoker);
     vm::PInvokes::register_pinvoke("System.GC::_Collect", nullptr, gc_collect_invoker);
+    vm::PInvokes::register_pinvoke("System.String::Intern(System.Runtime.CompilerServices.StringHandleOnStack)", nullptr,
+                                   string_intern_invoker);
+    vm::PInvokes::register_pinvoke("System.String::Intern", nullptr, string_intern_invoker);
+    vm::PInvokes::register_pinvoke("System.String::IsInterned(System.Runtime.CompilerServices.StringHandleOnStack)", nullptr,
+                                   string_is_interned_invoker);
+    vm::PInvokes::register_pinvoke("System.String::IsInterned", nullptr, string_is_interned_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Runtime.CompilerServices.RuntimeHelpers::RunClassConstructor(System.Runtime.CompilerServices.QCallTypeHandle)", nullptr,
         runtime_helpers_run_class_constructor_invoker);

@@ -1,7 +1,10 @@
+#include <cstdint>
 #include <cstring>
 #include "machine_state.h"
 
 #include "alloc/general_allocation.h"
+#include "gc/garbage_collector.h"
+#include "gc/gc_roots.h"
 #include "profile/profile.h"
 #include "vm/settings.h"
 #include "interpreter.h"
@@ -10,6 +13,12 @@ namespace leanclr
 {
 namespace interp
 {
+
+static void visit_machine_state_roots(gc::GcVisitObjectRoot visit, void* userdata)
+{
+    MachineState::get_global_machine_state().visit_roots(visit, userdata);
+}
+
 void MachineState::initialize()
 {
     MachineState& ms = get_global_machine_state();
@@ -31,6 +40,25 @@ void MachineState::initialize()
 
     ms._eval_stack_top = 0;
     ms._frame_stack_top = 0;
+
+    static bool roots_registered = false;
+    if (!roots_registered)
+    {
+        gc::GcRoots::register_visit_object_roots(visit_machine_state_roots);
+        roots_registered = true;
+    }
+}
+
+void MachineState::visit_roots(gc::GcVisitObjectRoot visit, void* userdata) const
+{
+    for (uint32_t i = 0; i < _eval_stack_top; ++i)
+    {
+        vm::RtObject* obj = _eval_stack_base[i].obj;
+        if (gc::GarbageCollector::is_allocated_object(obj))
+        {
+            visit(obj, userdata);
+        }
+    }
 }
 
 RtResult<RtStackObject*> MachineState::alloc_eval_stack(uint32_t size)

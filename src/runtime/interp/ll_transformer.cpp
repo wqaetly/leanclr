@@ -518,7 +518,7 @@ RtResult<bool> Transformer::transform_special_call_methods(GeneralInst* ll_inst,
             ll_inst->update_var_dst(ll_inst->get_var_ret());
         }
     }
-    else if (std::strcmp(klass_name, "ByReference`1") == 0)
+    else if (std::strcmp(klass_name, "ByReference`1") == 0 || std::strcmp(klass_name, "ByReference") == 0)
     {
         if (std::strcmp(method_name, STR_CTOR) == 0)
         {
@@ -618,7 +618,7 @@ RtResult<bool> Transformer::transform_special_newobj_methods(GeneralInst* ll_ins
         }
         // TODO: explicit operator, Subtract, ToXXX
     }
-    else if (std::strcmp(klass_name, "ByReference`1") == 0)
+    else if (std::strcmp(klass_name, "ByReference`1") == 0 || std::strcmp(klass_name, "ByReference") == 0)
     {
         assert(param_count == 1);
         ll_inst->set_opcode(OpCodeEnum::Nop);

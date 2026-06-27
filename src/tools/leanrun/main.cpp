@@ -16,8 +16,8 @@
 #include "vm/type.h"
 #include "vm/rt_exception.h"
 #include "vm/rt_array.h"
+#include "vm/stacktrace.h"
 #include "vm/property.h"
-#include "vm/field.h"
 #include "metadata/metadata_name.h"
 
 #ifdef _WIN32
@@ -96,19 +96,33 @@ static void print_native_exception_stack_trace(vm::RtException* ex)
     for (int32_t i = 0; i < stack_count; ++i)
     {
         auto* frame_obj = vm::Array::get_array_data_at<vm::RtObject*>(ex->trace_ips, i);
-        auto* frame = static_cast<vm::RtStackFrame*>(frame_obj);
-        if (frame == nullptr || frame->method == nullptr || frame->method->method == nullptr)
+        vm::RtReflectionMethod* reflection_method = nullptr;
+        int32_t native_offset = -1;
+        int32_t il_offset = -1;
+        vm::RtString* file_name = nullptr;
+        int32_t line_number = 0;
+        int32_t column_number = 0;
+        bool is_last_frame_from_foreign_exception_stack_trace = false;
+        auto frame_result = vm::StackTrace::get_stack_frame_data(frame_obj, &reflection_method, &native_offset, &il_offset, &file_name,
+                                                                &line_number, &column_number,
+                                                                &is_last_frame_from_foreign_exception_stack_trace);
+        (void)native_offset;
+        (void)file_name;
+        (void)line_number;
+        (void)column_number;
+        (void)is_last_frame_from_foreign_exception_stack_trace;
+        if (!frame_result.is_ok() || reflection_method == nullptr || reflection_method->method == nullptr)
         {
             continue;
         }
 
         utils::Utf8StringBuilder sb;
-        metadata::MetadataName::append_method_full_name_without_params(sb, frame->method->method, metadata::TypeNameFormat::FullName).is_ok();
+        metadata::MetadataName::append_method_full_name_without_params(sb, reflection_method->method, metadata::TypeNameFormat::FullName).is_ok();
         sb.sure_null_terminator_but_not_append();
         std::cerr << "  at " << sb.get_const_chars();
-        if (frame->il_offset >= 0)
+        if (il_offset >= 0)
         {
-            std::cerr << " il_" << frame->il_offset;
+            std::cerr << " il_" << il_offset;
         }
         std::cerr << std::endl;
     }

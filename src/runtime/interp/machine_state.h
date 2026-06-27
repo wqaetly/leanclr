@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "gc/gc_roots.h"
 #include "interp_defs.h"
 #include "utils/rt_span.h"
 
@@ -62,6 +63,8 @@ class MachineState
     {
         _frame_stack_top = new_top;
     }
+
+    void visit_roots(gc::GcVisitObjectRoot visit, void* userdata) const;
 
     InterpFrame* get_executing_frame_stack()
     {

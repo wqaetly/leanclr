@@ -224,6 +224,102 @@ int32_t RtSys::get_locale_info_ex(const Utf16Char* locale_name, uint32_t lc_type
 #endif
 }
 
+int32_t RtSys::lc_map_string_ex(const Utf16Char* locale_name, uint32_t map_flags, const Utf16Char* source, int32_t source_length, void* destination,
+                                int32_t destination_length, void* version_information, void* reserved, intptr_t sort_handle)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return static_cast<int32_t>(::LCMapStringEx(reinterpret_cast<LPCWSTR>(locale_name), static_cast<DWORD>(map_flags),
+                                               reinterpret_cast<LPCWSTR>(source), source_length,
+                                               reinterpret_cast<LPWSTR>(destination), destination_length,
+                                               static_cast<LPNLSVERSIONINFO>(version_information), reserved,
+                                               static_cast<LPARAM>(sort_handle)));
+#else
+    (void)locale_name;
+    (void)map_flags;
+    (void)source;
+    (void)source_length;
+    (void)destination;
+    (void)destination_length;
+    (void)version_information;
+    (void)reserved;
+    (void)sort_handle;
+    s_last_win32_error = 120; // ERROR_CALL_NOT_IMPLEMENTED
+    return 0;
+#endif
+}
+
+int32_t RtSys::find_nls_string_ex(const Utf16Char* locale_name, uint32_t find_flags, const Utf16Char* source, int32_t source_length,
+                                  const Utf16Char* value, int32_t value_length, int32_t* found_length, void* version_information,
+                                  void* reserved, intptr_t sort_handle)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return static_cast<int32_t>(::FindNLSStringEx(reinterpret_cast<LPCWSTR>(locale_name), static_cast<DWORD>(find_flags),
+                                                 reinterpret_cast<LPCWSTR>(source), source_length,
+                                                 reinterpret_cast<LPCWSTR>(value), value_length,
+                                                 reinterpret_cast<LPINT>(found_length),
+                                                 static_cast<LPNLSVERSIONINFO>(version_information), reserved,
+                                                 static_cast<LPARAM>(sort_handle)));
+#else
+    (void)locale_name;
+    (void)find_flags;
+    (void)source;
+    (void)source_length;
+    (void)value;
+    (void)value_length;
+    (void)found_length;
+    (void)version_information;
+    (void)reserved;
+    (void)sort_handle;
+    s_last_win32_error = 120; // ERROR_CALL_NOT_IMPLEMENTED
+    return -1;
+#endif
+}
+
+int32_t RtSys::find_string_ordinal(uint32_t find_flags, const Utf16Char* source, int32_t source_length,
+                                   const Utf16Char* value, int32_t value_length, int32_t ignore_case)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return static_cast<int32_t>(::FindStringOrdinal(static_cast<DWORD>(find_flags),
+                                                   reinterpret_cast<LPCWCH>(source), source_length,
+                                                   reinterpret_cast<LPCWCH>(value), value_length,
+                                                   ignore_case != 0 ? TRUE : FALSE));
+#else
+    (void)find_flags;
+    (void)source;
+    (void)source_length;
+    (void)value;
+    (void)value_length;
+    (void)ignore_case;
+    s_last_win32_error = 120; // ERROR_CALL_NOT_IMPLEMENTED
+    return -1;
+#endif
+}
+
+int32_t RtSys::compare_string_ex(const Utf16Char* locale_name, uint32_t compare_flags, const Utf16Char* string1, int32_t string1_length,
+                                 const Utf16Char* string2, int32_t string2_length, void* version_information, void* reserved,
+                                 intptr_t sort_handle)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return static_cast<int32_t>(::CompareStringEx(reinterpret_cast<LPCWSTR>(locale_name), static_cast<DWORD>(compare_flags),
+                                                 reinterpret_cast<LPCWSTR>(string1), string1_length,
+                                                 reinterpret_cast<LPCWSTR>(string2), string2_length,
+                                                 static_cast<LPNLSVERSIONINFO>(version_information), reserved,
+                                                 static_cast<LPARAM>(sort_handle)));
+#else
+    (void)locale_name;
+    (void)compare_flags;
+    (void)string1;
+    (void)string1_length;
+    (void)string2;
+    (void)string2_length;
+    (void)version_information;
+    (void)reserved;
+    (void)sort_handle;
+    s_last_win32_error = 120; // ERROR_CALL_NOT_IMPLEMENTED
+    return 0;
+#endif
+}
+
 int32_t RtSys::double_to_string(double value, const char* format, char* buffer, int32_t buffer_size)
 {
 #ifdef LEANCLR_PLATFORM_POSIX

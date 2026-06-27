@@ -15,6 +15,16 @@ class RtSys
     static uint32_t get_environment_variable(const Utf16Char* variable_name, Utf16Char* value, uint32_t value_length);
     static int32_t set_environment_variable(const Utf16Char* variable_name, const Utf16Char* value);
     static int32_t get_locale_info_ex(const Utf16Char* locale_name, uint32_t lc_type, Utf16Char* locale_data, int32_t locale_data_length);
+    static int32_t lc_map_string_ex(const Utf16Char* locale_name, uint32_t map_flags, const Utf16Char* source, int32_t source_length, void* destination,
+                                    int32_t destination_length, void* version_information, void* reserved, intptr_t sort_handle);
+    static int32_t find_nls_string_ex(const Utf16Char* locale_name, uint32_t find_flags, const Utf16Char* source, int32_t source_length,
+                                      const Utf16Char* value, int32_t value_length, int32_t* found_length, void* version_information,
+                                      void* reserved, intptr_t sort_handle);
+    static int32_t find_string_ordinal(uint32_t find_flags, const Utf16Char* source, int32_t source_length,
+                                       const Utf16Char* value, int32_t value_length, int32_t ignore_case);
+    static int32_t compare_string_ex(const Utf16Char* locale_name, uint32_t compare_flags, const Utf16Char* string1, int32_t string1_length,
+                                     const Utf16Char* string2, int32_t string2_length, void* version_information, void* reserved,
+                                     intptr_t sort_handle);
     static int32_t double_to_string(double value, const char* format, char* buffer, int32_t buffer_size);
     static int32_t ch_mod(vm::RtString* path, int32_t mode);
     static int32_t mk_dir(vm::RtString* path, int32_t mode);

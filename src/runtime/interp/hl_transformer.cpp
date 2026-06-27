@@ -1282,9 +1282,9 @@ RtResult<bool> Transformer::try_handle_newobj_intrinsic(const metadata::RtMethod
     {
         RET_OK(false);
     }
-    if (std::strcmp(klass->name, "ByReference`1") == 0)
+    if (std::strcmp(klass->name, "ByReference`1") == 0 || std::strcmp(klass->name, "ByReference") == 0)
     {
-        // nothing to do for ByReference<T> constructor
+        // ByReference<T> and .NET 10 System.ByReference are single-pointer ref structs.
         RET_OK(true);
     }
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::InternalCallInvoker, icalls_invoker, vm::InternalCalls::get_newobj_internal_call_by_method(method));

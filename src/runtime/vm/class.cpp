@@ -359,7 +359,6 @@ RtResultVoid Class::verify_integrity_of_corlib_classes()
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_numberformatinfo) == sizeof(RtNumberFormatInfo), RtErr::BadImageFormat);
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_regioninfo) == sizeof(RtRegionInfo), RtErr::BadImageFormat);
     RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_calendardata) == sizeof(RtCalendarData), RtErr::BadImageFormat);
-    RET_ERR_ON_FALSE(get_instance_size_with_object_header(t.cls_stackframe) == sizeof(RtStackFrame), RtErr::BadImageFormat);
 
     RET_VOID_OK();
 }
@@ -898,6 +897,10 @@ static RtResult<bool> is_reference_type_or_contains_reference_type_in_typesig(co
     case metadata::RtElementType::Array:
     case metadata::RtElementType::SZArray:
         RET_OK(true);
+    case metadata::RtElementType::Var:
+    case metadata::RtElementType::MVar:
+        RET_OK((typeSig->data.generic_param->flags &
+                static_cast<uint16_t>(metadata::RtGenericParamAttribute::ReferenceTypeConstraint)) != 0);
     case metadata::RtElementType::ValueType:
     {
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, cls, Class::get_class_from_typesig(typeSig));
@@ -2270,6 +2273,14 @@ RtResult<metadata::RtClass*> Class::get_generic_param_class_by_typesig(const met
     genericParamClass->flags = (uint32_t)metadata::RtTypeAttribute::Public;
     genericParamClass->by_val = byValTypeSig;
     genericParamClass->by_ref = byRefTypeSig;
+    if ((genericParam->flags & static_cast<uint16_t>(metadata::RtGenericParamAttribute::ReferenceTypeConstraint)) != 0)
+    {
+        genericParamClass->extra_flags |= static_cast<uint32_t>(metadata::RtClassExtraAttribute::ReferenceType);
+    }
+    else if ((genericParam->flags & static_cast<uint16_t>(metadata::RtGenericParamAttribute::NotNullableValueTypeConstraint)) != 0)
+    {
+        genericParamClass->extra_flags |= static_cast<uint32_t>(metadata::RtClassExtraAttribute::ValueType);
+    }
 
     g_genericParamClassCache.insert({genericParam, genericParamClass});
     RET_OK(genericParamClass);
