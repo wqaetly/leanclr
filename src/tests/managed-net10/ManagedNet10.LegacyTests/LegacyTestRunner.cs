@@ -119,7 +119,14 @@ namespace ManagedNet10.LegacyTests
                     instance = Activator.CreateInstance(type);
                 }
 
-                method.Invoke(instance, null);
+                try
+                {
+                    method.Invoke(instance, null);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Legacy test failed: " + type.FullName + "." + method.Name, ex);
+                }
                 executed++;
             }
 

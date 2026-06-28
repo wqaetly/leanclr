@@ -1344,6 +1344,22 @@ RtResultVoid initialize_signature_from_metadata(vm::RtSignature* signature, void
 
     if (method != nullptr)
     {
+        if (method->token != metadata::RtToken::Invalid)
+        {
+            metadata::RtModuleDef* module = method->parent->image;
+            auto method_row = module->get_cli_image().read_method(metadata::RtToken::decode_rid(method->token));
+            if (method_row.has_value())
+            {
+                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL2(utils::BinaryReader, method_sig_reader,
+                                                         module->get_decoded_blob_reader(method_row->signature));
+                signature->sig = const_cast<uint8_t*>(method_sig_reader.data());
+                signature->csig = static_cast<int32_t>(method_sig_reader.length());
+            }
+            else if (metadata::RtToken::decode_table_type(method->token) == metadata::TableType::Method)
+            {
+                RET_ERR(RtErr::BadImageFormat);
+            }
+        }
         return_or_field_type = method->return_type;
         parameters = method->parameters;
         parameter_count = static_cast<int32_t>(method->parameter_count);
@@ -3892,6 +3908,26 @@ RtResultVoid signature_init_invoker(metadata::RtManagedMethodPointer, const meta
     RET_VOID_OK();
 }
 
+RtResultVoid signature_get_custom_modifiers_at_offset_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                              const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    (void)interp::EvalStackOp::get_param<void*>(params, 0);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 1);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 2);
+    auto result_slot = interp::EvalStackOp::get_param<vm::RtArray**>(params, 3);
+    if (result_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        vm::RtArray*, result,
+        LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(vm::Class::get_corlib_types().cls_systemtype,
+                                                        "Signature_GetCustomModifiersAtOffset"));
+    *result_slot = result;
+    RET_VOID_OK();
+}
+
 RtResultVoid runtime_method_handle_get_method_body_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                            const interp::RtStackObject* params, interp::RtStackObject*) noexcept
 {
@@ -4926,6 +4962,13 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.Signature::Init(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Void*,System.Int32,System.RuntimeFieldHandleInternal,System.RuntimeMethodHandleInternal)",
         nullptr, signature_init_invoker);
     vm::PInvokes::register_pinvoke("System.Signature::Init", nullptr, signature_init_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Signature::GetCustomModifiersAtOffset(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32,Interop/BOOL,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, signature_get_custom_modifiers_at_offset_invoker);
+    vm::PInvokes::register_pinvoke("System.Signature::GetCustomModifiersAtOffset", nullptr,
+                                   signature_get_custom_modifiers_at_offset_invoker);
+    vm::PInvokes::register_pinvoke("Signature_GetCustomModifiersAtOffset", nullptr,
+                                   signature_get_custom_modifiers_at_offset_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeMethodHandle::GetMethodBody(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, runtime_method_handle_get_method_body_invoker);

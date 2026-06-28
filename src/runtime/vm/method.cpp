@@ -931,9 +931,16 @@ RtResultVoid Method::get_parameter_modifiers(const RtMethodInfo* method, int32_t
     {
         RET_ERR(RtErr::Argument);
     }
+    if (method->token == metadata::RtToken::Invalid)
+    {
+        RET_VOID_OK();
+    }
     metadata::RtModuleDef* mod = method->parent->image;
     auto optMethodRow = mod->get_cli_image().read_method(metadata::RtToken::decode_rid(method->token));
-    assert(optMethodRow.has_value() && "Method row must be present");
+    if (!optMethodRow.has_value())
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
     auto retBlobReader = mod->get_decoded_blob_reader(optMethodRow->signature);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL2(utils::BinaryReader, reader, retBlobReader);
     return mod->read_parameter_modifier(reader, index, optional, RtGenericContainerContext{}, nullptr, modifiers);

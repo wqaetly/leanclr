@@ -470,6 +470,11 @@
     "header": "icalls/system_runtimemethodhandle.h"
   },
   {
+    "name": "System.Signature::GetParameterOffsetInternal(System.Void*,System.Int32,System.Int32)",
+    "func": "SystemSignature::get_parameter_offset_internal",
+    "header": "icalls/system_signature.h"
+  },
+  {
     "name": "System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)",
     "func": "SystemRuntimeTypeHandle::get_array_rank",
     "header": "icalls/system_runtimetypehandle.h"

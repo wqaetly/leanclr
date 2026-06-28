@@ -30,6 +30,7 @@
 #include "system_runtime_remoting_remotingservices.h"
 #include "system_runtimefieldhandle.h"
 #include "system_runtimemethodhandle.h"
+#include "system_signature.h"
 #include "system_enum.h"
 #include "system_monocustomattrs.h"
 #include "system_buffer.h"
@@ -170,6 +171,7 @@ void InternalCallStubs::get_internal_call_entries(utils::Vector<vm::InternalCall
     Append(entries, SystemRuntimeRuntimeImports::get_internal_call_entries());
     Append(entries, SystemRuntimeFieldHandle::get_net10_internal_call_entries());
     Append(entries, SystemRuntimeMethodHandle::get_net10_internal_call_entries());
+    Append(entries, SystemSignature::get_internal_call_entries());
     Append(entries, Interop::get_internal_call_entries());
     Append(entries, SystemEnum::get_internal_call_entries());
     Append(entries, SystemBuffer::get_internal_call_entries());
