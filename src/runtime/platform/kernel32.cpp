@@ -6,6 +6,7 @@
 #endif
 
 #include "build_config.h"
+#include "platform/rt_event.h"
 #include "platform/rt_time.h"
 #include "utils/rt_vector.h"
 #include "vm/rt_string.h"
@@ -42,6 +43,96 @@ uint64_t Kernel32::get_tick_count64()
 #else
     int64_t milliseconds = os::Time::get_current_time_nanos() / 1000000;
     return milliseconds > 0 ? static_cast<uint64_t>(milliseconds) : 0;
+#endif
+}
+
+bool Kernel32::get_system_times(int64_t* idle_time, int64_t* kernel_time, int64_t* user_time)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    FILETIME idle{};
+    FILETIME kernel{};
+    FILETIME user{};
+    FILETIME* idle_ptr = idle_time != nullptr ? &idle : nullptr;
+    FILETIME* kernel_ptr = kernel_time != nullptr ? &kernel : nullptr;
+    FILETIME* user_ptr = user_time != nullptr ? &user : nullptr;
+    if (::GetSystemTimes(idle_ptr, kernel_ptr, user_ptr) == 0)
+    {
+        return false;
+    }
+    auto to_int64 = [](const FILETIME& time) -> int64_t {
+        ULARGE_INTEGER value{};
+        value.LowPart = time.dwLowDateTime;
+        value.HighPart = time.dwHighDateTime;
+        return static_cast<int64_t>(value.QuadPart);
+    };
+    if (idle_time != nullptr)
+    {
+        *idle_time = to_int64(idle);
+    }
+    if (kernel_time != nullptr)
+    {
+        *kernel_time = to_int64(kernel);
+    }
+    if (user_time != nullptr)
+    {
+        *user_time = to_int64(user);
+    }
+    return true;
+#else
+    int64_t now = os::Time::get_system_time_as_file_time();
+    if (idle_time != nullptr)
+    {
+        *idle_time = 0;
+    }
+    if (kernel_time != nullptr)
+    {
+        *kernel_time = now;
+    }
+    if (user_time != nullptr)
+    {
+        *user_time = now;
+    }
+    return true;
+#endif
+}
+
+intptr_t Kernel32::get_current_thread()
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return reinterpret_cast<intptr_t>(::GetCurrentThread());
+#else
+    return static_cast<intptr_t>(-2);
+#endif
+}
+
+int32_t Kernel32::get_current_thread_id()
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return static_cast<int32_t>(::GetCurrentThreadId());
+#else
+    return 1;
+#endif
+}
+
+bool Kernel32::get_thread_io_pending_flag(intptr_t thread_handle, int32_t* is_io_pending)
+{
+    if (is_io_pending == nullptr)
+    {
+        return false;
+    }
+#ifdef LEANCLR_PLATFORM_WIN
+    BOOL pending = FALSE;
+    if (::GetThreadIOPendingFlag(reinterpret_cast<HANDLE>(thread_handle), &pending) == 0)
+    {
+        *is_io_pending = 0;
+        return false;
+    }
+    *is_io_pending = pending != FALSE ? 1 : 0;
+    return true;
+#else
+    (void)thread_handle;
+    *is_io_pending = 0;
+    return true;
 #endif
 }
 
@@ -233,6 +324,107 @@ uint32_t Kernel32::get_full_path_name(const Utf16Char* path, uint32_t buffer_len
     (void)buffer_length;
     (void)buffer;
     (void)file_part;
+    return 0;
+#endif
+}
+
+intptr_t Kernel32::create_event_ex(intptr_t security_attributes, const Utf16Char* name, uint32_t flags, uint32_t desired_access)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    HANDLE handle = ::CreateEventExW(reinterpret_cast<LPSECURITY_ATTRIBUTES>(security_attributes), reinterpret_cast<LPCWSTR>(name),
+                                     static_cast<DWORD>(flags), static_cast<DWORD>(desired_access));
+    return reinterpret_cast<intptr_t>(handle);
+#else
+    (void)security_attributes;
+    (void)desired_access;
+    if (name != nullptr)
+    {
+        return 0;
+    }
+    constexpr uint32_t create_event_manual_reset = 0x1;
+    constexpr uint32_t create_event_initial_set = 0x2;
+    auto* ev = new Event((flags & create_event_manual_reset) != 0, (flags & create_event_initial_set) != 0);
+    auto* handle = new EventHandle(ev);
+    return reinterpret_cast<intptr_t>(handle);
+#endif
+}
+
+intptr_t Kernel32::open_event(uint32_t desired_access, int32_t inherit_handle, const Utf16Char* name)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    HANDLE handle = ::OpenEventW(static_cast<DWORD>(desired_access), inherit_handle != 0 ? TRUE : FALSE, reinterpret_cast<LPCWSTR>(name));
+    return reinterpret_cast<intptr_t>(handle);
+#else
+    (void)desired_access;
+    (void)inherit_handle;
+    (void)name;
+    return 0;
+#endif
+}
+
+bool Kernel32::set_event(intptr_t handle)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return ::SetEvent(reinterpret_cast<HANDLE>(handle)) != 0;
+#else
+    if (handle == 0)
+    {
+        return false;
+    }
+    return reinterpret_cast<EventHandle*>(handle)->get().set();
+#endif
+}
+
+bool Kernel32::reset_event(intptr_t handle)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return ::ResetEvent(reinterpret_cast<HANDLE>(handle)) != 0;
+#else
+    if (handle == 0)
+    {
+        return false;
+    }
+    return reinterpret_cast<EventHandle*>(handle)->get().reset();
+#endif
+}
+
+int32_t Kernel32::wait_for_single_object_ex(intptr_t handle, int32_t milliseconds, int32_t alertable)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    DWORD timeout = milliseconds < 0 ? INFINITE : static_cast<DWORD>(milliseconds);
+    DWORD result = ::WaitForSingleObjectEx(reinterpret_cast<HANDLE>(handle), timeout, alertable != 0 ? TRUE : FALSE);
+    return static_cast<int32_t>(result);
+#else
+    (void)handle;
+    (void)milliseconds;
+    (void)alertable;
+    return 0;
+#endif
+}
+
+int32_t Kernel32::wait_for_multiple_objects_ex(intptr_t* handles, int32_t count, int32_t wait_all, int32_t milliseconds)
+{
+    if (handles == nullptr || count <= 0)
+    {
+        return static_cast<int32_t>(0xFFFFFFFF);
+    }
+#ifdef LEANCLR_PLATFORM_WIN
+    DWORD timeout = milliseconds < 0 ? INFINITE : static_cast<DWORD>(milliseconds);
+    DWORD handle_count = static_cast<DWORD>(count);
+    HANDLE native_handles[MAXIMUM_WAIT_OBJECTS]{};
+    if (handle_count > MAXIMUM_WAIT_OBJECTS)
+    {
+        return static_cast<int32_t>(0xFFFFFFFF);
+    }
+    for (DWORD i = 0; i < handle_count; ++i)
+    {
+        native_handles[i] = reinterpret_cast<HANDLE>(handles[i]);
+    }
+    DWORD result = ::WaitForMultipleObjectsEx(handle_count, native_handles, wait_all != 0 ? TRUE : FALSE, timeout, FALSE);
+    return static_cast<int32_t>(result);
+#else
+    (void)wait_all;
+    (void)milliseconds;
     return 0;
 #endif
 }

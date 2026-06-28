@@ -14,6 +14,10 @@ class Kernel32
     static int32_t get_console_cp();
     static int32_t get_console_output_cp();
     static uint64_t get_tick_count64();
+    static bool get_system_times(int64_t* idle_time, int64_t* kernel_time, int64_t* user_time);
+    static intptr_t get_current_thread();
+    static int32_t get_current_thread_id();
+    static bool get_thread_io_pending_flag(intptr_t thread_handle, int32_t* is_io_pending);
     static intptr_t get_std_handle(int32_t std_handle);
     static bool get_console_screen_buffer_info(intptr_t handle, void* info);
     static bool peek_console_input(intptr_t handle, void* record, int32_t length, int32_t* events_read);
@@ -23,6 +27,12 @@ class Kernel32
     static int32_t format_message(int32_t flags, intptr_t source, uint32_t message_id, int32_t language_id, void* buffer, int32_t buffer_chars,
                                   intptr_t arguments);
     static uint32_t get_full_path_name(const Utf16Char* path, uint32_t buffer_length, Utf16Char* buffer, intptr_t file_part);
+    static intptr_t create_event_ex(intptr_t security_attributes, const Utf16Char* name, uint32_t flags, uint32_t desired_access);
+    static intptr_t open_event(uint32_t desired_access, int32_t inherit_handle, const Utf16Char* name);
+    static bool set_event(intptr_t handle);
+    static bool reset_event(intptr_t handle);
+    static int32_t wait_for_single_object_ex(intptr_t handle, int32_t milliseconds, int32_t alertable);
+    static int32_t wait_for_multiple_objects_ex(intptr_t* handles, int32_t count, int32_t wait_all, int32_t milliseconds);
 
 #if LEANCLR_PLATFORM_WIN
     static bool set_thread_error_mode(uint32_t mode, uint32_t& old_mode);

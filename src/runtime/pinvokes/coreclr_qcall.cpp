@@ -2017,6 +2017,7 @@ RtResultVoid ensure_coreclr_thread_initialized(vm::RtObject* thread, bool curren
     auto internal_thread_slot = reinterpret_cast<intptr_t*>(internal_thread_data);
     if (*internal_thread_slot != 0)
     {
+        reinterpret_cast<vm::RtInternalThread*>(*internal_thread_slot)->coreclr_managed_thread = thread;
         RET_VOID_OK();
     }
 
@@ -2035,6 +2036,7 @@ RtResultVoid ensure_coreclr_thread_initialized(vm::RtObject* thread, bool curren
     internal_thread->managed_id = managed_thread_id;
     internal_thread->state = current_thread ? vm::RtThreadState::Running : vm::RtThreadState::Unstarted;
     internal_thread->priority = static_cast<int32_t>(vm::ThreadPriority::Normal);
+    internal_thread->coreclr_managed_thread = thread;
 
     *internal_thread_slot = reinterpret_cast<intptr_t>(internal_thread);
     set_instance_int32_field_if_present(thread, "_priority", static_cast<int32_t>(vm::ThreadPriority::Normal));
@@ -2194,6 +2196,37 @@ RtResultVoid thread_start_internal_invoker(metadata::RtManagedMethodPointer, con
     thread->state = static_cast<vm::RtThreadState>(state);
     thread->priority = priority;
     thread->threadpool_thread = is_thread_pool != 0;
+    vm::RtObject* managed_thread = thread->coreclr_managed_thread;
+    if (managed_thread == nullptr || managed_thread->klass == nullptr)
+    {
+        RET_VOID_OK();
+    }
+
+    const metadata::RtMethodInfo* start_method = nullptr;
+    vm::RtObject* start_target = managed_thread;
+    if (is_thread_pool != 0)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, work_queue_klass,
+                                                managed_thread->klass->image->get_class_by_name("System.Threading.ThreadPoolWorkQueue", false, true));
+        start_method = vm::Class::get_method_for_name(work_queue_klass, "Dispatch", 0, true);
+        start_target = nullptr;
+    }
+    else
+    {
+        start_method = vm::Class::get_method_for_name(managed_thread->klass, "StartCallback", 0, true);
+    }
+
+    if (start_method == nullptr)
+    {
+        RET_VOID_OK();
+    }
+
+    RET_ERR_ON_FAIL(vm::Runtime::invoke_object_arguments_with_run_cctor(start_method, start_target, nullptr, 0));
+    state = static_cast<int32_t>(thread->state);
+    state &= ~static_cast<int32_t>(vm::RtThreadState::Running);
+    state |= static_cast<int32_t>(vm::RtThreadState::Stopped);
+    thread->state = static_cast<vm::RtThreadState>(state);
+    set_instance_bool_field_if_present(managed_thread, "_isDead", true);
     RET_VOID_OK();
 }
 
@@ -2211,6 +2244,14 @@ RtResultVoid thread_sleep_internal_invoker(metadata::RtManagedMethodPointer, con
 {
     int32_t milliseconds = interp::EvalStackOp::get_param<int32_t>(params, 0);
     vm::Thread::sleep(milliseconds);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_sleep_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                    interp::RtStackObject*) noexcept
+{
+    uint32_t milliseconds = interp::EvalStackOp::get_param<uint32_t>(params, 0);
+    vm::Thread::sleep(milliseconds > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) ? -1 : static_cast<int32_t>(milliseconds));
     RET_VOID_OK();
 }
 
@@ -2358,6 +2399,41 @@ RtResultVoid kernel32_get_tick_count64_invoker(metadata::RtManagedMethodPointer,
     RET_VOID_OK();
 }
 
+RtResultVoid kernel32_get_system_times_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                               const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    int64_t* idle_time = interp::EvalStackOp::get_param<int64_t*>(params, 0);
+    int64_t* kernel_time = interp::EvalStackOp::get_param<int64_t*>(params, 1);
+    int64_t* user_time = interp::EvalStackOp::get_param<int64_t*>(params, 2);
+    int32_t result = platform::Kernel32::get_system_times(idle_time, kernel_time, user_time) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_current_thread_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                 interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, platform::Kernel32::get_current_thread());
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_current_thread_id_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                    interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, platform::Kernel32::get_current_thread_id());
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_thread_io_pending_flag_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t thread_handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    int32_t* is_io_pending = interp::EvalStackOp::get_param<int32_t*>(params, 1);
+    int32_t result = platform::Kernel32::get_thread_io_pending_flag(thread_handle, is_io_pending) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_get_std_handle_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject* ret) noexcept
 {
@@ -2477,6 +2553,64 @@ RtResultVoid kernel32_get_full_path_name_invoker(metadata::RtManagedMethodPointe
         vm::Marshal::set_last_win32_error(0);
     }
     interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_create_event_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                              interp::RtStackObject* ret) noexcept
+{
+    intptr_t security_attributes = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    auto name = interp::EvalStackOp::get_param<const Utf16Char*>(params, 1);
+    uint32_t flags = interp::EvalStackOp::get_param<uint32_t>(params, 2);
+    uint32_t desired_access = interp::EvalStackOp::get_param<uint32_t>(params, 3);
+    interp::EvalStackOp::set_return(ret, platform::Kernel32::create_event_ex(security_attributes, name, flags, desired_access));
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_open_event_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                         interp::RtStackObject* ret) noexcept
+{
+    uint32_t desired_access = interp::EvalStackOp::get_param<uint32_t>(params, 0);
+    int32_t inherit_handle = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    auto name = interp::EvalStackOp::get_param<const Utf16Char*>(params, 2);
+    interp::EvalStackOp::set_return(ret, platform::Kernel32::open_event(desired_access, inherit_handle, name));
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_set_event_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                        interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    interp::EvalStackOp::set_return(ret, platform::Kernel32::set_event(handle) ? 1 : 0);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_reset_event_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                          interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    interp::EvalStackOp::set_return(ret, platform::Kernel32::reset_event(handle) ? 1 : 0);
+    RET_VOID_OK();
+}
+
+RtResultVoid wait_handle_wait_one_core_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                               interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    int32_t milliseconds = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    int32_t use_trivial_waits = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    interp::EvalStackOp::set_return(ret, platform::Kernel32::wait_for_single_object_ex(handle, milliseconds, use_trivial_waits));
+    RET_VOID_OK();
+}
+
+RtResultVoid wait_handle_wait_multiple_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                               interp::RtStackObject* ret) noexcept
+{
+    auto handles = interp::EvalStackOp::get_param<intptr_t*>(params, 0);
+    int32_t count = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    int32_t wait_all = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    int32_t milliseconds = interp::EvalStackOp::get_param<int32_t>(params, 3);
+    interp::EvalStackOp::set_return(ret, platform::Kernel32::wait_for_multiple_objects_ex(handles, count, wait_all, milliseconds));
     RET_VOID_OK();
 }
 
@@ -4951,6 +5085,12 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Threading.Thread::SleepInternal", nullptr, thread_sleep_internal_invoker);
     vm::PInvokes::register_pinvoke("ThreadNative_Sleep(System.Int32)", nullptr, thread_sleep_internal_invoker);
     vm::PInvokes::register_pinvoke("ThreadNative_Sleep", nullptr, thread_sleep_internal_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::Sleep(System.UInt32)", nullptr, kernel32_sleep_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::Sleep", nullptr, kernel32_sleep_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::Sleep(System.UInt32)", nullptr, kernel32_sleep_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::Sleep", nullptr, kernel32_sleep_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::Sleep(System.UInt32)", nullptr, kernel32_sleep_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::Sleep", nullptr, kernel32_sleep_invoker);
     vm::PInvokes::register_pinvoke("System.Threading.Thread::SpinWaitInternal(System.Int32)", nullptr, thread_spin_wait_internal_invoker);
     vm::PInvokes::register_pinvoke("System.Threading.Thread::SpinWaitInternal", nullptr, thread_spin_wait_internal_invoker);
     vm::PInvokes::register_pinvoke("ThreadNative_SpinWait(System.Int32)", nullptr, thread_spin_wait_internal_invoker);
@@ -4976,6 +5116,14 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.Threading.Monitor::<Wait>g____PInvoke|24_0(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)", nullptr,
         monitor_wait_invoker);
     vm::PInvokes::register_pinvoke("System.Threading.Monitor::<Wait>g____PInvoke|24_0", nullptr, monitor_wait_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.WaitHandle::<WaitOneCore>g____PInvoke|0_0(System.IntPtr,System.Int32,System.Int32)", nullptr,
+                                   wait_handle_wait_one_core_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.WaitHandle::<WaitOneCore>g____PInvoke|0_0", nullptr, wait_handle_wait_one_core_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Threading.WaitHandle::<WaitMultipleIgnoringSyncContext>g____PInvoke|2_0(System.IntPtr*,System.Int32,System.Int32,System.Int32)", nullptr,
+        wait_handle_wait_multiple_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.WaitHandle::<WaitMultipleIgnoringSyncContext>g____PInvoke|2_0", nullptr,
+                                   wait_handle_wait_multiple_invoker);
     vm::PInvokes::register_pinvoke("System.Threading.Thread::PollGCInternal()", nullptr, thread_poll_gc_invoker);
     vm::PInvokes::register_pinvoke("System.Threading.Thread::PollGCInternal", nullptr, thread_poll_gc_invoker);
     vm::PInvokes::register_pinvoke("ThreadNative_PollGC()", nullptr, thread_poll_gc_invoker);
@@ -5028,12 +5176,43 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Kernel32::GetConsoleOutputCP", nullptr, kernel32_get_console_output_cp_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetConsoleOutputCP()", nullptr, kernel32_get_console_output_cp_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetConsoleOutputCP", nullptr, kernel32_get_console_output_cp_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetCurrentThread()", nullptr, kernel32_get_current_thread_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetCurrentThread", nullptr, kernel32_get_current_thread_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetCurrentThread()", nullptr, kernel32_get_current_thread_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetCurrentThread", nullptr, kernel32_get_current_thread_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetCurrentThread()", nullptr, kernel32_get_current_thread_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetCurrentThread", nullptr, kernel32_get_current_thread_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetCurrentThreadId()", nullptr, kernel32_get_current_thread_id_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetCurrentThreadId", nullptr, kernel32_get_current_thread_id_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetCurrentThreadId()", nullptr, kernel32_get_current_thread_id_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetCurrentThreadId", nullptr, kernel32_get_current_thread_id_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetCurrentThreadId()", nullptr, kernel32_get_current_thread_id_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetCurrentThreadId", nullptr, kernel32_get_current_thread_id_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetThreadIOPendingFlag>g____PInvoke|252_0(System.IntPtr,Interop/BOOL*)", nullptr,
+                                   kernel32_get_thread_io_pending_flag_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetThreadIOPendingFlag>g____PInvoke|252_0", nullptr,
+                                   kernel32_get_thread_io_pending_flag_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetThreadIOPendingFlag>g____PInvoke|252_0(System.IntPtr,Interop/BOOL*)", nullptr,
+                                   kernel32_get_thread_io_pending_flag_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetThreadIOPendingFlag>g____PInvoke|252_0", nullptr, kernel32_get_thread_io_pending_flag_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetThreadIOPendingFlag>g____PInvoke|252_0(System.IntPtr,Interop/BOOL*)", nullptr,
+                                   kernel32_get_thread_io_pending_flag_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetThreadIOPendingFlag>g____PInvoke|252_0", nullptr, kernel32_get_thread_io_pending_flag_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetTickCount64()", nullptr, kernel32_get_tick_count64_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetTickCount64", nullptr, kernel32_get_tick_count64_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetTickCount64()", nullptr, kernel32_get_tick_count64_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetTickCount64", nullptr, kernel32_get_tick_count64_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetTickCount64()", nullptr, kernel32_get_tick_count64_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetTickCount64", nullptr, kernel32_get_tick_count64_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetSystemTimes>g____PInvoke|156_0(System.Int64*,System.Int64*,System.Int64*)", nullptr,
+                                   kernel32_get_system_times_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetSystemTimes>g____PInvoke|156_0", nullptr, kernel32_get_system_times_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetSystemTimes>g____PInvoke|156_0(System.Int64*,System.Int64*,System.Int64*)", nullptr,
+                                   kernel32_get_system_times_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetSystemTimes>g____PInvoke|156_0", nullptr, kernel32_get_system_times_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetSystemTimes>g____PInvoke|156_0(System.Int64*,System.Int64*,System.Int64*)", nullptr,
+                                   kernel32_get_system_times_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetSystemTimes>g____PInvoke|156_0", nullptr, kernel32_get_system_times_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetStdHandle(System.Int32)", nullptr, kernel32_get_std_handle_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetStdHandle", nullptr, kernel32_get_std_handle_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetStdHandle(System.Int32)", nullptr, kernel32_get_std_handle_invoker);
@@ -5152,6 +5331,36 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke(".Kernel32::<CloseHandle>g____PInvoke|277_0(System.IntPtr)", nullptr,
                                    kernel32_close_handle_pinvoke_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::<CloseHandle>g____PInvoke|277_0", nullptr, kernel32_close_handle_pinvoke_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<CreateEventEx>g____PInvoke|294_0(System.IntPtr,System.UInt16*,System.UInt32,System.UInt32)",
+                                   nullptr, kernel32_create_event_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<CreateEventEx>g____PInvoke|294_0", nullptr, kernel32_create_event_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<CreateEventEx>g____PInvoke|294_0(System.IntPtr,System.UInt16*,System.UInt32,System.UInt32)", nullptr,
+                                   kernel32_create_event_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<CreateEventEx>g____PInvoke|294_0", nullptr, kernel32_create_event_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<CreateEventEx>g____PInvoke|294_0(System.IntPtr,System.UInt16*,System.UInt32,System.UInt32)", nullptr,
+                                   kernel32_create_event_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<CreateEventEx>g____PInvoke|294_0", nullptr, kernel32_create_event_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetEvent>g____PInvoke|292_0(System.IntPtr)", nullptr, kernel32_set_event_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetEvent>g____PInvoke|292_0", nullptr, kernel32_set_event_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<SetEvent>g____PInvoke|292_0(System.IntPtr)", nullptr, kernel32_set_event_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<SetEvent>g____PInvoke|292_0", nullptr, kernel32_set_event_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<SetEvent>g____PInvoke|292_0(System.IntPtr)", nullptr, kernel32_set_event_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<SetEvent>g____PInvoke|292_0", nullptr, kernel32_set_event_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ResetEvent>g____PInvoke|293_0(System.IntPtr)", nullptr, kernel32_reset_event_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ResetEvent>g____PInvoke|293_0", nullptr, kernel32_reset_event_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ResetEvent>g____PInvoke|293_0(System.IntPtr)", nullptr, kernel32_reset_event_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ResetEvent>g____PInvoke|293_0", nullptr, kernel32_reset_event_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ResetEvent>g____PInvoke|293_0(System.IntPtr)", nullptr, kernel32_reset_event_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ResetEvent>g____PInvoke|293_0", nullptr, kernel32_reset_event_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<OpenEvent>g____PInvoke|295_0(System.UInt32,System.Int32,System.UInt16*)", nullptr,
+                                   kernel32_open_event_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<OpenEvent>g____PInvoke|295_0", nullptr, kernel32_open_event_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<OpenEvent>g____PInvoke|295_0(System.UInt32,System.Int32,System.UInt16*)", nullptr,
+                                   kernel32_open_event_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<OpenEvent>g____PInvoke|295_0", nullptr, kernel32_open_event_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<OpenEvent>g____PInvoke|295_0(System.UInt32,System.Int32,System.UInt16*)", nullptr,
+                                   kernel32_open_event_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<OpenEvent>g____PInvoke|295_0", nullptr, kernel32_open_event_invoker);
     vm::PInvokes::register_pinvoke(
         "Interop/Kernel32::<CreateFilePrivate_IntPtr>g____PInvoke|84_0(System.UInt16*,System.Int32,System.IO.FileShare,Interop/Kernel32/SECURITY_ATTRIBUTES*,System.IO.FileMode,System.Int32,System.IntPtr)",
         nullptr, kernel32_create_file_private_ptr_invoker);

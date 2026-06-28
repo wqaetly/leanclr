@@ -654,6 +654,7 @@ struct RtInternalThread : public RtObject
     void* netcore1;
     void* netcore2;
     void* last;
+    RtObject* coreclr_managed_thread;
 };
 
 // Thread
