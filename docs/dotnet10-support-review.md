@@ -871,6 +871,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 迁移旧 `TC_System_Reflection_RuntimeAssembly` 反射素材：补齐 `GetImageRuntimeVersion`、`GetEntryPoint`、`GetManifestResourceNames` 三个 CoreCLR QCall façade，并用 `RunCorlibReflectionRuntimeAssembly` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeConstructorInfo` 反射素材：覆盖 constructor metadata token、constructor invoke 和重载 constructor token 区分，并用 `RunCorlibReflectionRuntimeConstructorInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeFieldInfo` 反射素材：补齐 `RuntimeFieldHandle.SetValue` QCall/PInvoke façade 与 `IsFastPathSupported` internal call，并用 `RunCorlibReflectionRuntimeFieldInfo` / `RunAll` 验收。
+- [x] 迁移旧 `TC_System_Reflection_FieldInfo` 反射素材：覆盖 FieldInfo 名称、类型、DeclaringType、metadata token、custom modifiers、class/struct/private/static/nested field GetValue/SetValue 以及 GetValueDirect/SetValueDirect，并用 `RunCorlibReflectionFieldInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeMethodInfo` 反射素材：覆盖 method metadata token、MethodInfo.Invoke、泛型方法构造、GetBaseDefinition 和 MethodBody，并用 `RunCorlibReflectionRuntimeMethodInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeParameterInfo` 反射素材：覆盖参数 metadata token、参数类型/位置、默认值、构造函数参数、数组伪构造函数参数、泛型方法参数和返回参数，并用 `RunCorlibReflectionRuntimeParameterInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimePropertyInfo` 反射素材：覆盖 property metadata token、PropertyType、CanRead/CanWrite、getter/setter、custom modifiers、GetValue/SetValue、泛型类型属性和索引参数，并用 `RunCorlibReflectionRuntimePropertyInfo` / `RunAll` 验收。
@@ -1061,6 +1062,14 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 默认排除项不是从覆盖范围删除测试，而是标记“聚合 `ManagedNet10.Smoke` 已覆盖、但尚未适合作为独立冷启动 gate”的深反射或复合场景，包括 `TestBasics`、`TestCustomAttributeDataOnly`、`TestFieldRawConstantValueOnly`、`TestGenericsDelegatesAndExceptions`、`TestReflection`、`TestReflectionInvokeMethodOnly`、`TestResolveUserStringOnly`、`TestSpan`、`TestStructLayoutAttributeOnly`。后续整理 smoke 时应优先把这些入口拆成更小的稳定切片，或补齐其冷启动前置状态。
 - 本轮还为 `.NET 10` CoreLib 触发的 `System.RuntimeTypeHandle::RegisterCollectibleTypeDependency(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallAssembly)` 增加最小 no-op QCall façade。LeanCLR 当前 minimal profile 不建模 collectible AssemblyLoadContext / LoaderAllocator，故该入口只用于保持 metadata/custom attribute 路径可继续执行。
 - `ManagedNet10.Smoke.Program::TestCustomAttributeDataBlobShapesOnly` 中 object-typed custom attribute argument 的 `ArgumentType` 期望已校准为 `.NET 10` 实际编码类型 `typeof(int)`，而不是旧探路预期的 `typeof(object)`。
+
+2026-06-28 已迁移旧 `FieldInfo` 反射用例：
+
+- 将旧 `CorlibTests.InternalCall.TC_System_Reflection_FieldInfo` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionFieldInfo` 定位入口，并让 `RunAll` 程序集级扫描覆盖 FieldInfo 名称、类型、DeclaringType、metadata token、custom modifiers、class/struct/private/static/nested field 的 GetValue/SetValue，以及 GetValueDirect/SetValueDirect typed-reference 旧素材。
+- 旧 `GetRawConstantValue` 用例与已迁移的 `RuntimeFieldInfo.GetRawConstantValue_ForConstField` 属于同一类 Mono-era `RtFieldInfo.GetRawConstantValue` 断言；本轮将该旧断言纳入 net10 replacement 过滤，保留默认 `ManagedNet10.Smoke.TestFieldRawConstantValueOnly` 继续覆盖 `.NET 10` 当前 raw constant gate。
+- 为 `.NET 10` CoreLib 当前实际调用链补齐 `Signature.Init` 的 field metadata raw signature blob 回填，避免 `FieldInfo.GetOptionalCustomModifiers()` / `GetRequiredCustomModifiers()` 进入 `System.Signature::GetParameterOffsetInternal` 时拿到空签名。
+- 为 `.NET 10` CoreLib 的 private P/Invoke 入口 `System.RuntimeFieldHandle::GetValueDirect(System.IntPtr,System.Void*,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)` 与 `System.RuntimeFieldHandle::SetValueDirect(System.IntPtr,System.Void*,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallTypeHandle)` 增加 façade，并复用 LeanCLR field metadata 与 typed-reference 内存读写语义。
+- 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionFieldInfo`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
 
 2026-06-28 已迁移旧 `AssemblyName` 反射用例：
 

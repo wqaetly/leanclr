@@ -125,7 +125,11 @@ namespace ManagedNet10.LegacyTests
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Legacy test failed: " + type.FullName + "." + method.Name, ex);
+                    Exception failure = ex.InnerException ?? ex;
+                    throw new Exception(
+                        "Legacy test failed: " + type.FullName + "." + method.Name + ": " +
+                        failure.GetType().FullName + ": " + failure.Message,
+                        ex);
                 }
                 executed++;
             }
@@ -184,6 +188,11 @@ namespace ManagedNet10.LegacyTests
             if (type == typeof(CorlibTests.InternalCall.TC_System_Reflection_RuntimeFieldInfo))
             {
                 return methodName == "GetRawConstantValue_ForConstField";
+            }
+
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Reflection_FieldInfo))
+            {
+                return methodName == "GetRawConstantValue";
             }
 
             return false;

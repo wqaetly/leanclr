@@ -36,6 +36,7 @@
     <Compile Include="CorlibReflectionAssemblyTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeAssemblyTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeConstructorInfoTestEntries.cs" />
+    <Compile Include="CorlibReflectionFieldInfoTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeFieldInfoTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeMethodInfoTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeParameterInfoTestEntries.cs" />
@@ -144,6 +145,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_Assembly.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_Assembly.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_AssemblyName.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_AssemblyName.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_EventInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_EventInfo.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_FieldInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_FieldInfo.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_MonoMethodInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_MonoMethodInfo.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_RuntimeAssembly.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_RuntimeAssembly.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_RuntimeConstructorInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_RuntimeConstructorInfo.cs" />

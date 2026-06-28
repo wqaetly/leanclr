@@ -1371,6 +1371,22 @@ RtResultVoid initialize_signature_from_metadata(vm::RtSignature* signature, void
     }
     else if (field != nullptr)
     {
+        if (field->token != metadata::RtToken::Invalid)
+        {
+            metadata::RtModuleDef* module = field->parent->image;
+            auto field_row = module->get_cli_image().read_field(metadata::RtToken::decode_rid(field->token));
+            if (field_row.has_value())
+            {
+                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL2(utils::BinaryReader, field_sig_reader,
+                                                         module->get_decoded_blob_reader(field_row->signature));
+                signature->sig = const_cast<uint8_t*>(field_sig_reader.data());
+                signature->csig = static_cast<int32_t>(field_sig_reader.length());
+            }
+            else if (metadata::RtToken::decode_table_type(field->token) == metadata::TableType::Field)
+            {
+                RET_ERR(RtErr::BadImageFormat);
+            }
+        }
         return_or_field_type = field->type_sig;
     }
     else
@@ -3096,6 +3112,71 @@ RtResultVoid get_rva_field_info_invoker(metadata::RtManagedMethodPointer, const 
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_field_handle_get_value_direct_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto field_arg = interp::EvalStackOp::get_param<const void*>(params, 0);
+    auto typed_ref = interp::EvalStackOp::get_param<vm::RtTypedReference*>(params, 1);
+    (void)interp::EvalStackOp::get_param<void*>(params, 2);
+    (void)interp::EvalStackOp::get_param<void*>(params, 3);
+    (void)interp::EvalStackOp::get_param<void*>(params, 4);
+    (void)interp::EvalStackOp::get_param<void*>(params, 5);
+    auto result_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 6);
+    if (typed_ref == nullptr || result_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field,
+                                            vm::Reflection::get_field_info_from_handle_arg(field_arg));
+    vm::RtObject* result = nullptr;
+    if (vm::Class::is_reference_type(field->parent))
+    {
+        auto target = *reinterpret_cast<vm::RtObject**>(const_cast<void*>(typed_ref->value));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, value,
+                                                vm::Field::get_value_object(field, target));
+        result = value;
+    }
+    else
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, value,
+                                                vm::Field::get_value_direct(field, const_cast<void*>(typed_ref->value)));
+        result = value;
+    }
+
+    *result_slot = result;
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_field_handle_set_value_direct_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto field_arg = interp::EvalStackOp::get_param<const void*>(params, 0);
+    auto typed_ref = interp::EvalStackOp::get_param<vm::RtTypedReference*>(params, 1);
+    auto value_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 2);
+    (void)interp::EvalStackOp::get_param<void*>(params, 3);
+    (void)interp::EvalStackOp::get_param<void*>(params, 4);
+    (void)interp::EvalStackOp::get_param<void*>(params, 5);
+    (void)interp::EvalStackOp::get_param<void*>(params, 6);
+    if (typed_ref == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field,
+                                            vm::Reflection::get_field_info_from_handle_arg(field_arg));
+    vm::RtObject* value = value_slot != nullptr ? *value_slot : nullptr;
+    if (vm::Class::is_reference_type(field->parent))
+    {
+        auto target = *reinterpret_cast<vm::RtObject**>(const_cast<void*>(typed_ref->value));
+        return vm::Field::set_value_object(field, target, value);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, is_reference_type, vm::Type::is_reference_type(field->type_sig));
+    void* ptr_field_value = is_reference_type ? static_cast<void*>(&value) : static_cast<void*>(value ? value + 1 : nullptr);
+    return vm::Field::set_value_direct(field, const_cast<void*>(typed_ref->value), ptr_field_value);
+}
+
 RtResultVoid runtime_field_handle_set_value_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                     const interp::RtStackObject* params, interp::RtStackObject*) noexcept
 {
@@ -4741,6 +4822,16 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, get_rva_field_info_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeFieldHandle::<GetRVAFieldInfo>g____PInvoke|24_0", nullptr,
                                    get_rva_field_info_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeFieldHandle::GetValueDirect(System.IntPtr,System.Void*,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, runtime_field_handle_get_value_direct_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeFieldHandle::GetValueDirect", nullptr,
+                                   runtime_field_handle_get_value_direct_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeFieldHandle::SetValueDirect(System.IntPtr,System.Void*,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallTypeHandle)",
+        nullptr, runtime_field_handle_set_value_direct_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeFieldHandle::SetValueDirect", nullptr,
+                                   runtime_field_handle_set_value_direct_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeFieldHandle::<SetValue>g____PInvoke|34_0(System.IntPtr,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallTypeHandle,System.Int32*)",
         nullptr, runtime_field_handle_set_value_invoker);
