@@ -150,6 +150,8 @@ class Array
                                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept;
     static RtResultVoid szarray_interface_count_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
                                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept;
+    static RtResultVoid szarray_generic_get_enumerator_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
+                                                               const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept;
     static RtResultVoid newmdarray_lengths_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
                                                    const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept;
     static RtResultVoid newmdarray_lengths_lower_bounds_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,

@@ -2,6 +2,11 @@
 #include "class.h"
 #include "object.h"
 #include "array_class.h"
+#include "generic_class.h"
+#include "method.h"
+#include "runtime.h"
+#include "metadata/metadata_cache.h"
+#include "metadata/module_def.h"
 #include "utils/mem_op.h"
 #include "rt_managed_types.h"
 #include "interp/eval_stack_op.h"
@@ -419,6 +424,45 @@ RtResultVoid Array::szarray_interface_count_invoker(metadata::RtManagedMethodPoi
     }
 
     interp::EvalStackOp::set_return(ret, get_array_length(arr));
+    RET_VOID_OK();
+}
+
+RtResultVoid Array::szarray_generic_get_enumerator_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    RtArray* arr = interp::EvalStackOp::get_param<RtArray*>(params, 0);
+    if (arr == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    const metadata::RtTypeSig* generic_args[1] = {arr->klass->element_class->by_val};
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtGenericInst*, generic_inst,
+                                            metadata::MetadataCache::get_pooled_generic_inst(generic_args, 1));
+
+    metadata::RtModuleDef* corlib = Class::get_corlib_types().cls_array->image;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, enumerator_def,
+                                            corlib->get_class_by_name("System.SZGenericArrayEnumerator`1", false, true));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, enumerator_class,
+                                            GenericClass::get_class(Class::get_type_def_gid(enumerator_def), generic_inst));
+    RET_ERR_ON_FAIL(Class::initialize_all(enumerator_class));
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, enumerator,
+                                            LEANCLR_NEWOBJ_INTERNAL(enumerator_class, "Array::szarray_generic_get_enumerator"));
+
+    const metadata::RtMethodInfo* ctor = Method::find_matched_method_in_class_by_name_and_param_count(enumerator_class, ".ctor", 2);
+    if (ctor == nullptr)
+    {
+        RET_ERR(RtErr::MissingMethod);
+    }
+
+    interp::RtStackObject ctor_args[3]{};
+    ctor_args[0].obj = enumerator;
+    ctor_args[1].obj = reinterpret_cast<RtObject*>(arr);
+    ctor_args[2].i32 = get_array_length(arr);
+    RET_ERR_ON_FAIL(Runtime::invoke_stackobject_arguments_with_run_cctor(ctor, ctor_args, nullptr));
+
+    interp::EvalStackOp::set_return(ret, enumerator);
     RET_VOID_OK();
 }
 
