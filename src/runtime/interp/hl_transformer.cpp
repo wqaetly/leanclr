@@ -1,6 +1,7 @@
 #include "hl_transformer.h"
 #include "ll_transformer.h"
 #include "il_opcodes.h"
+#include "metadata/metadata_cache.h"
 #include "metadata/module_def.h"
 #include "metadata/generic_metadata.h"
 #include "metadata/aot_module.h"
@@ -2081,8 +2082,10 @@ RtResultVoid Transformer::add_mkrefany(metadata::RtClass* klass)
 
     ir->set_class(klass);
     ir->set_var_src(addr);
-    // Push TypedRef value
-    ir->set_var_dst(push_ref_or_ptr_to_eval_stack());
+    metadata::RtTypeSig typedref_sig = metadata::RtTypeSig::new_by_val(metadata::RtElementType::TypedByRef);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, pooled_typedref_sig, metadata::MetadataCache::get_pooled_typesig(typedref_sig));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(Variable*, dst, push_typesig_to_eval_stack(pooled_typedref_sig));
+    ir->set_var_dst(dst);
     RET_VOID_OK();
 }
 

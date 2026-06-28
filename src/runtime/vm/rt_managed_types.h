@@ -225,8 +225,8 @@ struct RtCustomAttribute : public RtObject
 // Typed reference
 struct RtTypedReference
 {
-    const metadata::RtTypeSig* type_handle;
     const void* value;
+    const void* type_handle;
     const metadata::RtClass* klass;
 };
 

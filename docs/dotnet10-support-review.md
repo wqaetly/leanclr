@@ -877,6 +877,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 迁移旧 `TC_System_Reflection_RuntimePropertyInfo` 反射素材：覆盖 property metadata token、PropertyType、CanRead/CanWrite、getter/setter、custom modifiers、GetValue/SetValue、泛型类型属性和索引参数，并用 `RunCorlibReflectionRuntimePropertyInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_EventInfo` 反射素材：覆盖 event lookup 和 RuntimeEventInfo 名称读取，并用 `RunCorlibReflectionEventInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_MonoMethodInfo` 反射素材：覆盖 MethodInfo.ReturnParameter、返回参数类型和返回值自定义特性读取，并用 `RunCorlibReflectionMonoMethodInfo` / `RunAll` 验收。
+- [x] 迁移旧 `TC_System_TypedReference` 素材：覆盖 `__makeref` / `__refvalue` 和 `.NET 10` 托管 `TypedReference.ToObject`，并用 `RunCorlibTypedReference` / `RunAll` 验收。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1062,6 +1063,12 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 默认排除项不是从覆盖范围删除测试，而是标记“聚合 `ManagedNet10.Smoke` 已覆盖、但尚未适合作为独立冷启动 gate”的深反射或复合场景，包括 `TestBasics`、`TestCustomAttributeDataOnly`、`TestFieldRawConstantValueOnly`、`TestGenericsDelegatesAndExceptions`、`TestReflection`、`TestReflectionInvokeMethodOnly`、`TestResolveUserStringOnly`、`TestSpan`、`TestStructLayoutAttributeOnly`。后续整理 smoke 时应优先把这些入口拆成更小的稳定切片，或补齐其冷启动前置状态。
 - 本轮还为 `.NET 10` CoreLib 触发的 `System.RuntimeTypeHandle::RegisterCollectibleTypeDependency(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallAssembly)` 增加最小 no-op QCall façade。LeanCLR 当前 minimal profile 不建模 collectible AssemblyLoadContext / LoaderAllocator，故该入口只用于保持 metadata/custom attribute 路径可继续执行。
 - `ManagedNet10.Smoke.Program::TestCustomAttributeDataBlobShapesOnly` 中 object-typed custom attribute argument 的 `ArgumentType` 期望已校准为 `.NET 10` 实际编码类型 `typeof(int)`，而不是旧探路预期的 `typeof(object)`。
+
+2026-06-28 已迁移旧 `TypedReference` 用例：
+- 将旧 `CorlibTests.InternalCall.TC_System_TypedReference` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibTypedReference` 定位入口，并保留 `RunCorlibTypedReferenceMakeTypedReference` / `RunCorlibTypedReferenceInternalToObject` 两个细分入口，方便后续区分 `__makeref` / `__refvalue` 与 `TypedReference.ToObject` 路径。
+- 修正解释器 `mkrefany` 的高层求值栈类型：不再把结果当普通 `RefOrPtr`，而是推入 `RtElementType::TypedByRef`，让后续 `refanyval` / `refanytype` 的 typed-by-ref 校验和栈槽大小一致。
+- 对齐 `.NET 10` `System.TypedReference` CoreCLR 布局：`RtTypedReference` 前两个字段按 CoreLib 可见的 `_value` / `_type` 顺序存放，并将 `_type` 写为已有 net10 `MethodTable` façade；LeanCLR 继续在第三个字段缓存 `RtClass`，供 `refanyval`、`refanytype` 和 native typed-reference fast path 使用。
+- 本机已验证 `RunCorlibTypedReferenceMakeTypedReference`、`RunCorlibTypedReferenceInternalToObject`、`RunCorlibTypedReference` 均输出 `ok!`；`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke`、`scripts\dotnet10\api-scan.ps1 -Configuration Release` 和 `git diff --check` 均通过。
 
 2026-06-28 已迁移旧 `FieldInfo` 反射用例：
 

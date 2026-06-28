@@ -19,6 +19,7 @@
 #include "vm/intrinsics.h"
 #include "vm/rt_exception.h"
 #include "vm/enum.h"
+#include "vm/reflection.h"
 
 namespace leanclr
 {
@@ -5760,9 +5761,10 @@ method_start:
                     {
                         const metadata::RtClass* klass = get_resolved_data<metadata::RtClass>(imi, ir->klass_idx);
                         const void* src_addr = get_stack_value_at<const void*>(eval_stack_base, ir->addr);
+                        HANDLE_RAISE_RUNTIME_ERROR(const void*, method_table, vm::Reflection::get_net10_method_table(klass->by_val));
                         vm::RtTypedReference* dst = get_ptr_stack_value_at<vm::RtTypedReference>(eval_stack_base, ir->dst);
-                        dst->type_handle = klass->by_val;
                         dst->value = src_addr;
+                        dst->type_handle = method_table;
                         dst->klass = klass;
                     }
                     LEANCLR_CASE_END1()
@@ -5780,7 +5782,7 @@ method_start:
                     LEANCLR_CASE_BEGIN1(RefAnyType)
                     {
                         vm::RtTypedReference* src = get_ptr_stack_value_at<vm::RtTypedReference>(eval_stack_base, ir->src);
-                        set_stack_value_at<const metadata::RtTypeSig*>(eval_stack_base, ir->dst, src->type_handle);
+                        set_stack_value_at<const metadata::RtTypeSig*>(eval_stack_base, ir->dst, src->klass->by_val);
                     }
                     LEANCLR_CASE_END1()
                     LEANCLR_CASE_BEGIN1(LdToken)

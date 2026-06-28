@@ -28,6 +28,7 @@
     <Compile Include="CorlibToStringTestEntries.cs" />
     <Compile Include="CorlibThreadingTestEntries.cs" />
     <Compile Include="CorlibTypeSystemTestEntries.cs" />
+    <Compile Include="CorlibTypedReferenceTestEntries.cs" />
     <Compile Include="CorlibArrayBufferIntrinsicTestEntries.cs" />
     <Compile Include="CorlibCoreObjectValueTestEntries.cs" />
     <Compile Include="CorlibEnvironmentTestEntries.cs" />
@@ -161,6 +162,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Interlocked.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Interlocked.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Volatile.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Volatile.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Type.cs" Link="CorlibTests\InternalCall\TC_System_Type.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_TypedReference.cs" Link="CorlibTests\InternalCall\TC_System_TypedReference.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_ValueType.cs" Link="CorlibTests\InternalCall\TC_System_ValueType.cs" />
     <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_String.cs" Link="CorlibTests\Intrinsic\TC_String.cs" />
     <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_System_Object.cs" Link="CorlibTests\Intrinsic\TC_System_Object.cs" />
