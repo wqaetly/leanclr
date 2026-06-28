@@ -228,6 +228,18 @@ namespace ManagedNet10.LegacyTests
                 return true;
             }
 
+            if (type == typeof(Tests.Instruments.Converts.TC_conv_u4))
+            {
+                return methodName == "float_overflow_down" ||
+                    methodName == "double_overflow_down";
+            }
+
+            if (type == typeof(Tests.Instruments.Converts.TC_conv_u8))
+            {
+                return methodName == "float_2" ||
+                    methodName == "double_2";
+            }
+
             return false;
         }
     }

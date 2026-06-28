@@ -36,12 +36,14 @@ namespace ManagedNet10.LegacyTests
 
         public static void RunConvertU4()
         {
-            LegacyTestRunner.RunType(typeof(Tests.Instruments.Converts.TC_conv_u4));
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(Tests.Instruments.Converts.TC_conv_u4));
+            LegacyTestRunner.RunType(typeof(ConvertUnsignedNet10Semantics));
         }
 
         public static void RunConvertU8()
         {
-            LegacyTestRunner.RunType(typeof(Tests.Instruments.Converts.TC_conv_u8));
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(Tests.Instruments.Converts.TC_conv_u8));
+            LegacyTestRunner.RunType(typeof(ConvertUnsignedNet10Semantics));
         }
 
         public static void RunConvertSignedInteger()
@@ -156,6 +158,41 @@ namespace ManagedNet10.LegacyTests
         public static void RunConvertOverflowU8()
         {
             LegacyTestRunner.RunType(typeof(Tests.Instruments.Converts.TC_conv_ovf_u8));
+        }
+    }
+
+    internal sealed class ConvertUnsignedNet10Semantics
+    {
+        [UnitTest]
+        public void ConvU4NegativeFloatReturnsZero()
+        {
+            float value = -1;
+            uint converted = (uint)value;
+            Assert.Equal(0u, converted);
+        }
+
+        [UnitTest]
+        public void ConvU4NegativeDoubleReturnsZero()
+        {
+            double value = -1;
+            uint converted = (uint)value;
+            Assert.Equal(0u, converted);
+        }
+
+        [UnitTest]
+        public void ConvU8NegativeFloatReturnsZero()
+        {
+            float value = -1;
+            ulong converted = (ulong)value;
+            Assert.Equal(0ul, converted);
+        }
+
+        [UnitTest]
+        public void ConvU8NegativeDoubleReturnsZero()
+        {
+            double value = -1;
+            ulong converted = (ulong)value;
+            Assert.Equal(0ul, converted);
         }
     }
 }
