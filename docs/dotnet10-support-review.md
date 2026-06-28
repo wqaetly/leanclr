@@ -867,6 +867,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 实现 `System.Reflection.RuntimeAssembly::GetFullName(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)` 的 .NET 10 QCall façade，并用 `ManagedNet10.Smoke.Program::TestAssemblyFullNameOnly` / `TestReflection` 验收。
 - [x] 修复 `RuntimeModule.ResolveField` 相关字段反射 façade：`RuntimeFieldHandleInternal` 支持 direct field desc、栈槽、boxed handle、`RtFieldInfo` 与 runtime field info stub 解码，并用 `ManagedNet10.LegacyTests.Program::RunCorlibReflectionRuntimeModule` 验收。
 - [x] 迁移旧 `TC_System_Reflection_AssemblyName` 反射素材：保留 `AssemblyName` 解析与 `CustomAttributeData` 参数读取，使用 net10 replacement 覆盖当前程序集名差异，并用 `RunCorlibReflectionAssemblyName` 验收。
+- [x] 迁移旧 `TC_System_Reflection_Assembly` 反射素材：覆盖 Assembly.GetTypes、GetExecutingAssembly、GetCallingAssembly、GetReferencedAssemblies 和 .NET 10 当前程序集加载 replacement，并用 `RunCorlibReflectionAssembly` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeAssembly` 反射素材：补齐 `GetImageRuntimeVersion`、`GetEntryPoint`、`GetManifestResourceNames` 三个 CoreCLR QCall façade，并用 `RunCorlibReflectionRuntimeAssembly` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeConstructorInfo` 反射素材：覆盖 constructor metadata token、constructor invoke 和重载 constructor token 区分，并用 `RunCorlibReflectionRuntimeConstructorInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeFieldInfo` 反射素材：补齐 `RuntimeFieldHandle.SetValue` QCall/PInvoke façade 与 `IsFastPathSupported` internal call，并用 `RunCorlibReflectionRuntimeFieldInfo` / `RunAll` 验收。
@@ -1066,6 +1067,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 将旧 `CorlibTests.InternalCall.TC_System_Reflection_AssemblyName` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionAssemblyName` 定位入口，并让 `RunAll` 程序集级扫描覆盖旧素材中的 `AssemblyName` 解析和 `CustomAttributeData` constructor/named argument 读取。
 - 旧 `GetNativeName` 用例原本断言当前程序集名为 `CorlibTests`，在 net10 迁移项目中应为 `ManagedNet10.LegacyTests`；本轮将该旧预期纳入 net10 replacement 过滤，并新增 `CorlibReflectionAssemblyNameNet10Semantics.GetNameReturnsCurrentNet10AssemblyName` 作为替代断言。
 - 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunCorlibReflectionAssemblyName"` 通过并输出 `ok!`，`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 和 `scripts\dotnet10\api-scan.ps1 -Configuration Release` 也均通过。
+
+2026-06-28 已迁移旧 `Assembly` 反射用例：
+
+- 将旧 `CorlibTests.InternalCall.TC_System_Reflection_Assembly` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionAssembly` 定位入口，并让 `RunAll` 程序集级扫描覆盖 `Assembly.GetTypes()`、`Assembly.GetExecutingAssembly()`、`Assembly.GetCallingAssembly()` 和 `Assembly.GetReferencedAssemblies()` 等旧 Assembly 素材。
+- 旧 `LoadAssembly` / `LoadAssemblyFullQualifiedName` 用例原本按 `CorlibTests` 程序集名断言；本轮将它们纳入 net10 replacement 过滤，并新增 `CorlibReflectionAssemblyNet10Semantics` 覆盖 `ManagedNet10.LegacyTests` 的 simple-name、full-name 和 `AssemblyName` 三种当前程序集加载路径。
+- 旧 `Serialization_Call_Assembly_Load_Internal` 依赖 `BinaryFormatter` 触发 Assembly.Load 内部路径；`.NET 10` 已将 `BinaryFormatter` 标记为 SYSLIB0011 error 且不属于当前 minimal runtime 主线。本轮将该旧断言纳入 net10 replacement 过滤，并在 `ManagedNet10.LegacyTests` 中仅为 linked 源码压制 SYSLIB0011 编译诊断，避免把过时序列化 API 当作新增 runtime contract。
+- 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionAssembly`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
 
 2026-06-28 已迁移旧 `RuntimeAssembly` 反射用例：
 

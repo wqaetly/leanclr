@@ -167,6 +167,13 @@ namespace ManagedNet10.LegacyTests
                 return true;
             }
 
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Reflection_Assembly))
+            {
+                return methodName == "LoadAssembly" ||
+                    methodName == "LoadAssemblyFullQualifiedName" ||
+                    methodName == "Serialization_Call_Assembly_Load_Internal";
+            }
+
             if (type == typeof(CorlibTests.InternalCall.TC_System_Reflection_RuntimeAssembly))
             {
                 return methodName == "GetFullName" ||

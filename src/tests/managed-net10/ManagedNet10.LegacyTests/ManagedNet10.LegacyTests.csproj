@@ -7,6 +7,7 @@
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);SYSLIB0011</NoWarn>
     <Copyright>Copyright 2026</Copyright>
   </PropertyGroup>
 
@@ -32,6 +33,7 @@
     <Compile Include="CorlibEnvironmentTestEntries.cs" />
     <Compile Include="CorlibRuntimeServicesTestEntries.cs" />
     <Compile Include="CorlibDiagnosticsTestEntries.cs" />
+    <Compile Include="CorlibReflectionAssemblyTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeAssemblyTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeConstructorInfoTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeFieldInfoTestEntries.cs" />
@@ -139,6 +141,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Math.cs" Link="CorlibTests\InternalCall\TC_System_Math.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Object_Icalls.cs" Link="CorlibTests\InternalCall\TC_System_Object_Icalls.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_Assembly.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_Assembly.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_AssemblyName.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_AssemblyName.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_EventInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_EventInfo.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_MonoMethodInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_MonoMethodInfo.cs" />
