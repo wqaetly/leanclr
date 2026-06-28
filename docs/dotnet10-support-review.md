@@ -867,6 +867,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 实现 `System.Reflection.RuntimeAssembly::GetFullName(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)` 的 .NET 10 QCall façade，并用 `ManagedNet10.Smoke.Program::TestAssemblyFullNameOnly` / `TestReflection` 验收。
 - [x] 修复 `RuntimeModule.ResolveField` 相关字段反射 façade：`RuntimeFieldHandleInternal` 支持 direct field desc、栈槽、boxed handle、`RtFieldInfo` 与 runtime field info stub 解码，并用 `ManagedNet10.LegacyTests.Program::RunCorlibReflectionRuntimeModule` 验收。
 - [x] 迁移旧 `TC_System_Reflection_AssemblyName` 反射素材：保留 `AssemblyName` 解析与 `CustomAttributeData` 参数读取，使用 net10 replacement 覆盖当前程序集名差异，并用 `RunCorlibReflectionAssemblyName` 验收。
+- [x] 迁移旧 `TC_System_Reflection_RuntimeAssembly` 反射素材：补齐 `GetImageRuntimeVersion`、`GetEntryPoint`、`GetManifestResourceNames` 三个 CoreCLR QCall façade，并用 `RunCorlibReflectionRuntimeAssembly` 验收。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1058,6 +1059,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 将旧 `CorlibTests.InternalCall.TC_System_Reflection_AssemblyName` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionAssemblyName` 定位入口，并让 `RunAll` 程序集级扫描覆盖旧素材中的 `AssemblyName` 解析和 `CustomAttributeData` constructor/named argument 读取。
 - 旧 `GetNativeName` 用例原本断言当前程序集名为 `CorlibTests`，在 net10 迁移项目中应为 `ManagedNet10.LegacyTests`；本轮将该旧预期纳入 net10 replacement 过滤，并新增 `CorlibReflectionAssemblyNameNet10Semantics.GetNameReturnsCurrentNet10AssemblyName` 作为替代断言。
 - 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunCorlibReflectionAssemblyName"` 通过并输出 `ok!`，`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 和 `scripts\dotnet10\api-scan.ps1 -Configuration Release` 也均通过。
+
+2026-06-28 已迁移旧 `RuntimeAssembly` 反射用例：
+
+- 将旧 `CorlibTests.InternalCall.TC_System_Reflection_RuntimeAssembly` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionRuntimeAssembly` 定位入口，并让 `RunAll` 程序集级扫描覆盖 runtime version、GAC、ReflectionOnly、manifest resource names 等旧 RuntimeAssembly 素材。
+- 为 `.NET 10` CoreLib 当前实际调用链补齐 `System.Reflection.RuntimeAssembly::GetImageRuntimeVersion(QCallAssembly,StringHandleOnStack)`、`GetEntryPoint(QCallAssembly,ObjectHandleOnStack)`、`GetManifestResourceNames(QCallAssembly,ObjectHandleOnStack)` 三个 QCall/PInvoke façade，并写入 `coreclr-net10` pinvoke catalog。
+- 旧 `GetFullName`、`GetEntryPoint`、`GetManifestModule` 用例带有 `CorlibTests.dll`/library 形态预期；本轮将它们纳入 net10 replacement 过滤，并新增 `CorlibReflectionRuntimeAssemblyNet10Semantics` 覆盖 `ManagedNet10.LegacyTests` 的 FullName、Program.Main entry point 与 manifest module 名称。
+- 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionRuntimeAssembly`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
 
 仍未完成：
 

@@ -476,6 +476,48 @@ RtResult<vm::RtString*> get_assembly_full_name(void* qcall_assembly, void* nativ
     RET_OK(vm::String::create_string_from_utf8chars(full_name.get_const_chars(), static_cast<int32_t>(full_name.length())));
 }
 
+RtResult<vm::RtString*> get_assembly_image_runtime_version(void* qcall_assembly, void* native_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly, vm::Reflection::get_assembly_from_qcall_assembly(qcall_assembly, native_handle));
+    if (assembly->mod == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    RET_OK(vm::String::create_string_from_utf8cstr("v4.0.30319"));
+}
+
+RtResult<vm::RtReflectionMethod*> get_assembly_entry_point(void* qcall_assembly, void* native_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly, vm::Reflection::get_assembly_from_qcall_assembly(qcall_assembly, native_handle));
+    if (assembly->mod == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    metadata::EncodedTokenId entrypoint_token = assembly->mod->get_entrypoint_token();
+    if (entrypoint_token == 0)
+    {
+        RET_OK(nullptr);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method,
+                                            assembly->mod->get_method_by_rid(metadata::RtToken::decode_rid(entrypoint_token)));
+    return vm::Reflection::get_method_reflection_object(method, method->parent);
+}
+
+RtResult<vm::RtArray*> get_assembly_manifest_resource_names(void* qcall_assembly, void* native_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly, vm::Reflection::get_assembly_from_qcall_assembly(qcall_assembly, native_handle));
+    if (assembly->mod == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    return LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(
+        vm::Class::get_corlib_types().cls_string, "RuntimeAssembly_GetManifestResourceNames");
+}
+
 RtResult<const metadata::RtAssemblyName*> get_qcall_assembly_name(void* qcall_assembly, void* native_handle) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly, vm::Reflection::get_assembly_from_qcall_assembly(qcall_assembly, native_handle));
@@ -3256,6 +3298,57 @@ RtResultVoid assembly_get_full_name_invoker(metadata::RtManagedMethodPointer, co
     RET_VOID_OK();
 }
 
+RtResultVoid assembly_get_image_runtime_version_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                        const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto qcall_assembly = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto ret_string = interp::EvalStackOp::get_param<vm::RtString**>(params, 2);
+    if (ret_string == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtString*, runtime_version,
+                                            get_assembly_image_runtime_version(qcall_assembly, native_handle));
+    *ret_string = runtime_version;
+    RET_VOID_OK();
+}
+
+RtResultVoid assembly_get_entry_point_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                              interp::RtStackObject*) noexcept
+{
+    auto qcall_assembly = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto ret_method = interp::EvalStackOp::get_param<vm::RtObject**>(params, 2);
+    if (ret_method == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethod*, entry_point,
+                                            get_assembly_entry_point(qcall_assembly, native_handle));
+    *ret_method = reinterpret_cast<vm::RtObject*>(entry_point);
+    RET_VOID_OK();
+}
+
+RtResultVoid assembly_get_manifest_resource_names_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                          const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto qcall_assembly = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto ret_resource_names = interp::EvalStackOp::get_param<vm::RtArray**>(params, 2);
+    if (ret_resource_names == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, resource_names,
+                                            get_assembly_manifest_resource_names(qcall_assembly, native_handle));
+    *ret_resource_names = resource_names;
+    RET_VOID_OK();
+}
+
 RtResultVoid assembly_get_simple_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                               interp::RtStackObject*) noexcept
 {
@@ -4588,6 +4681,25 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, assembly_get_full_name_invoker);
     vm::PInvokes::register_pinvoke("System.Reflection.RuntimeAssembly::GetFullName", nullptr, assembly_get_full_name_invoker);
     vm::PInvokes::register_pinvoke("AssemblyNative_GetFullName", nullptr, assembly_get_full_name_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeAssembly::GetImageRuntimeVersion(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
+        nullptr, assembly_get_image_runtime_version_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeAssembly::GetImageRuntimeVersion", nullptr,
+                                   assembly_get_image_runtime_version_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_GetImageRuntimeVersion", nullptr,
+                                   assembly_get_image_runtime_version_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeAssembly::GetEntryPoint(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, assembly_get_entry_point_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeAssembly::GetEntryPoint", nullptr, assembly_get_entry_point_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_GetEntryPoint", nullptr, assembly_get_entry_point_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeAssembly::GetManifestResourceNames(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, assembly_get_manifest_resource_names_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeAssembly::GetManifestResourceNames", nullptr,
+                                   assembly_get_manifest_resource_names_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_GetManifestResourceNames", nullptr,
+                                   assembly_get_manifest_resource_names_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Reflection.RuntimeAssembly::<GetCodeBase>g____PInvoke|14_0(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
         nullptr, assembly_get_code_base_invoker);

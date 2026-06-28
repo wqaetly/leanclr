@@ -116,8 +116,20 @@ namespace ManagedNet10.LegacyTests
 
             // The original assembly name test was compiled into CorlibTests.dll. The linked
             // net10 assembly intentionally runs under ManagedNet10.LegacyTests instead.
-            return type == typeof(CorlibTests.InternalCall.TC_System_Reflection_AssemblyName) &&
-                methodName == "GetNativeName";
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Reflection_AssemblyName) &&
+                methodName == "GetNativeName")
+            {
+                return true;
+            }
+
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Reflection_RuntimeAssembly))
+            {
+                return methodName == "GetFullName" ||
+                    methodName == "GetEntryPoint" ||
+                    methodName == "GetManifestModule";
+            }
+
+            return false;
         }
     }
 }
