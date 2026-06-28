@@ -3,6 +3,7 @@
 #include <cstring>
 #include <limits>
 
+#include "const_strs.h"
 #include "alloc/general_allocation.h"
 #include "gc/gc_roots.h"
 #include "icalls/system_enum.h"
@@ -666,6 +667,38 @@ RtResult<vm::RtReflectionAssembly*> load_runtime_assembly(const NativeAssemblyNa
     }
 
     return vm::Reflection::get_assembly_reflection_object(loaded.unwrap());
+}
+
+RtResult<vm::RtReflectionAssembly*> create_dynamic_assembly_facade(const NativeAssemblyNameParts* name_parts) noexcept
+{
+    if (name_parts == nullptr || name_parts->name == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    utils::Vector<metadata::RtModuleDef*> modules;
+    vm::AppDomain::get_modules(vm::AppDomain::get_default_appdomain(), modules);
+    for (metadata::RtModuleDef* module : modules)
+    {
+        if (module == nullptr || module->get_assembly() == nullptr)
+        {
+            continue;
+        }
+        if (std::strcmp(module->get_name_no_ext(), STR_SYSTEM_PRIVATE_CORELIB_NAME) == 0)
+        {
+            continue;
+        }
+
+        return vm::Reflection::get_assembly_reflection_object(module->get_assembly());
+    }
+
+    metadata::RtModuleDef* corlib = metadata::RtModuleDef::get_corlib_module();
+    if (corlib == nullptr || corlib->get_assembly() == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    return vm::Reflection::get_assembly_reflection_object(corlib->get_assembly());
 }
 
 static bool is_same_or_nested_within(const metadata::RtClass* klass, const metadata::RtClass* enclosing) noexcept
@@ -4559,6 +4592,24 @@ RtResultVoid assembly_internal_load_invoker(metadata::RtManagedMethodPointer, co
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_assembly_builder_create_dynamic_assembly_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                      const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    (void)interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    auto name_parts = interp::EvalStackOp::get_param<NativeAssemblyNameParts*>(params, 1);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 2);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 3);
+    auto ret_assembly = interp::EvalStackOp::get_param<vm::RtObject**>(params, 4);
+    if (ret_assembly == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionAssembly*, assembly, create_dynamic_assembly_facade(name_parts));
+    *ret_assembly = reinterpret_cast<vm::RtObject*>(assembly);
+    RET_VOID_OK();
+}
+
 RtResultVoid runtime_type_handle_get_fields_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                     interp::RtStackObject* ret) noexcept
 {
@@ -6397,6 +6448,11 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Reflection.RuntimeAssembly::<InternalLoad>g____PInvoke|48_0", nullptr,
                                    assembly_internal_load_invoker);
     vm::PInvokes::register_pinvoke("AssemblyNative_InternalLoad", nullptr, assembly_internal_load_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.Emit.RuntimeAssemblyBuilder::CreateDynamicAssembly(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Reflection.NativeAssemblyNameParts*,System.Configuration.Assemblies.AssemblyHashAlgorithm,System.Reflection.Emit.AssemblyBuilderAccess,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, runtime_assembly_builder_create_dynamic_assembly_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.Emit.RuntimeAssemblyBuilder::CreateDynamicAssembly", nullptr,
+                                   runtime_assembly_builder_create_dynamic_assembly_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Reflection.MetadataImport::<Enum>g____PInvoke|8_0(System.IntPtr,System.Int32,System.Int32,System.Int32*,System.Int32*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, metadata_import_enum_invoker);
