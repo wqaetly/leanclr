@@ -71,6 +71,7 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\ArmHFAStructs.cs" Link="Fixtures\ArmHFAStructs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\CallDefs.cs" Link="Fixtures\CallDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\CustomAttributes.cs" Link="Fixtures\CustomAttributes.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\InnerTypes.cs" Link="Fixtures\InnerTypes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdftnDefs.cs" Link="Fixtures\LdftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdvirftnDefs.cs" Link="Fixtures\LdvirftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\MethodRefs.cs" Link="Fixtures\MethodRefs.cs" />
@@ -207,6 +208,7 @@
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Reflection.cs" Link="Runtime\TC_Reflection.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_String.cs" Link="Runtime\TC_String.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_using.cs" Link="Runtime\TC_using.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_InnerType.cs" Link="Runtime\Misc\TC_InnerType.cs" />
   </ItemGroup>
 
 </Project>
