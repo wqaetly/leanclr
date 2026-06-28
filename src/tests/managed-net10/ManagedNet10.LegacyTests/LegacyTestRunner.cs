@@ -178,6 +178,12 @@ namespace ManagedNet10.LegacyTests
                     methodName == "Serialization_Call_Assembly_Load_Internal";
             }
 
+            if (type == typeof(CorlibTests.InternalCall.TC_System_AppDomain) &&
+                methodName == "LoadAssemblyExist_ByName")
+            {
+                return true;
+            }
+
             if (type == typeof(CorlibTests.InternalCall.TC_System_Reflection_RuntimeAssembly))
             {
                 return methodName == "GetFullName" ||

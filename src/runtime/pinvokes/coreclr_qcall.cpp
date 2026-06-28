@@ -19,6 +19,7 @@
 #include "utils/rt_vector.h"
 #include "utils/string_builder.h"
 #include "vm/assembly.h"
+#include "vm/appdomain.h"
 #include "vm/array_class.h"
 #include "vm/class.h"
 #include "vm/customattribute.h"
@@ -469,6 +470,25 @@ RtResult<vm::RtArray*> get_assembly_modules(void* qcall_assembly, void* native_h
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionModule*, module, vm::Reflection::get_module_reflection_object(assembly->mod));
     vm::Array::set_array_data_at<vm::RtReflectionModule*>(module_array, 0, module);
     RET_OK(module_array);
+}
+
+RtResult<vm::RtArray*> get_loaded_assemblies() noexcept
+{
+    utils::Vector<metadata::RtModuleDef*> modules;
+    vm::AppDomain::get_modules(vm::AppDomain::get_default_appdomain(), modules);
+    metadata::RtClass* assembly_klass = vm::Class::get_corlib_types().cls_reflection_assembly;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        vm::RtArray*, assembly_array,
+        LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(assembly_klass, static_cast<int32_t>(modules.size()), "AssemblyNative_GetLoadedAssemblies"));
+
+    for (size_t i = 0; i < modules.size(); ++i)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionAssembly*, assembly,
+                                                vm::Reflection::get_assembly_reflection_object(modules[i]->get_assembly()));
+        vm::Array::set_array_data_at<vm::RtReflectionAssembly*>(assembly_array, static_cast<int32_t>(i), assembly);
+    }
+
+    RET_OK(assembly_array);
 }
 
 RtResult<vm::RtString*> get_assembly_full_name(void* qcall_assembly, void* native_handle) noexcept
@@ -2843,6 +2863,20 @@ RtResultVoid assembly_get_entry_assembly_invoker(metadata::RtManagedMethodPointe
     RET_VOID_OK();
 }
 
+RtResultVoid assembly_get_loaded_assemblies_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                    interp::RtStackObject*) noexcept
+{
+    auto ret_assemblies = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    if (ret_assemblies == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, assemblies, get_loaded_assemblies());
+    *ret_assemblies = assemblies;
+    RET_VOID_OK();
+}
+
 RtResultVoid array_create_instance_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                            interp::RtStackObject*) noexcept
 {
@@ -4758,6 +4792,12 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke(
         "System.Reflection.Assembly::GetEntryAssemblyNative(System.Runtime.CompilerServices.ObjectHandleOnStack)", nullptr,
         assembly_get_entry_assembly_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.Loader.AssemblyLoadContext::GetLoadedAssemblies(System.Runtime.CompilerServices.ObjectHandleOnStack)", nullptr,
+        assembly_get_loaded_assemblies_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.Loader.AssemblyLoadContext::GetLoadedAssemblies", nullptr,
+                                   assembly_get_loaded_assemblies_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_GetLoadedAssemblies", nullptr, assembly_get_loaded_assemblies_invoker);
     vm::PInvokes::register_pinvoke("Array_CreateInstance", nullptr, array_create_instance_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Array::<InternalCreate>g____PInvoke|0_0(System.Runtime.CompilerServices.QCallTypeHandle,System.Int32,System.Int32*,System.Int32*,System.Boolean,System.Runtime.CompilerServices.ObjectHandleOnStack)",

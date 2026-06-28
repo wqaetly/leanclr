@@ -880,6 +880,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 迁移旧 `TC_System_TypedReference` 素材：覆盖 `__makeref` / `__refvalue` 和 `.NET 10` 托管 `TypedReference.ToObject`，并用 `RunCorlibTypedReference` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_RuntimeTypeHandle` 素材：将旧 `HasInstantiation` 私有 API 断言替换为 `.NET 10` 当前 `System.RuntimeTypeHandle` / `System.Type.IsGenericType` 语义覆盖，并用 `RunCorlibRuntimeTypeHandle` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_RuntimeType` 素材：覆盖 nested type name lookup、ignore-case lookup 和 nested type enumeration，并用 `RunCorlibRuntimeType` / `RunAll` 验收。
+- [x] 迁移旧 `TC_System_AppDomain` 素材：覆盖 CurrentDomain、SetupInformation、GetAssemblies、GetData/SetData 和当前程序集加载 replacement，并用 `RunCorlibAppDomain` / `RunAll` 验收。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1083,6 +1084,12 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 为 `.NET 10` CoreLib 当前实际调用链补齐 `System.RuntimeTypeHandle::GetUtf8NameInternal(System.Runtime.CompilerServices.MethodTable*)` internal call，从 net10 MethodTable façade 解析回 LeanCLR `RtClass` 并返回 metadata UTF-8 名称；同时将 `RuntimeTypeHandle_GetDeclaringTypeHandle` 的返回值改为 net10 MethodTable façade，避免 CoreLib `TypeHandle` 路径把 raw `RtTypeSig*` 当作 MethodTable 读取。
 - 为 `RuntimeType.GetNestedType(..., ignoreCase: true)` 触发的 `System.MdUtf8String::<EqualsCaseInsensitive>g____PInvoke|0_0(System.Void*,System.Void*,System.Int32)` 增加 QCall/PInvoke façade，并登记到 `coreclr-net10` pinvoke catalog；当前实现按 ASCII 大小写折叠比较 metadata 名称，非 ASCII 字节保持精确比较。
 - 本机已验证 `RunCorlibRuntimeType` 输出 `ok!`；`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 和 `scripts\dotnet10\api-scan.ps1 -Configuration Release` 均通过。
+
+2026-06-28 已迁移旧 `AppDomain` 用例：
+- 将旧 `CorlibTests.InternalCall.TC_System_AppDomain` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibAppDomain` 定位入口，并保留 `RunCorlibAppDomainLegacy` / `RunCorlibAppDomainNet10Semantics` 细分入口。
+- 旧 `LoadAssemblyExist_ByName` 用例按 `CorlibTests` 程序集名加载；net10 迁移程序集当前为 `ManagedNet10.LegacyTests`。本轮将旧断言纳入 net10 replacement 过滤，并新增 `CorlibAppDomainNet10Semantics.LoadCurrentAssemblyByName` 验证 `AppDomain.CurrentDomain.Load("ManagedNet10.LegacyTests")`。
+- `.NET 10` `AppDomain.GetAssemblies()` 走 `System.Runtime.Loader.AssemblyLoadContext::GetLoadedAssemblies(System.Runtime.CompilerServices.ObjectHandleOnStack)` QCall/PInvoke，而不是旧 Mono-era `System.AppDomain::GetAssemblies(System.Boolean)` icall。本轮新增 `AssemblyNative_GetLoadedAssemblies` façade，复用 LeanCLR appdomain 注册模块列表并返回 `System.Reflection.Assembly[]`，同时登记到 `coreclr-net10` pinvoke catalog。
+- 本机已验证 `RunCorlibAppDomain` 输出 `ok!`；`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 和 `scripts\dotnet10\api-scan.ps1 -Configuration Release` 均通过。
 
 2026-06-28 已迁移旧 `FieldInfo` 反射用例：
 
