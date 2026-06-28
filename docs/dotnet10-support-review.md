@@ -859,8 +859,8 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 接入解释执行 smoke runner 脚本：复用 `src/tools/leanrun`，支持指定用户程序集目录、`.NET 10` runtime pack 目录和入口方法，避免第一阶段依赖 AOT 生成/编译流程。
 - [x] 跑通 `scripts\dotnet10\interp-smoke.ps1 -Entry "ManagedNet10.Smoke.Program::TestPairArithmetic"`，确认最小 .NET 10 解释入口可进入并退出 `0`。
 - [x] 拉取 `dotnet/runtime` 参考源码到 gitignored `artifacts/dotnet10-runtime-src`，用于快速对照 .NET 10 CoreLib/QCall/InternalCall 调用链；后续不再作为常规主线步骤。
-- [ ] 定义 `minimal-net10` API 白名单：明确允许的 core type、基础 BCL、反射、Span/Unsafe、异常、委托和引擎 bridge 所需 API。
-- [ ] 增加 `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描：项目纯逻辑 DLL 一旦引用白名单外 API，应在构建或加载阶段给出清晰诊断。
+- [x] 定义 `minimal-net10` API 白名单第一版：`src/tools/net10apiscan/minimal-net10-whitelist.json` 覆盖当前 `ManagedNet10.Smoke`、`ManagedNet10.NkgSmoke` 和 NKG core/Odin/UniTask 轻量 workload；后续仍需按真实 workload 继续收紧。
+- [x] 增加 `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描：`src/tools/net10apiscan` 读取程序集 metadata 并按白名单输出 `unsupported_api` 诊断；`scripts/dotnet10/api-scan.ps1` 已作为可复跑 gate，当前 managed smoke 与 NKG core 扫描均为 0 越界引用。
 - [x] 新增 [`net10-runtime-contract`](net10-runtime-contract.md) 设计文档：从 .NET 10 `System.Private.CoreLib` / CoreCLR 源码抽取 RuntimeType、RuntimeTypeHandle、RuntimeMethodHandle、RuntimeFieldHandle、RuntimeAssembly、RuntimeModule、CustomAttribute、RuntimeHelpers、Unsafe/Span、Thread/Monitor/Task 的最小 contract。
 - [ ] 重写 `coreclr-net10` 活跃路径的 model/façade：外部满足 CoreLib contract，内部映射到 LeanCLR `RtClass` / `RtMethodInfo` / `RtFieldInfo` / metadata cache / interpreter。
 - [x] 优先完成 `RuntimeType` 身份与 `System.Type` 相等性 façade：统一 `typeof(T)`、`Object.GetType()`、`Type.GetTypeFromHandle()`、`Signature.Init` / `MethodInfo.ReturnType` 的 canonical `RuntimeType`，并用 `ManagedNet10.LegacyTests.Program::RunLegacyDiscoverySmoke` 验收。
@@ -876,7 +876,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [ ] 将原作者 managed / Mono 测试资产分阶段迁移到 `.NET 10` 验证路径，并以最终全量跑通作为 LeanCLR `.NET 10` 接入合格线。
 - [ ] 将 `ManagedNet10.Smoke` 整理为阶段性定位集：保留真实会用到的纯逻辑能力，同时和原作者测试资产全量迁移计划对齐。
 - [x] 在官方 `.NET 10` SDK 下跑通 `C:\study\wqaetly\new\NKGGameFramework` 基线：Release 构建成功，`NKGGameFramework.Tests` 142/142 通过。
-- [ ] 接入 `C:\study\wqaetly\new\NKGGameFramework` 真实 workload smoke：优先覆盖核心 `net10.0` 逻辑库，再扩展到 async、轻量反射、序列化和 bridge。
+- [x] 接入 `C:\study\wqaetly\new\NKGGameFramework` 真实 workload smoke 第一版：`ManagedNet10.NkgSmoke` + `scripts/dotnet10/nkg-smoke.ps1` 覆盖核心程序集加载、类型/成员枚举和 Odin/NKG 常见 `CustomAttributeData` 读取路径；后续扩展到 async、序列化和 bridge。
 - [ ] 接口静态虚函数、`static abstract`、generic math 等能力改为按需触发：只有真实纯逻辑 DLL 使用时才新增 fixture 和 runtime 支持。
 - [x] 根据 `coreclr-net10` extern diff 优先补齐启动路径 icalls / intrinsics，让最小 `ManagedNet10.Smoke` 能在 LeanCLR 解释执行 runner 中端到端执行。
 - [ ] 完整 `System.Private.CoreLib` / `.NET 10` runtime pack assembly resolver 后置：当前只保留 minimal profile 所需解析能力，遇到真实依赖再补。
