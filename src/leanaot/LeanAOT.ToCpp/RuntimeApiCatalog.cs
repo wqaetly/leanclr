@@ -21,6 +21,8 @@ namespace LeanAOT.ToCpp
     internal sealed class PInvokesConfigFile
     {
         public Dictionary<string, List<string>> StaticLinkedMethods { get; set; }
+
+        public List<string> RuntimeApiNames { get; set; }
     }
 
     internal sealed class RuntimeApiProfileConfig

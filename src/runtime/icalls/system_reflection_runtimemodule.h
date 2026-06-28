@@ -10,6 +10,7 @@ namespace icalls
 class SystemReflectionRuntimeModule
 {
   public:
+    static utils::Span<vm::InternalCallEntry> get_net10_internal_call_entries() noexcept;
     static utils::Span<vm::InternalCallEntry> get_internal_call_entries() noexcept;
 
     // Get metadata token from module

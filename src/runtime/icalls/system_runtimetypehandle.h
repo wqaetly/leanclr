@@ -10,6 +10,7 @@ namespace icalls
 class SystemRuntimeTypeHandle
 {
   public:
+    static utils::Span<vm::InternalCallEntry> get_net10_internal_call_entries() noexcept;
     static utils::Span<vm::InternalCallEntry> get_internal_call_entries() noexcept;
 
     // Get type attributes
@@ -38,6 +39,7 @@ class SystemRuntimeTypeHandle
 
     // Get element type
     static RtResult<vm::RtReflectionRuntimeType*> get_element_type(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
+    static RtResult<intptr_t> get_element_type_handle(void* runtime_type_handle) noexcept;
 
     // Check if type is generic variable
     static RtResult<bool> is_generic_variable(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
@@ -86,8 +88,8 @@ class SystemRuntimeTypeHandle
     // Get virtual method slot count for .NET RuntimeType method cache population
     static RtResult<int32_t> get_num_virtuals(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
 
-    // Allocate an uninitialized object from the native type handle used by .NET 10 CoreLib fast paths
-    static RtResult<vm::RtObject*> internal_alloc_no_checks_fast_path(const metadata::RtClass* klass) noexcept;
+    // Allocate an uninitialized object from the MethodTable facade used by .NET 10 CoreLib fast paths
+    static RtResult<vm::RtObject*> internal_alloc_no_checks_fast_path(const void* method_table) noexcept;
 };
 
 } // namespace icalls

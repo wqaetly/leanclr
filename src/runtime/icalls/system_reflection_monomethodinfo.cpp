@@ -88,8 +88,9 @@ RtResult<RtObject*> SystemReflectionMonoMethodInfo::get_retval_marshal(const RtM
 /// @icall: System.Reflection.MonoMethodInfo::get_parameter_info
 static RtResultVoid get_parameter_info_invoker(RtManagedMethodPointer, const RtMethodInfo*, const RtStackObject* params, RtStackObject* ret) noexcept
 {
-    const RtMethodInfo* method = EvalStackOp::get_param<const RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
     RtReflectionMethod* member = EvalStackOp::get_param<RtReflectionMethod*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const RtMethodInfo*, method, Reflection::get_method_info_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtArray*, params_array, SystemReflectionMonoMethodInfo::get_parameter_info(method, member));
     EvalStackOp::set_return(ret, params_array);
     RET_VOID_OK();
@@ -98,7 +99,8 @@ static RtResultVoid get_parameter_info_invoker(RtManagedMethodPointer, const RtM
 /// @icall: System.Reflection.MonoMethodInfo::get_method_attributes
 static RtResultVoid get_method_attributes_invoker(RtManagedMethodPointer, const RtMethodInfo*, const RtStackObject* params, RtStackObject* ret) noexcept
 {
-    const RtMethodInfo* method = EvalStackOp::get_param<const RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const RtMethodInfo*, method, Reflection::get_method_info_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, attrs, SystemReflectionMonoMethodInfo::get_method_attributes(method));
     EvalStackOp::set_return(ret, attrs);
     RET_VOID_OK();
@@ -107,8 +109,9 @@ static RtResultVoid get_method_attributes_invoker(RtManagedMethodPointer, const 
 /// @icall: System.Reflection.MonoMethodInfo::get_method_info
 static RtResultVoid get_method_info_invoker(RtManagedMethodPointer, const RtMethodInfo*, const RtStackObject* params, RtStackObject* ret) noexcept
 {
-    const RtMethodInfo* method = EvalStackOp::get_param<const RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
     RtMonoMethodInfo* result_info = EvalStackOp::get_param<RtMonoMethodInfo*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const RtMethodInfo*, method, Reflection::get_method_info_from_handle_arg(method_arg));
     (void)ret; // Suppress unused parameter warning
     return SystemReflectionMonoMethodInfo::get_method_info(method, result_info);
 }
@@ -116,7 +119,8 @@ static RtResultVoid get_method_info_invoker(RtManagedMethodPointer, const RtMeth
 /// @icall: System.Reflection.MonoMethodInfo::get_retval_marshal(System.IntPtr)
 static RtResultVoid get_retval_marshal_invoker(RtManagedMethodPointer, const RtMethodInfo*, const RtStackObject* params, RtStackObject* ret) noexcept
 {
-    const RtMethodInfo* method = EvalStackOp::get_param<const RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const RtMethodInfo*, method, Reflection::get_method_info_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, retval_marshal, SystemReflectionMonoMethodInfo::get_retval_marshal(method));
     EvalStackOp::set_return(ret, retval_marshal);
     RET_VOID_OK();

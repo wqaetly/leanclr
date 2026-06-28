@@ -9,51 +9,10 @@ namespace leanclr
 {
 namespace intrinsics
 {
-namespace
-{
-
-bool is_plausible_pointer(const void* value) noexcept
-{
-    auto address = reinterpret_cast<uintptr_t>(value);
-    return address >= 0x10000 && (address % alignof(void*) == 0);
-}
-
-bool is_runtime_type_object(const void* value, const metadata::RtClass* runtime_type_klass) noexcept
-{
-    if (!is_plausible_pointer(value))
-    {
-        return false;
-    }
-
-    auto obj = reinterpret_cast<const vm::RtObject*>(value);
-    return obj->klass == runtime_type_klass;
-}
-
-} // namespace
 
 RtResult<vm::RtReflectionRuntimeType*> SystemType::get_type_from_handle(const void* type_handle) noexcept
 {
-    if (type_handle == nullptr)
-    {
-        RET_ERR(RtErr::ArgumentNull);
-    }
-
-    auto runtime_type_klass = vm::Class::get_corlib_types().cls_runtimetype;
-    if (is_runtime_type_object(type_handle, runtime_type_klass))
-    {
-        RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(const_cast<void*>(type_handle)));
-    }
-
-    auto type_object = *reinterpret_cast<void* const*>(type_handle);
-    if (is_runtime_type_object(type_object, runtime_type_klass))
-    {
-        RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(type_object));
-    }
-
-    auto type_sig = reinterpret_cast<const metadata::RtTypeSig*>(type_handle);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, ref_type, vm::Reflection::get_klass_reflection_object(klass));
-    RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(ref_type));
+    return vm::Reflection::get_runtime_type_from_handle_arg(type_handle);
 }
 
 RtResult<bool> SystemType::get_is_value_type(vm::RtReflectionRuntimeType* runtime_type) noexcept
@@ -63,7 +22,9 @@ RtResult<bool> SystemType::get_is_value_type(vm::RtReflectionRuntimeType* runtim
         RET_ERR(RtErr::NullReference);
     }
 
-    return vm::Type::is_value_type(runtime_type->reflection_type.type_handle);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(&runtime_type->reflection_type));
+    return vm::Type::is_value_type(type_sig);
 }
 
 RtResult<bool> SystemType::equals(vm::RtReflectionRuntimeType* left, vm::RtReflectionRuntimeType* right) noexcept
@@ -76,16 +37,12 @@ RtResult<bool> SystemType::equals(vm::RtReflectionRuntimeType* left, vm::RtRefle
     {
         RET_OK(false);
     }
-    const auto& corlib_types = vm::Class::get_corlib_types();
-    if (left->reflection_type.header.klass != corlib_types.cls_runtimetype || right->reflection_type.header.klass != corlib_types.cls_runtimetype)
-    {
-        RET_OK(false);
-    }
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, left_type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(&left->reflection_type));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, right_type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(&right->reflection_type));
 
-    RET_OK(metadata::MetadataCompare::is_typesig_equal_ignore_attrs(
-        left->reflection_type.type_handle,
-        right->reflection_type.type_handle,
-        false));
+    RET_OK(metadata::MetadataCompare::is_typesig_equal_ignore_attrs(left_type_sig, right_type_sig, false));
 }
 
 /// @intrinsic: System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)

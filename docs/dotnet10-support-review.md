@@ -621,7 +621,27 @@ Unity/Godot host
 5. **按领域替换桥接层**：优先顺序为 type/reflection handles -> assembly/module/custom attribute -> Span/Unsafe/RuntimeHelpers -> exception/delegate -> threading/Monitor/async -> host bridge。每个领域完成后再接对应 smoke。
 6. **测试后置为验收门禁**：contract/model 重写完成一个领域后，再跑 `ManagedNet10.Smoke` 定位入口、`ManagedNet10.LegacyTests` 对应子集、最终 `RunAll` 和真实纯逻辑 DLL smoke。测试只验证 contract 是否成立，不再驱动架构形状。
 
-阶段性完成标准也随之调整：第一阶段不是“所有已迁移旧用例立即跑绿”，而是先产出可审查、可版本化的 `net10-runtime-contract` 文档和 façade 骨架，并保证白名单内入口失败时有明确诊断。随后每个领域以测试验收收口。
+阶段性完成标准也随之调整：第一阶段不是“所有已迁移旧用例立即跑绿”，而是先产出可审查、可版本化的 [`net10-runtime-contract`](net10-runtime-contract.md) 文档和 façade 骨架，并保证白名单内入口失败时有明确诊断。随后每个领域以测试验收收口。
+
+### 2026-06-28 当前执行计划更新
+
+当前计划继续坚持 contract-first，但执行焦点从“先写完整大模型”收敛为“按 CoreLib 实际会跨 native 边界读取的 façade 逐批替换”。第一批不再只看 `RuntimeType` 身份，而是把 `RuntimeType`、`RuntimeFieldHandle`、`RuntimeModule`、`ValueType` 和 delegate 相关的 `MethodTable*` 入口放在同一条 P0 线上处理：外部满足 .NET 10 CoreLib 的 handle / MethodTable 形状，内部统一落到 LeanCLR 自己的 `RtClass` / `RtMethodInfo` / `RtFieldInfo`。
+
+当前已验证的切片：
+
+- `RunLegacyDiscoverySmoke` 通过，说明 `RuntimeType` 身份、`System.Type` 相等性和 legacy 反射发现入口已具备第一道 gate。
+- `RunCorlibReflectionRuntimeModule` 通过，说明 `RuntimeModule.ResolveField`、`RuntimeFieldHandleInternal` 解码、field reflection stub 和 declaring MethodTable façade 已经能支撑当前字段反射切片。
+- `RunCorlibValueTypeEqualsStructValueTypes` 与 `RunCorlibValueTypeGetHashCodeStructIsStable` 通过，说明 `ValueType` 的 `MethodTable*` native 边界已经不再按 raw `RtClass*` 解释。
+- delegate multicast allocation 切片已通过：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(System.Runtime.CompilerServices.MethodTable*)` 已按 net10 MethodTable façade 解析到 LeanCLR `RtClass`，`RunRuntimeDelegateDynamicInvoke` 通过，且未发现 `[delegate-dyn]` 临时定位输出残留。
+- `ManagedNet10.LegacyTests.Program::RunAll` 通过，当前 P0 legacy 回归基线已恢复；后续失败不再来自这一批 P0 façade 阻塞。
+- `ManagedNet10.Smoke.Program::TestCustomAttributeDataOnly` 已纳入默认 smoke，覆盖 assembly / module / type / field / method / parameter / property / event target 上 `CustomAttributeData` metadata-only 路径的 constructor arguments、property named argument 和 field named argument；默认 `ManagedNet10.Smoke` 通过。
+- `ManagedNet10.Smoke.Program::TestCustomAttributeDataOnly` 已继续扩展 Odin/NKG 常见 attribute blob 形状：enum、Type、int[]、Type[]、object、object[]、named enum/type/array/object；默认 `ManagedNet10.Smoke` 通过且 0 warning / 0 error。
+
+更新后的短期顺序：
+
+1. 把默认 `ManagedNet10.Smoke`、`ManagedNet10.LegacyTests.Program::RunAll` 和 `RunRuntimeDelegateDynamicInvoke` 保留为 P0 回归 gate。
+2. 把新增的 bool 返回槽、field handle/stub、MethodTable façade、delegate allocation contract 和 `CustomAttributeData` metadata-only gate 写回 [`net10-runtime-contract`](net10-runtime-contract.md) 和 `coreclr-net10` catalog 检查。
+3. 继续推进 P1：method/field/type/module handle decode helper 收敛，以及 NKG/Odin 轻量反射 workload。
 
 ### 2026-06-27 范围收敛后的支撑计划
 
@@ -713,7 +733,7 @@ Unity/Godot host
 
 | 主线 | 最小验证入口 | 通过证据 | 说明 |
 | --- | --- | --- | --- |
-| net10 contract/model | `docs/net10-runtime-contract.md` 或同等设计文档，覆盖 RuntimeType/Handle/Assembly/Module/Attribute/Span/Monitor 等 façade | contract 可审查、入口签名可追踪、NotSupported 边界明确 | 下一轮最优先；先定结构再跑测试 |
+| net10 contract/model | [`docs/net10-runtime-contract.md`](net10-runtime-contract.md) 或同等设计文档，覆盖 RuntimeType/Handle/Assembly/Module/Attribute/Span/Monitor 等 façade | contract 可审查、入口签名可追踪、NotSupported 边界明确 | 下一轮最优先；先定结构再跑测试 |
 | 解释执行 runner 基线 | `scripts/dotnet10/interp-smoke.ps1` 复用 `src/tools/leanrun`，可指定程序集目录和入口方法 | 能构建 `ManagedNet10.Smoke` 和 `leanrun`，最小定位入口退出 `0` | 作为 contract 领域验收工具，不再驱动设计 |
 | API 白名单 | minimal profile 允许的 assembly/type/member 清单 | 白名单可审查、可版本化 | 作为“支持什么”的正式边界 |
 | 静态扫描 | 扫描项目纯逻辑 DLL 的 `AssemblyRef` / `TypeRef` / `MemberRef` | 白名单外 API 给出明确错误 | 防止用户无意把完整 BCL 生态拉进来 |
@@ -841,9 +861,16 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 拉取 `dotnet/runtime` 参考源码到 gitignored `artifacts/dotnet10-runtime-src`，用于快速对照 .NET 10 CoreLib/QCall/InternalCall 调用链；后续不再作为常规主线步骤。
 - [ ] 定义 `minimal-net10` API 白名单：明确允许的 core type、基础 BCL、反射、Span/Unsafe、异常、委托和引擎 bridge 所需 API。
 - [ ] 增加 `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描：项目纯逻辑 DLL 一旦引用白名单外 API，应在构建或加载阶段给出清晰诊断。
-- [ ] 新增 `net10-runtime-contract` 设计文档：从 .NET 10 `System.Private.CoreLib` / CoreCLR 源码抽取 RuntimeType、RuntimeTypeHandle、RuntimeMethodHandle、RuntimeFieldHandle、RuntimeAssembly、RuntimeModule、CustomAttribute、RuntimeHelpers、Unsafe/Span、Thread/Monitor/Task 的最小 contract。
+- [x] 新增 [`net10-runtime-contract`](net10-runtime-contract.md) 设计文档：从 .NET 10 `System.Private.CoreLib` / CoreCLR 源码抽取 RuntimeType、RuntimeTypeHandle、RuntimeMethodHandle、RuntimeFieldHandle、RuntimeAssembly、RuntimeModule、CustomAttribute、RuntimeHelpers、Unsafe/Span、Thread/Monitor/Task 的最小 contract。
 - [ ] 重写 `coreclr-net10` 活跃路径的 model/façade：外部满足 CoreLib contract，内部映射到 LeanCLR `RtClass` / `RtMethodInfo` / `RtFieldInfo` / metadata cache / interpreter。
+- [x] 优先完成 `RuntimeType` 身份与 `System.Type` 相等性 façade：统一 `typeof(T)`、`Object.GetType()`、`Type.GetTypeFromHandle()`、`Signature.Init` / `MethodInfo.ReturnType` 的 canonical `RuntimeType`，并用 `ManagedNet10.LegacyTests.Program::RunLegacyDiscoverySmoke` 验收。
+- [x] 实现 `System.Reflection.RuntimeAssembly::GetFullName(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)` 的 .NET 10 QCall façade，并用 `ManagedNet10.Smoke.Program::TestAssemblyFullNameOnly` / `TestReflection` 验收。
+- [x] 修复 `RuntimeModule.ResolveField` 相关字段反射 façade：`RuntimeFieldHandleInternal` 支持 direct field desc、栈槽、boxed handle、`RtFieldInfo` 与 runtime field info stub 解码，并用 `ManagedNet10.LegacyTests.Program::RunCorlibReflectionRuntimeModule` 验收。
+- [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
+- [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
+- [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
 - [ ] 将旧 Mono-era 适配从 `coreclr-net10` 主路径隔离：禁止 `Mono.*`、`System.IO.Mono*`、`System.Runtime.Remoting*`、旧 `mscorlib` 布局假设和无签名宽松匹配隐式命中 `.NET 10` BCL。
+- [x] 在 runtime API 签名检查器中为 `coreclr-net10` 增加 Mono-era forbidden gate，并从 `coreclr-net10` catalog 移除没有 .NET 10 extern 来源的 `System.RuntimeMethodHandle::GetName(System.RuntimeMethodHandleInternal)`。
 - [x] 在解释执行 runner 中修复 `TestSpan`，让 Span stackalloc / RVA initializer 子路径不依赖 AOT codegen intrinsic 也能通过。
 - [x] 在解释执行 runner 中修复 `TestBoxingMetadata`，让 boxed value type 的 `Object.GetType()` / `RuntimeType.Name` 子路径在 `System.Private.CoreLib` 下通过。
 - [ ] 将原作者 managed / Mono 测试资产分阶段迁移到 `.NET 10` 验证路径，并以最终全量跑通作为 LeanCLR `.NET 10` 接入合格线。
@@ -989,6 +1016,18 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - `.NET 10` `InlineArrayAttribute` 布局支持已按 custom attribute blob 读取长度，`RuntimeHelpers` 补齐 `InlineArrayAsSpan` / `InlineArrayAsReadOnlySpan` / `InlineArrayFirstElementRef` / `InlineArrayElementRef`，`ManagedNet10.Smoke` 新增 `Span<bool>` stackalloc 与 inline-array struct tail reference 不重叠的验证。
 - 清理了本轮定位期间加入的解释器、intrinsic、QCall 和反射 stderr 诊断输出；保留的改动均为运行时行为或测试入口改动。
 - 本机已验证 `dotnet build src\tests\managed-net10\managed-net10.sln -c Release` 通过，`RunCorlibDiagnostics`、`ManagedNet10.LegacyTests.Program::RunAll` 和默认 `ManagedNet10.Smoke` 三条 `interp-smoke.ps1` 命令均输出 `ok!`。
+
+2026-06-28 已继续收窄默认 `.NET 10` icall 注册面：
+
+- `InternalCallStubs` 新增 `LEANCLR_ENABLE_LEGACY_MONO_ICALLS` 默认关闭开关，并把旧 Mono / mscorlib 专用入口从默认 `.NET 10` 路径移入 legacy 注册路径；本轮新增迁移包括 `System.AppDomain`、旧 console driver、`System.Diagnostics.Debugger` / `StackFrame` / `StackTrace` / `Stopwatch`、`System.Exception::ReportUnhandledException`、`System.ArgIterator`、`System.CurrentSystemTimeZone`、`System.IO.MonoIO`、`RNGCryptoServiceProvider` 和 `SecurityManager` 等 mono45-only 入口。
+- 迁移 `Debugger` 旧 icall 后，`ManagedNet10.LegacyTests` 暴露出 .NET 10 CoreLib 实际依赖 `System.Diagnostics.Debugger::IsLoggingInternal`；已在 `coreclr_qcall` P/Invoke registry 中补齐最小 façade，返回未启用调试日志，而不是把 Mono-era `Debugger::IsLogging()` 整组放回默认表。
+- 本机已重新验证三条目标解释执行入口均输出 `ok!`：默认 `ManagedNet10.Smoke.Program::Main`、`ManagedNet10.LegacyTests.Program::RunAll`、`ManagedNet10.NkgSmoke.Program::RunReflectionAttributeSmoke`。这只证明当前目标 smoke/regression 通过，不代表项目所有测试用例全量跑通。
+
+2026-06-28 已继续收窄 threading 默认 icall 面：
+
+- `System.Threading.Thread` 新增 `.NET 10` 最小注册子表，只保留 `SleepInternal(System.Int32)` 和 `YieldInternal` 两个 `coreclr-net10` catalog 中存在的入口；完整 Mono-era `Thread` icall 表移入 legacy 路径。
+- `System.Threading.ThreadPool`、`InternalThread`、`Timer`、`NativeEventCalls`、`OSSpecificSynchronizationContext` 均只出现在 `mono45` catalog，本轮已从默认 `.NET 10` icall 注册面移入 legacy 路径；`Monitor` 暂不整组迁移，因为当前实现中同时包含 `.NET 10` fast-path 形状，需要后续单独拆表。
+- 本机再次验证默认 `ManagedNet10.Smoke.Program::Main`、`ManagedNet10.LegacyTests.Program::RunAll`、`ManagedNet10.NkgSmoke.Program::RunReflectionAttributeSmoke` 三条目标入口均输出 `ok!`。
 
 仍未完成：
 

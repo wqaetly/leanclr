@@ -97,77 +97,6 @@ static RtResult<bool> is_bitwise_equatable_by_typesig(const metadata::RtTypeSig*
     }
 }
 
-static bool is_valid_element_type(metadata::RtElementType element_type) noexcept
-{
-    switch (element_type)
-    {
-    case metadata::RtElementType::Void:
-    case metadata::RtElementType::Boolean:
-    case metadata::RtElementType::Char:
-    case metadata::RtElementType::I1:
-    case metadata::RtElementType::U1:
-    case metadata::RtElementType::I2:
-    case metadata::RtElementType::U2:
-    case metadata::RtElementType::I4:
-    case metadata::RtElementType::U4:
-    case metadata::RtElementType::I8:
-    case metadata::RtElementType::U8:
-    case metadata::RtElementType::R4:
-    case metadata::RtElementType::R8:
-    case metadata::RtElementType::String:
-    case metadata::RtElementType::Ptr:
-    case metadata::RtElementType::ByRef:
-    case metadata::RtElementType::ValueType:
-    case metadata::RtElementType::Class:
-    case metadata::RtElementType::Var:
-    case metadata::RtElementType::Array:
-    case metadata::RtElementType::GenericInst:
-    case metadata::RtElementType::TypedByRef:
-    case metadata::RtElementType::I:
-    case metadata::RtElementType::U:
-    case metadata::RtElementType::FnPtr:
-    case metadata::RtElementType::Object:
-    case metadata::RtElementType::SZArray:
-    case metadata::RtElementType::MVar:
-        return true;
-    default:
-        return false;
-    }
-}
-
-static bool looks_like_leanclr_type_sig(const metadata::RtTypeSig* type_sig) noexcept
-{
-    if (type_sig == nullptr)
-    {
-        return false;
-    }
-
-    return is_valid_element_type(type_sig->ele_type) && type_sig->field_or_param_attrs == 0 && !type_sig->pinned && type_sig->num_mods == 0;
-}
-
-static RtResult<const metadata::RtClass*> get_class_from_method_table_or_typesig(const void* method_table) noexcept
-{
-    if (method_table == nullptr)
-    {
-        RET_ERR(RtErr::ArgumentNull);
-    }
-
-    auto klass_from_handle = vm::Reflection::get_class_from_net10_method_table(method_table);
-    if (klass_from_handle.is_ok())
-    {
-        RET_OK(klass_from_handle.unwrap());
-    }
-
-    auto type_sig = reinterpret_cast<const metadata::RtTypeSig*>(method_table);
-    if (looks_like_leanclr_type_sig(type_sig))
-    {
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
-        RET_OK(klass);
-    }
-
-    RET_ERR(klass_from_handle.unwrap_err());
-}
-
 RtResult<const void*> SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table(vm::RtObject* obj) noexcept
 {
     if (obj == nullptr)
@@ -175,9 +104,7 @@ RtResult<const void*> SystemRuntimeCompilerServicesRuntimeHelpers::get_method_ta
         RET_ERR(RtErr::NullReference);
     }
 
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, method_table,
-                                            vm::Reflection::get_net10_type_handle(vm::Class::get_by_val_type_sig(obj->klass)));
-    RET_OK(method_table);
+    return vm::Reflection::get_net10_method_table(vm::Class::get_by_val_type_sig(obj->klass));
 }
 
 RtResult<bool> SystemRuntimeCompilerServicesRuntimeHelpers::object_has_component_size(vm::RtObject* obj) noexcept
@@ -217,14 +144,16 @@ RtResultVoid SystemRuntimeCompilerServicesRuntimeHelpers::initialize_array(vm::R
 
 RtResult<uint32_t> SystemRuntimeCompilerServicesRuntimeHelpers::get_num_instance_field_bytes(const void* method_table) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass, get_class_from_method_table_or_typesig(method_table));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass,
+                                            vm::Reflection::get_class_from_net10_method_table(method_table));
     RET_ERR_ON_FAIL(vm::Class::initialize_fields(const_cast<metadata::RtClass*>(klass)));
     RET_OK(vm::Class::get_instance_size_without_object_header(klass));
 }
 
 RtResult<metadata::RtElementType> SystemRuntimeCompilerServicesRuntimeHelpers::get_primitive_cor_element_type(const void* method_table) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass, get_class_from_method_table_or_typesig(method_table));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass,
+                                            vm::Reflection::get_class_from_net10_method_table(method_table));
 
     if (vm::Class::is_enum_type(klass))
     {
@@ -362,7 +291,9 @@ static RtResultVoid initialize_array_invoker(metadata::RtManagedMethodPointer me
     (void)method;
     (void)ret;
     auto array = interp::EvalStackOp::get_param<vm::RtArray*>(params, 0);
-    auto field = interp::EvalStackOp::get_param<const metadata::RtFieldInfo*>(params, 1);
+    auto field_arg = interp::EvalStackOp::get_param<const void*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field,
+                                            vm::Reflection::get_field_info_from_handle_arg(field_arg));
 
     return SystemRuntimeCompilerServicesRuntimeHelpers::initialize_array(array, field);
 }
@@ -414,7 +345,9 @@ static RtResultVoid create_span_invoker(metadata::RtManagedMethodPointer methodP
                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
     (void)methodPtr;
-    const metadata::RtFieldInfo* field = interp::EvalStackOp::get_param<const metadata::RtFieldInfo*>(params, 0);
+    auto field_arg = interp::EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field,
+                                            vm::Reflection::get_field_info_from_handle_arg(field_arg));
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReadOnlySpan<uint8_t>, span,
                                             SystemRuntimeCompilerServicesRuntimeHelpers::create_span(method, field));

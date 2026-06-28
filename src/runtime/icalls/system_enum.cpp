@@ -98,7 +98,8 @@ RtResult<int32_t> SystemEnum::internal_compare_to(vm::RtObject* obj1, vm::RtObje
 
 RtResult<vm::RtReflectionRuntimeType*> SystemEnum::internal_get_underlying_type(vm::RtReflectionRuntimeType* enum_klass) noexcept
 {
-    const metadata::RtTypeSig* type_sig = enum_klass->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(&enum_klass->reflection_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, reflection_type, vm::Reflection::get_klass_reflection_object(klass->element_class));
     RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(reflection_type));
@@ -106,7 +107,8 @@ RtResult<vm::RtReflectionRuntimeType*> SystemEnum::internal_get_underlying_type(
 
 RtResult<bool> SystemEnum::get_enum_values_and_names(vm::RtReflectionRuntimeType* enum_klass, vm::RtArray** values, vm::RtArray** names) noexcept
 {
-    const metadata::RtTypeSig* type_sig = enum_klass->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(&enum_klass->reflection_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     auto result = vm::Enum::get_enum_values_and_names(klass);
     RET_ERR_ON_FAIL(result);
@@ -122,28 +124,10 @@ static RtResult<const metadata::RtTypeSig*> get_type_sig_from_qcall_type_handle(
 {
     if (native_handle != nullptr)
     {
-        RET_OK(reinterpret_cast<const metadata::RtTypeSig*>(native_handle));
+        return vm::Reflection::get_type_sig_from_runtime_type_handle_arg(native_handle);
     }
 
-    if (qcall_type_handle == nullptr)
-    {
-        RET_ERR(RtErr::ArgumentNull);
-    }
-
-    auto runtime_type_klass = vm::Class::get_corlib_types().cls_runtimetype;
-    auto direct_runtime_type = reinterpret_cast<vm::RtReflectionRuntimeType*>(qcall_type_handle);
-    if (direct_runtime_type->reflection_type.header.klass == runtime_type_klass)
-    {
-        RET_OK(direct_runtime_type->reflection_type.type_handle);
-    }
-
-    auto runtime_type = *reinterpret_cast<vm::RtReflectionRuntimeType**>(qcall_type_handle);
-    if (runtime_type == nullptr || runtime_type->reflection_type.header.klass != runtime_type_klass)
-    {
-        RET_ERR(RtErr::BadImageFormat);
-    }
-
-    RET_OK(runtime_type->reflection_type.type_handle);
+    return vm::Reflection::get_type_sig_from_runtime_type_handle_arg(qcall_type_handle);
 }
 
 RtResultVoid SystemEnum::get_enum_values_and_names_qcall(void* qcall_type_handle, void* native_handle, vm::RtArray** values, vm::RtArray** names,
@@ -162,7 +146,8 @@ RtResultVoid SystemEnum::get_enum_values_and_names_qcall(void* qcall_type_handle
 
 RtResult<vm::RtObject*> SystemEnum::internal_box_enum(vm::RtReflectionRuntimeType* runtime_type, uint64_t value) noexcept
 {
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(&runtime_type->reflection_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     assert(vm::Class::is_enum_type(klass));
     return LEANCLR_BOX_OBJECT_INTERNAL(klass, &value, "icalls::SystemEnum::internal_box_enum");

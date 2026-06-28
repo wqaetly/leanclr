@@ -203,6 +203,7 @@ RtResult<IntrinsicInvoker> Intrinsics::get_newobj_intrinsic_by_method(const meta
             RET_OK(it->second);
     }
 
+    if (!is_coreclr_corlib_method(method))
     {
         sb.clear();
         RET_ERR_ON_FAIL(metadata::MetadataName::append_method_full_name_without_params(sb, method, metadata::TypeNameFormat::InternalName));

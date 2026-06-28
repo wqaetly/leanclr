@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify icalls.json / intrinsics.json names against externs.txt signatures."""
+"""Verify runtime API JSON names against externs.txt signatures."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 LINE_RE = re.compile(r"^\[[^\]]+\]\s+(.+)$")
 # DeclaringType::MemberName with optional (params) at end of dnlib FullName tail.
 MEMBER_SIG_RE = re.compile(
-    r"((?:[\w/`\.`][\w/`\.`<>,*&\[\]+\-]*)::\.?[\w`<>]+)(\([^)]*\))?\s*$"
+    r"((?:[\w/`\.`][\w/`\.`<>,*&\[\]+\-|]*)::\.?[\w`<>|]+)(\([^)]*\))?\s*$"
 )
 
 # Extra LeanCLR implementations not listed in externs.txt (exact `name` field match).
@@ -26,6 +26,8 @@ INTRINSICS_WHITELIST: frozenset[str] = frozenset(
     {
         "System.Array::get_Length",
         "System.Array::get_LongLength",
+        "System.Array::Copy(System.Array,System.Array,System.Int32)",
+        "System.Array::Copy(System.Array,System.Int32,System.Array,System.Int32,System.Int32)",
         "System.Array::GetGenericValueImpl<>",
         "System.Array::SetGenericValueImpl<>",
         "System.Object::.ctor()",
@@ -36,6 +38,39 @@ INTRINSICS_WHITELIST: frozenset[str] = frozenset(
         "System.Threading.Interlocked::MemoryBarrier",
     }
 )
+
+
+FORBIDDEN_PROFILE_PATTERNS: dict[str, tuple[tuple[re.Pattern[str], str], ...]] = {
+    "coreclr-net10": (
+        (re.compile(r"\bMono\."), "Mono namespace entry"),
+        (re.compile(r"\bSystem\.Mono"), "Mono custom attribute/runtime entry"),
+        (re.compile(r"\bSystem\.IO\.Mono"), "Mono IO entry"),
+        (re.compile(r"\bSystem\.Reflection\.Mono"), "Mono reflection entry"),
+        (re.compile(r"\bSystem\.Runtime\.Remoting"), "remoting entry"),
+        (re.compile(r"\bmscorlib\b", re.IGNORECASE), "mscorlib-era entry"),
+        (re.compile(r"\bSystemMono[A-Za-z0-9_]*"), "Mono-era implementation symbol"),
+        (re.compile(r"\bMono[A-Za-z0-9_]*::"), "Mono-era implementation symbol"),
+        (re.compile(r"(?:^|[/\\])mono_[^/\\]*", re.IGNORECASE), "Mono-era runtime header"),
+    ),
+}
+
+
+def forbidden_profile_reason(profile: str | None, entry: dict) -> str | None:
+    if not profile:
+        return None
+    rules = FORBIDDEN_PROFILE_PATTERNS.get(profile)
+    if not rules:
+        return None
+
+    entry_text = " ".join(
+        str(value)
+        for key, value in entry.items()
+        if key in ("name", "func", "header") and isinstance(value, str)
+    )
+    for pattern, reason in rules:
+        if pattern.search(entry_text):
+            return reason
+    return None
 
 
 def member_signature_from_extern(rest: str) -> str | None:
@@ -99,6 +134,36 @@ def load_json_entries(path: Path) -> list[dict]:
     return data
 
 
+def load_pinvoke_contract_entries(path: Path) -> list[dict]:
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected JSON object or array in {path}")
+
+    names = data.get("runtimeApiNames", [])
+    if names is None:
+        return []
+    if not isinstance(names, list):
+        raise ValueError(f"Expected runtimeApiNames array in {path}")
+
+    entries: list[dict] = []
+    for item in names:
+        if isinstance(item, str):
+            entries.append({"name": item})
+        elif isinstance(item, dict):
+            entries.append(item)
+        else:
+            entries.append({"name": item})
+    return entries
+
+
+def load_runtime_api_entries(path: Path, json_kind: str) -> list[dict]:
+    if json_kind == "pinvokes":
+        return load_pinvoke_contract_entries(path)
+    return load_json_entries(path)
+
+
 def is_whitelisted(json_kind: str, name: str) -> bool:
     if json_kind == "icalls":
         return name in ICALLS_WHITELIST
@@ -111,12 +176,23 @@ def name_matches_signatures(name: str, signatures: set[str]) -> bool:
     return any(key in signatures for key in canonical_lookup_keys(name))
 
 
-def check_json_file(path: Path, signatures: set[str], json_kind: str) -> list[dict]:
+def check_json_file(path: Path, signatures: set[str], json_kind: str, profile: str | None = None) -> list[dict]:
     missing = []
-    for entry in load_json_entries(path):
+    for entry in load_runtime_api_entries(path, json_kind):
         name = entry.get("name")
         if not isinstance(name, str) or not name.strip():
             missing.append({"file": path.name, "name": name, "func": entry.get("func"), "reason": "empty name"})
+            continue
+        forbidden_reason = forbidden_profile_reason(profile, entry)
+        if forbidden_reason:
+            missing.append(
+                {
+                    "file": path.name,
+                    "name": name,
+                    "func": entry.get("func"),
+                    "reason": f"forbidden in {profile}: {forbidden_reason}",
+                }
+            )
             continue
         if is_whitelisted(json_kind, name):
             continue
@@ -128,7 +204,7 @@ def check_json_file(path: Path, signatures: set[str], json_kind: str) -> list[di
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Check icalls.json / intrinsics.json name fields against externs.txt. "
+            "Check runtime API JSON name fields against externs.txt. "
             "Non-generic extern entries contribute signatures with and without parameters. "
             "Generic extern entries contribute a single signature: Type::Method<> (no parameters)."
         )
@@ -175,6 +251,14 @@ def parse_args() -> argparse.Namespace:
         default=[],
         metavar="FILE",
         help="intrinsics.json path; repeat for multiple files.",
+    )
+    parser.add_argument(
+        "--pinvokes",
+        action="append",
+        type=Path,
+        default=[],
+        metavar="FILE",
+        help="pinvokes.json path; repeat for multiple files. Object-form pinvokes.json may expose contract names via runtimeApiNames.",
     )
     parser.add_argument(
         "--diff-report",
@@ -240,7 +324,7 @@ def collect_runtime_api_lookup_keys(json_paths: list[tuple[str, Path]]) -> set[s
     for _kind, path in json_paths:
         if not path.is_file():
             continue
-        for entry in load_json_entries(path):
+        for entry in load_runtime_api_entries(path, _kind):
             name = entry.get("name")
             if isinstance(name, str) and name.strip():
                 lookup_keys.update(canonical_lookup_keys(name))
@@ -259,6 +343,7 @@ def collect_diff_report_runtime_api_paths(
     for kind, file_name in (
         ("icalls_newobj", "icalls_newobj.json"),
         ("intrinsics_newobj", "intrinsics_newobj.json"),
+        ("pinvokes", "pinvokes.json"),
     ):
         path = (runtime_api_dir / file_name).resolve()
         if path.is_file() and path not in seen:
@@ -315,6 +400,8 @@ def main() -> int:
             args.icalls.append(runtime_api_dir / "icalls.json")
         if not args.intrinsics:
             args.intrinsics.append(runtime_api_dir / "intrinsics.json")
+        if not args.pinvokes:
+            args.pinvokes.append(runtime_api_dir / "pinvokes.json")
 
     if not extern_paths:
         print("error: specify at least one --externs file, --externs-dir, or --profile", file=sys.stderr)
@@ -333,6 +420,8 @@ def main() -> int:
         json_paths.append(("icalls", path.resolve()))
     for path in args.intrinsics:
         json_paths.append(("intrinsics", path.resolve()))
+    for path in args.pinvokes:
+        json_paths.append(("pinvokes", path.resolve()))
 
     if not json_paths:
         print("error: specify at least one --icalls or --intrinsics file", file=sys.stderr)
@@ -343,8 +432,8 @@ def main() -> int:
         if not path.is_file():
             print(f"error: {kind} file not found: {path}", file=sys.stderr)
             return 2
-        entries = load_json_entries(path)
-        missing = check_json_file(path, signatures, kind)
+        entries = load_runtime_api_entries(path, kind)
+        missing = check_json_file(path, signatures, kind, args.profile)
         whitelisted_count = sum(1 for e in entries if isinstance(e.get("name"), str) and is_whitelisted(kind, e["name"]))
         print(
             f"{path.name}: {len(entries)} entries, {len(missing)} not in externs"
@@ -370,11 +459,13 @@ def main() -> int:
         return 1
 
     if all_missing:
-        print("\nMissing entries:")
+        print("\nRuntime API contract issues:")
         for item in all_missing:
             func = item.get("func")
             func_suffix = f"  func={func}" if func else ""
-            print(f"  [{item['file']}] {item['name']}{func_suffix}")
+            reason = item.get("reason")
+            reason_suffix = f"  reason={reason}" if reason else ""
+            print(f"  [{item['file']}] {item['name']}{func_suffix}{reason_suffix}")
         return 1
 
     print("All entries matched extern signatures.")

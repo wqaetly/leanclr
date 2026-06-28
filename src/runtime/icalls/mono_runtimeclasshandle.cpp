@@ -2,6 +2,7 @@
 
 #include "icall_base.h"
 #include "vm/class.h"
+#include "vm/reflection.h"
 
 namespace leanclr
 {
@@ -17,8 +18,9 @@ RtResult<const metadata::RtTypeSig*> MonoRuntimeClassHandle::get_type_from_class
 static RtResultVoid get_type_from_class_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    auto klass = EvalStackOp::get_param<metadata::RtClass*>(params, 0);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig, MonoRuntimeClassHandle::get_type_from_class(klass));
+    auto klass_handle = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_net10_type_handle(klass_handle));
     EvalStackOp::set_return(ret, type_sig);
     RET_VOID_OK();
 }

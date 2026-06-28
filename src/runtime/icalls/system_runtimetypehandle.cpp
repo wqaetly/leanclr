@@ -22,28 +22,32 @@ namespace icalls
 
 RtResult<uint32_t> SystemRuntimeTypeHandle::get_attributes(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     RET_OK(klass->flags);
 }
 
 RtResult<int32_t> SystemRuntimeTypeHandle::get_metadata_token(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     RET_OK(static_cast<int32_t>(klass->token));
 }
 
 RtResult<metadata::RtElementType> SystemRuntimeTypeHandle::get_cor_element_type(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     auto ret = type_sig->is_by_ref() ? metadata::RtElementType::ByRef : type_sig->ele_type;
     RET_OK(ret);
 }
 
 RtResult<bool> SystemRuntimeTypeHandle::has_instantiation(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->is_by_ref())
     {
         RET_OK(false);
@@ -81,8 +85,10 @@ RtResult<bool> SystemRuntimeTypeHandle::compare_canonical_handles(const vm::RtRe
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    const metadata::RtTypeSig* left_sig = left->reflection_type.type_handle;
-    const metadata::RtTypeSig* right_sig = right->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, left_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(left));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, right_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(right));
     if (left_sig == right_sig)
     {
         RET_OK(true);
@@ -95,7 +101,8 @@ RtResult<bool> SystemRuntimeTypeHandle::compare_canonical_handles(const vm::RtRe
 
 RtResult<int32_t> SystemRuntimeTypeHandle::get_array_rank(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     switch (type_sig->ele_type)
     {
     case metadata::RtElementType::Array:
@@ -109,7 +116,8 @@ RtResult<int32_t> SystemRuntimeTypeHandle::get_array_rank(const vm::RtReflection
 
 RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_element_type(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
 
     vm::RtReflectionType* ref_type = nullptr;
     if (type_sig->is_by_ref())
@@ -145,20 +153,23 @@ RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_element_type
 
 RtResult<bool> SystemRuntimeTypeHandle::is_generic_variable(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     auto ele_type = type_sig->ele_type;
     RET_OK(!type_sig->is_by_ref() && (ele_type == metadata::RtElementType::Var || ele_type == metadata::RtElementType::MVar));
 }
 
 RtResult<bool> SystemRuntimeTypeHandle::contains_generic_variables(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     RET_OK(vm::Type::contains_generic_param(type_sig));
 }
 
 RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_base_type(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     RET_ERR_ON_FAIL(vm::Class::initialize_super_types(klass));
     auto base_klass = klass->parent;
@@ -175,7 +186,8 @@ RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_base_type(co
 
 RtResult<bool> SystemRuntimeTypeHandle::is_generic_type_definition(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->ele_type != metadata::RtElementType::Class && type_sig->ele_type != metadata::RtElementType::ValueType)
     {
         RET_OK(false);
@@ -187,7 +199,8 @@ RtResult<bool> SystemRuntimeTypeHandle::is_generic_type_definition(const vm::RtR
 
 RtResult<const metadata::RtGenericParam*> SystemRuntimeTypeHandle::get_generic_parameter_info(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     switch (type_sig->ele_type)
     {
     case metadata::RtElementType::Var:
@@ -226,40 +239,60 @@ RtResult<bool> SystemRuntimeTypeHandle::is_subclass_of(const metadata::RtTypeSig
     RET_OK(vm::Class::is_subclass_of_initialized(child_class, parent_class, true));
 }
 
-static RtResult<const metadata::RtTypeSig*> get_type_sig_from_runtime_type_handle(void* runtime_type_handle) noexcept
+static RtResult<const metadata::RtTypeSig*> get_element_type_sig(const metadata::RtTypeSig* type_sig) noexcept
 {
-    if (runtime_type_handle == nullptr)
+    if (type_sig == nullptr)
     {
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    auto runtime_type_klass = vm::Class::get_corlib_types().cls_runtimetype;
-    auto direct_runtime_type = reinterpret_cast<const vm::RtReflectionRuntimeType*>(runtime_type_handle);
-    if (direct_runtime_type->reflection_type.header.klass == runtime_type_klass)
+    if (type_sig->is_by_ref())
     {
-        RET_OK(direct_runtime_type->reflection_type.type_handle);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+        RET_OK(klass->by_val);
     }
 
-    auto runtime_type = *reinterpret_cast<const vm::RtReflectionRuntimeType* const*>(runtime_type_handle);
-    if (runtime_type == nullptr || runtime_type->reflection_type.header.klass != runtime_type_klass)
+    switch (type_sig->ele_type)
     {
-        RET_ERR(RtErr::BadImageFormat);
+    case metadata::RtElementType::Array:
+        RET_OK(type_sig->data.array_type->ele_type);
+    case metadata::RtElementType::SZArray:
+    case metadata::RtElementType::Ptr:
+        RET_OK(type_sig->data.element_type);
+    default:
+        RET_OK(nullptr);
+    }
+}
+
+RtResult<intptr_t> SystemRuntimeTypeHandle::get_element_type_handle(void* runtime_type_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_handle_arg(runtime_type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, element_type_sig, get_element_type_sig(type_sig));
+    if (element_type_sig == nullptr)
+    {
+        RET_OK(0);
     }
 
-    RET_OK(runtime_type->reflection_type.type_handle);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, element_type_handle,
+                                            vm::Reflection::get_net10_type_handle(element_type_sig));
+    RET_OK(reinterpret_cast<intptr_t>(element_type_handle));
 }
 
 RtResult<bool> SystemRuntimeTypeHandle::is_by_ref_like(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     RET_OK(vm::Class::is_by_ref_like(klass));
 }
 
 RtResult<bool> SystemRuntimeTypeHandle::type_is_assignable_from(vm::RtReflectionRuntimeType* to_type, vm::RtReflectionRuntimeType* from_type) noexcept
 {
-    auto to_type_sig = to_type->reflection_type.type_handle;
-    auto from_type_sig = from_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, to_type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(to_type));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, from_type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(from_type));
 
     if (to_type_sig->is_by_ref() != from_type_sig->is_by_ref())
     {
@@ -274,7 +307,8 @@ RtResult<bool> SystemRuntimeTypeHandle::type_is_assignable_from(vm::RtReflection
 
 RtResult<vm::RtReflectionAssembly*> SystemRuntimeTypeHandle::get_assembly(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     auto mod = klass->image;
     return vm::Reflection::get_assembly_reflection_object(mod->get_assembly());
@@ -287,14 +321,16 @@ RtResult<bool> SystemRuntimeTypeHandle::is_instance_of_type(const vm::RtReflecti
         RET_OK(false);
     }
 
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     RET_OK(vm::Object::is_inst(obj, klass) != nullptr);
 }
 
 RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_generic_type_definition_impl(vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->is_by_ref())
     {
         RET_OK(nullptr);
@@ -320,7 +356,8 @@ RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_generic_type
 
 RtResult<vm::RtReflectionModule*> SystemRuntimeTypeHandle::get_module(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     auto module = klass->image;
     return vm::Reflection::get_module_reflection_object(module);
@@ -333,7 +370,9 @@ RtResult<vm::RtReflectionType*> SystemRuntimeTypeHandle::internal_from_name(vm::
     metadata::RtModuleDef* default_mod = nullptr;
     if (assembly)
     {
-        default_mod = assembly->assembly->mod;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, runtime_assembly,
+                                                vm::Reflection::get_assembly_from_reflection_object(assembly));
+        default_mod = runtime_assembly->mod;
     }
     else
     {
@@ -370,7 +409,8 @@ RtResult<const metadata::RtMethodInfo*> SystemRuntimeTypeHandle::get_first_intro
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig == nullptr || type_sig->is_by_ref() || type_sig->ele_type == metadata::RtElementType::Var ||
         type_sig->ele_type == metadata::RtElementType::MVar || type_sig->ele_type == metadata::RtElementType::Ptr ||
         type_sig->ele_type == metadata::RtElementType::FnPtr)
@@ -424,7 +464,8 @@ RtResult<int32_t> SystemRuntimeTypeHandle::get_num_virtuals(const vm::RtReflecti
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig == nullptr || type_sig->is_by_ref() || type_sig->ele_type == metadata::RtElementType::Var ||
         type_sig->ele_type == metadata::RtElementType::MVar || type_sig->ele_type == metadata::RtElementType::Ptr ||
         type_sig->ele_type == metadata::RtElementType::FnPtr)
@@ -437,13 +478,15 @@ RtResult<int32_t> SystemRuntimeTypeHandle::get_num_virtuals(const vm::RtReflecti
     RET_OK(static_cast<int32_t>(klass->vtable_count));
 }
 
-RtResult<vm::RtObject*> SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path(const metadata::RtClass* klass) noexcept
+RtResult<vm::RtObject*> SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path(const void* method_table) noexcept
 {
-    if (klass == nullptr)
+    if (method_table == nullptr)
     {
         RET_ERR(RtErr::ArgumentNull);
     }
 
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass,
+                                            vm::Reflection::get_class_from_net10_method_table(method_table));
     RET_ERR_ON_FAIL(vm::Class::initialize_all(const_cast<metadata::RtClass*>(klass)));
     return LEANCLR_NEWOBJ_INTERNAL(klass, "RuntimeTypeHandle_InternalAllocNoChecks_FastPath");
 }
@@ -505,7 +548,8 @@ static RtResultVoid has_references_invoker(metadata::RtManagedMethodPointer meth
                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
     auto ref_type = EvalStackOp::get_param<const vm::RtReflectionType*>(params, 0);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(ref_type->type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
+                                            vm::Reflection::get_class_from_reflection_type_object(ref_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeTypeHandle::has_references(klass));
     EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
@@ -539,6 +583,16 @@ static RtResultVoid get_element_type_invoker(metadata::RtManagedMethodPointer me
     auto runtime_type = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 0);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, element_type, SystemRuntimeTypeHandle::get_element_type(runtime_type));
     EvalStackOp::set_return(ret, element_type);
+    RET_VOID_OK();
+}
+
+static RtResultVoid get_element_type_handle_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                    const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type_handle = EvalStackOp::get_param<void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(intptr_t, element_type_handle,
+                                            SystemRuntimeTypeHandle::get_element_type_handle(runtime_type_handle));
+    EvalStackOp::set_return(ret, element_type_handle);
     RET_VOID_OK();
 }
 
@@ -598,8 +652,10 @@ static RtResultVoid is_subclass_of_invoker(metadata::RtManagedMethodPointer meth
 {
     auto child_type_handle = EvalStackOp::get_param<void*>(params, 0);
     auto parent_type_handle = EvalStackOp::get_param<void*>(params, 1);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, child_type_sig, get_type_sig_from_runtime_type_handle(child_type_handle));
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, parent_type_sig, get_type_sig_from_runtime_type_handle(parent_type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, child_type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_handle_arg(child_type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, parent_type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_handle_arg(parent_type_handle));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeTypeHandle::is_subclass_of(child_type_sig, parent_type_sig));
     EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
@@ -729,9 +785,9 @@ static RtResultVoid get_num_virtuals_invoker(metadata::RtManagedMethodPointer, c
 static RtResultVoid internal_alloc_no_checks_fast_path_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                               const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    auto klass = EvalStackOp::get_param<const metadata::RtClass*>(params, 0);
+    auto method_table = EvalStackOp::get_param<const void*>(params, 0);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
-                                            SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path(klass));
+                                            SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path(method_table));
     EvalStackOp::set_return(ret, obj);
     RET_VOID_OK();
 }
@@ -757,6 +813,10 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] 
      compare_canonical_handles_invoker},
     {"System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_array_rank, get_array_rank_invoker},
     {"System.RuntimeTypeHandle::GetElementType", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_element_type, get_element_type_invoker},
+    {"System.RuntimeTypeHandle::GetElementTypeHandle(System.IntPtr)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_element_type_handle,
+     get_element_type_handle_invoker},
+    {"System.RuntimeTypeHandle::GetElementTypeHandle", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_element_type_handle,
+     get_element_type_handle_invoker},
     {"System.RuntimeTypeHandle::IsGenericVariable", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_generic_variable, is_generic_variable_invoker},
     {"System.RuntimeTypeHandle::IsGenericVariable(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_generic_variable,
      is_generic_variable_invoker},
@@ -803,6 +863,52 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] 
      (vm::InternalCallFunction)&SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path,
      internal_alloc_no_checks_fast_path_invoker},
 };
+
+static vm::InternalCallEntry s_net10_internal_call_entries_system_runtimetypehandle[] = {
+    {"System.RuntimeTypeHandle::GetAttributes", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_attributes, get_attributes_invoker},
+    {"System.RuntimeTypeHandle::GetAttributes(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_attributes,
+     get_attributes_invoker},
+    {"System.RuntimeTypeHandle::GetToken", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_metadata_token,
+     get_metadata_token_invoker_system_runtimetypehandle},
+    {"System.RuntimeTypeHandle::GetToken(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_metadata_token,
+     get_metadata_token_invoker_system_runtimetypehandle},
+    {"System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_array_rank, get_array_rank_invoker},
+    {"System.RuntimeTypeHandle::GetElementTypeHandle(System.IntPtr)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_element_type_handle,
+     get_element_type_handle_invoker},
+    {"System.RuntimeTypeHandle::IsGenericVariable", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_generic_variable, is_generic_variable_invoker},
+    {"System.RuntimeTypeHandle::IsGenericVariable(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_generic_variable,
+     is_generic_variable_invoker},
+    {"System.RuntimeTypeHandle::GetAssemblyIfExists(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_assembly,
+     get_assembly_invoker},
+    {"System.RuntimeTypeHandle::GetModuleIfExists(System.RuntimeType)", nullptr, get_module_if_exists_invoker},
+    {"System.RuntimeTypeHandle::ContainsGenericVariables", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::contains_generic_variables,
+     contains_generic_variables_invoker},
+    {"System.RuntimeTypeHandle::ContainsGenericVariables(System.RuntimeType)",
+     (vm::InternalCallFunction)&SystemRuntimeTypeHandle::contains_generic_variables, contains_generic_variables_invoker},
+    {"System.RuntimeTypeHandle::GetNumVirtuals", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_num_virtuals, get_num_virtuals_invoker},
+    {"System.RuntimeTypeHandle::GetNumVirtuals(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_num_virtuals,
+     get_num_virtuals_invoker},
+    {"System.RuntimeTypeHandle::GetFirstIntroducedMethod", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_first_introduced_method,
+     get_first_introduced_method_invoker},
+    {"System.RuntimeTypeHandle::GetFirstIntroducedMethod(System.RuntimeType)",
+     (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_first_introduced_method, get_first_introduced_method_invoker},
+    {"System.RuntimeTypeHandle::GetNextIntroducedMethod", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_next_introduced_method,
+     get_next_introduced_method_invoker},
+    {"System.RuntimeTypeHandle::GetNextIntroducedMethod(System.RuntimeMethodHandleInternal&)",
+     (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_next_introduced_method, get_next_introduced_method_invoker},
+    {"System.RuntimeTypeHandle::InternalAllocNoChecks_FastPath",
+     (vm::InternalCallFunction)&SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path,
+     internal_alloc_no_checks_fast_path_invoker},
+    {"System.RuntimeTypeHandle::InternalAllocNoChecks_FastPath(System.Runtime.CompilerServices.MethodTable*)",
+     (vm::InternalCallFunction)&SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_path,
+     internal_alloc_no_checks_fast_path_invoker},
+};
+
+utils::Span<vm::InternalCallEntry> SystemRuntimeTypeHandle::get_net10_internal_call_entries() noexcept
+{
+    return utils::Span<vm::InternalCallEntry>(s_net10_internal_call_entries_system_runtimetypehandle,
+                                              sizeof(s_net10_internal_call_entries_system_runtimetypehandle) / sizeof(vm::InternalCallEntry));
+}
 
 utils::Span<vm::InternalCallEntry> SystemRuntimeTypeHandle::get_internal_call_entries() noexcept
 {

@@ -17,8 +17,9 @@ RtResultVoid SystemReflectionCustomAttributeData::resolve_arguments_internal(vm:
     utils::BinaryReader reader(data_ptr, static_cast<size_t>(data_length));
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, vm::Reflection::get_method_info_from_reflection_object(ctor));
-    RET_ERR_ON_FAIL(vm::CustomAttribute::resolve_customattribute_data_arguments(&reader, ctor_assembly->assembly->mod, method, typed_arg_arr_ptr,
-                                                                                named_arg_arr_ptr));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly,
+                                            vm::Reflection::get_assembly_from_reflection_object(ctor_assembly));
+    RET_ERR_ON_FAIL(vm::CustomAttribute::resolve_customattribute_data_arguments(&reader, assembly->mod, method, typed_arg_arr_ptr, named_arg_arr_ptr));
     RET_VOID_OK();
 }
 

@@ -921,5 +921,14 @@ utils::Span<vm::InternalCallEntry> SystemThreadingThread::get_internal_call_entr
                                               sizeof(s_internal_call_entries_system_threading_thread) / sizeof(vm::InternalCallEntry));
 }
 
+utils::Span<vm::InternalCallEntry> SystemThreadingThread::get_net10_internal_call_entries() noexcept
+{
+    static vm::InternalCallEntry s_entries[] = {
+        {"System.Threading.Thread::SleepInternal(System.Int32)", (vm::InternalCallFunction)&SystemThreadingThread::sleep_internal, sleep_internal_invoker},
+        {"System.Threading.Thread::YieldInternal", (vm::InternalCallFunction)&SystemThreadingThread::yield_internal, yield_internal_invoker},
+    };
+    return utils::Span<vm::InternalCallEntry>(s_entries, sizeof(s_entries) / sizeof(s_entries[0]));
+}
+
 } // namespace icalls
 } // namespace leanclr

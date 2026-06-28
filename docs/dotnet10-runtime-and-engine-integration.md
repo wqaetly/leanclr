@@ -15,7 +15,7 @@ LeanCLR 对接 .NET 10 不是从零重新实现一套 CLR，也不是把元数�
 因此工作重点是：
 
 - 保留独立的 `coreclr-net10` / `minimal-net10` profile 边界，不污染现有 `mono45` / Unity profile。
-- 基于 .NET 10 `System.Private.CoreLib` / CoreCLR VM 源码抽取 contract map，先定义 RuntimeType、RuntimeHandle、Assembly、Module、CustomAttribute、Span/Unsafe、Monitor/Task 等 net10 façade。
+- 基于 .NET 10 `System.Private.CoreLib` / CoreCLR VM 源码抽取 contract map，先定义 RuntimeType、RuntimeHandle、Assembly、Module、CustomAttribute、Span/Unsafe、Monitor/Task 等 net10 façade；执行基准见 [`docs/net10-runtime-contract.md`](net10-runtime-contract.md)。
 - 重写 `coreclr-net10` 活跃路径的 model/façade，外部满足 CoreLib 期待，内部映射到 LeanCLR 自己的 `RtClass` / `RtMethodInfo` / `RtFieldInfo` / metadata cache / interpreter。
 - 只支持项目纯逻辑 DLL 实际使用到的核心类型、基础 IL、泛型、异常、委托、少量反射、必要 Span/Unsafe 和 host bridge API。
 - 不再以完整 `Microsoft.NETCore.App` 或剩余 extern diff 归零作为近期目标。
@@ -156,10 +156,10 @@ flowchart LR
     I --> G
 ```
 
-建议每个新增 contract 都满足三个条件：
+本循环的执行清单以 [`docs/net10-runtime-contract.md`](net10-runtime-contract.md) 为准。当前第一批执行切片已经从单一 `RuntimeType` 身份扩展为 RuntimeType / RuntimeFieldHandle / RuntimeModule / ValueType / delegate `MethodTable*` façade 的统一边界：所有 CoreLib 传入的 handle 或 `System.Runtime.CompilerServices.MethodTable*` 都必须先解析成 net10 façade，再映射到 LeanCLR 自己的 `RtClass`、`RtMethodInfo` 或 `RtFieldInfo`。下一阻塞点是 `MulticastDelegate.NewMulticastDelegate` 触发的 `RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 分配路径。建议每个新增 contract 都满足四个条件：
 
 - 能被 `coreclr-net10` profile 独立描述。
-- 能在 `net10-runtime-contract` 中说明它来自 CoreLib 哪条真实调用链。
+- 能在 [`net10-runtime-contract`](net10-runtime-contract.md) 中说明它来自 CoreLib 哪条真实调用链。
 - 能被一个小 smoke 子入口稳定触发。
 - 缺失或签名不匹配时能输出具体方法名，而不是只表现为 `BadImageFormatException` 或启动失败。
 

@@ -40,6 +40,26 @@
     "header": "intrinsics/system_string.h"
   },
   {
+    "name": "System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)",
+    "func": "SystemType::get_type_from_handle",
+    "header": "intrinsics/system_type.h"
+  },
+  {
+    "name": "System.Type::get_IsValueType()",
+    "func": "SystemType::get_is_value_type",
+    "header": "intrinsics/system_type.h"
+  },
+  {
+    "name": "System.Type::op_Equality(System.Type,System.Type)",
+    "func": "SystemType::equals",
+    "header": "intrinsics/system_type.h"
+  },
+  {
+    "name": "System.Type::op_Inequality(System.Type,System.Type)",
+    "func": "SystemType::equals",
+    "header": "intrinsics/system_type.h"
+  },
+  {
     "name": "System.Threading.Interlocked::CompareExchange<>",
     "func": "SystemThreadingInterlocked::compare_exchange",
     "header": "intrinsics/system_threading_interlocked.h"

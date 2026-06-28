@@ -12,92 +12,9 @@ namespace icalls
 {
 namespace
 {
-struct RtRuntimeMethodInfoStub : public vm::RtObject
-{
-    vm::RtObject* keep_alive;
-    vm::RtObject* a;
-    vm::RtObject* b;
-    vm::RtObject* c;
-    vm::RtObject* d;
-    vm::RtObject* e;
-    vm::RtObject* f;
-    vm::RtObject* g;
-    vm::RtObject* h;
-    const metadata::RtMethodInfo* value;
-};
-
-bool is_type_named(const metadata::RtClass* klass, const char* namespaze, const char* name) noexcept
-{
-    return klass != nullptr && klass->namespaze != nullptr && klass->name != nullptr && std::strcmp(klass->namespaze, namespaze) == 0 &&
-           std::strcmp(klass->name, name) == 0;
-}
-
-bool is_method_metadata_pointer(const metadata::RtMethodInfo* method) noexcept
-{
-    if (method == nullptr || method->parent == nullptr || method->parent->methods == nullptr)
-    {
-        return false;
-    }
-
-    for (uint16_t i = 0; i < method->parent->method_count; ++i)
-    {
-        if (method->parent->methods[i] == method)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 RtResult<const metadata::RtMethodInfo*> get_method_from_handle_arg(const void* method_arg) noexcept
 {
-    if (method_arg == nullptr)
-    {
-        RET_ERR(RtErr::ArgumentNull);
-    }
-
-    auto direct_method = reinterpret_cast<const metadata::RtMethodInfo*>(method_arg);
-    if (is_method_metadata_pointer(direct_method))
-    {
-        RET_OK(direct_method);
-    }
-
-    const auto& corlib_types = vm::Class::get_corlib_types();
-    auto obj = reinterpret_cast<const vm::RtObject*>(method_arg);
-    if (obj->klass == corlib_types.cls_reflection_method || obj->klass == corlib_types.cls_reflection_constructor)
-    {
-        return vm::Reflection::get_method_info_from_reflection_object(const_cast<vm::RtReflectionMethod*>(
-            reinterpret_cast<const vm::RtReflectionMethod*>(method_arg)));
-    }
-    if (is_type_named(obj->klass, "System", "RuntimeMethodInfoStub"))
-    {
-        auto stub = reinterpret_cast<const RtRuntimeMethodInfoStub*>(method_arg);
-        if (stub->value == nullptr)
-        {
-            RET_ERR(RtErr::ArgumentNull);
-        }
-        RET_OK(stub->value);
-    }
-
-    RET_OK(reinterpret_cast<const metadata::RtMethodInfo*>(method_arg));
-}
-
-RtResult<const vm::RtReflectionMethod*> get_reflection_method_from_arg(const void* method_arg) noexcept
-{
-    if (method_arg == nullptr)
-    {
-        RET_ERR(RtErr::ArgumentNull);
-    }
-
-    const auto& corlib_types = vm::Class::get_corlib_types();
-    auto obj = reinterpret_cast<const vm::RtObject*>(method_arg);
-    if (obj->klass == corlib_types.cls_reflection_method || obj->klass == corlib_types.cls_reflection_constructor)
-    {
-        RET_OK(reinterpret_cast<const vm::RtReflectionMethod*>(method_arg));
-    }
-
-    RET_ERR(RtErr::Argument);
+    return vm::Reflection::get_method_info_from_handle_arg(method_arg);
 }
 } // namespace
 
@@ -108,7 +25,8 @@ RtResult<intptr_t> SystemRuntimeMethodHandle::get_function_pointer(intptr_t meth
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    const metadata::RtMethodInfo* method_info = reinterpret_cast<const metadata::RtMethodInfo*>(method);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method_info,
+                                            vm::Reflection::get_method_info_from_handle_arg(reinterpret_cast<const void*>(method)));
     RET_OK(reinterpret_cast<intptr_t>(method_info->method_ptr));
 }
 
@@ -122,16 +40,14 @@ RtResult<int32_t> SystemRuntimeMethodHandle::get_attributes(const metadata::RtMe
     RET_OK(static_cast<int32_t>(method->flags));
 }
 
-RtResult<int32_t> SystemRuntimeMethodHandle::get_impl_attributes(const vm::RtReflectionMethod* method) noexcept
+RtResult<int32_t> SystemRuntimeMethodHandle::get_impl_attributes(const metadata::RtMethodInfo* method) noexcept
 {
     if (method == nullptr)
     {
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method_info,
-                                            vm::Reflection::get_method_info_from_reflection_object(const_cast<vm::RtReflectionMethod*>(method)));
-    RET_OK(static_cast<int32_t>(method_info->iflags));
+    RET_OK(static_cast<int32_t>(method->iflags));
 }
 
 RtResult<const void*> SystemRuntimeMethodHandle::get_method_table(const metadata::RtMethodInfo* method) noexcept
@@ -141,8 +57,11 @@ RtResult<const void*> SystemRuntimeMethodHandle::get_method_table(const metadata
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, method_table,
-                                            vm::Reflection::get_net10_type_handle(vm::Class::get_by_val_type_sig(method->parent)));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const void*, method_table,
+                                            vm::Reflection::get_net10_method_table(vm::Class::get_by_val_type_sig(method->parent)));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, declaring_type,
+                                            vm::Reflection::get_klass_reflection_object(method->parent));
+    (void)declaring_type;
     RET_OK(method_table);
 }
 
@@ -315,7 +234,7 @@ static RtResultVoid get_impl_attributes_invoker(metadata::RtManagedMethodPointer
                                                 interp::RtStackObject* ret) noexcept
 {
     auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const vm::RtReflectionMethod*, method, get_reflection_method_from_arg(method_arg));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, impl_attributes, SystemRuntimeMethodHandle::get_impl_attributes(method));
     EvalStackOp::set_return(ret, impl_attributes);
     RET_VOID_OK();
@@ -424,8 +343,9 @@ static RtResultVoid is_typical_method_definition_invoker(metadata::RtManagedMeth
 static RtResultVoid get_stub_if_needed_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                interp::RtStackObject* ret) noexcept
 {
-    auto method = EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
     auto declaring_type = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, stub,
                                             SystemRuntimeMethodHandle::get_stub_if_needed(method, declaring_type));
     EvalStackOp::set_return(ret, stub);
@@ -436,8 +356,9 @@ static RtResultVoid get_stub_if_needed_invoker(metadata::RtManagedMethodPointer,
 static RtResultVoid get_method_from_canonical_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    auto method = EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
     auto declaring_type = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, result,
                                             SystemRuntimeMethodHandle::get_method_from_canonical(method, declaring_type));
     EvalStackOp::set_return(ret, result);
@@ -448,7 +369,8 @@ static RtResultVoid get_method_from_canonical_invoker(metadata::RtManagedMethodP
 static RtResultVoid is_dynamic_method_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                               interp::RtStackObject* ret) noexcept
 {
-    auto method = EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeMethodHandle::is_dynamic_method(method));
     EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
@@ -458,7 +380,8 @@ static RtResultVoid is_dynamic_method_invoker(metadata::RtManagedMethodPointer, 
 static RtResultVoid is_constructor_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                            interp::RtStackObject* ret) noexcept
 {
-    auto method = EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeMethodHandle::is_constructor(method));
     EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
@@ -468,7 +391,8 @@ static RtResultVoid is_constructor_invoker(metadata::RtManagedMethodPointer, con
 static RtResultVoid get_resolver_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                          interp::RtStackObject* ret) noexcept
 {
-    auto method = EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, resolver, SystemRuntimeMethodHandle::get_resolver(method));
     EvalStackOp::set_return(ret, resolver);
     RET_VOID_OK();
@@ -478,7 +402,8 @@ static RtResultVoid get_resolver_invoker(metadata::RtManagedMethodPointer, const
 static RtResultVoid get_loader_allocator_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                  interp::RtStackObject* ret) noexcept
 {
-    auto method = EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    auto method_arg = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, loader_allocator, SystemRuntimeMethodHandle::get_loader_allocator(method));
     EvalStackOp::set_return(ret, loader_allocator);
     RET_VOID_OK();
@@ -558,6 +483,12 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimemethodhandle[
     {"System.RuntimeMethodHandle::GetMethodBody(System.IRuntimeMethodInfo,System.RuntimeType)", nullptr, get_method_body_invoker},
     {"System.RuntimeMethodHandle::GetMethodBody", nullptr, get_method_body_invoker},
 };
+
+utils::Span<vm::InternalCallEntry> SystemRuntimeMethodHandle::get_net10_internal_call_entries() noexcept
+{
+    return utils::Span<vm::InternalCallEntry>(s_internal_call_entries_system_runtimemethodhandle,
+                                              sizeof(s_internal_call_entries_system_runtimemethodhandle) / sizeof(vm::InternalCallEntry));
+}
 
 utils::Span<vm::InternalCallEntry> SystemRuntimeMethodHandle::get_internal_call_entries() noexcept
 {

@@ -6,6 +6,7 @@ param(
     [string]$CMakeArchitecture,
     [string]$Entry = "ManagedNet10.Smoke.Program::TestPairArithmetic",
     [string]$AssemblyName = "ManagedNet10.Smoke",
+    [string[]]$AdditionalAssemblyDir = @(),
     [switch]$BuildOnly
 )
 
@@ -138,7 +139,15 @@ if (-not (Test-Path ([System.IO.Path]::Combine($assemblyDir, "$AssemblyName.dll"
     throw "$AssemblyName output not found: $assemblyDir"
 }
 
-$runArgs = @("-l", $assemblyDir, "-l", $RuntimeDir)
+$runArgs = @("-l", $assemblyDir)
+foreach ($dir in $AdditionalAssemblyDir) {
+    if ([string]::IsNullOrWhiteSpace($dir)) {
+        continue
+    }
+    $resolvedDir = (Resolve-Path $dir).Path
+    $runArgs += @("-l", $resolvedDir)
+}
+$runArgs += @("-l", $RuntimeDir)
 if (-not [string]::IsNullOrWhiteSpace($Entry)) {
     $runArgs += @("-e", $Entry)
 }

@@ -305,8 +305,113 @@
     "header": "icalls/system_reflection_methodbase.h"
   },
   {
+    "name": "System.Reflection.MetadataImport::GetClassLayout(System.IntPtr,System.Int32,System.Int32&,System.Int32&)",
+    "func": "metadata_import_get_class_layout",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetCustomAttributeProps(System.IntPtr,System.Int32,System.Int32&,System.Reflection.ConstArray&)",
+    "func": "metadata_import_get_custom_attribute_props",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetDefaultValue(System.IntPtr,System.Int32,System.Int64&,System.Char*&,System.Int32&,System.Int32&)",
+    "func": "metadata_import_get_default_value",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetFieldDefProps(System.IntPtr,System.Int32,System.Int32&)",
+    "func": "metadata_import_get_field_def_props",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetFieldMarshal(System.IntPtr,System.Int32,System.Reflection.ConstArray&)",
+    "func": "metadata_import_get_field_marshal",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetFieldOffset(System.IntPtr,System.Int32,System.Int32,System.Int32&,System.Boolean&)",
+    "func": "metadata_import_get_field_offset",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetMetadataImport(System.Reflection.RuntimeModule)",
+    "func": "get_metadata_import",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetMemberRefProps(System.IntPtr,System.Int32,System.Reflection.ConstArray&)",
+    "func": "metadata_import_get_member_ref_props",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetName(System.IntPtr,System.Int32,System.Byte*&)",
+    "func": "metadata_import_get_name",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetNamespace(System.IntPtr,System.Int32,System.Byte*&)",
+    "func": "metadata_import_get_namespace",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetParentToken(System.IntPtr,System.Int32,System.Int32&)",
+    "func": "metadata_import_get_parent_token",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetParamDefProps(System.IntPtr,System.Int32,System.Int32&,System.Int32&)",
+    "func": "metadata_import_get_param_def_props",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetPropertyProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&,System.Reflection.ConstArray&)",
+    "func": "metadata_import_get_property_props",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetScopeProps(System.IntPtr,System.Guid&)",
+    "func": "metadata_import_get_scope_props",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetSigOfFieldDef(System.IntPtr,System.Int32,System.Reflection.ConstArray&)",
+    "func": "metadata_import_get_sig_of_field_def",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetSigOfMethodDef(System.IntPtr,System.Int32,System.Reflection.ConstArray&)",
+    "func": "metadata_import_get_sig_of_method_def",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetSignatureFromToken(System.IntPtr,System.Int32,System.Reflection.ConstArray&)",
+    "func": "metadata_import_get_signature_from_token",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::GetUserString(System.IntPtr,System.Int32,System.Char*&,System.Int32&)",
+    "func": "metadata_import_get_user_string",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
+    "name": "System.Reflection.MetadataImport::IsValidToken(System.IntPtr,System.Int32)",
+    "func": "metadata_import_is_valid_token",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
     "name": "System.Reflection.RuntimeAssembly::GetManifestResourceNames",
     "func": "SystemReflectionRuntimeAssembly::get_manifest_resource_names",
+    "header": "icalls/system_reflection_runtimeassembly.h"
+  },
+  {
+    "name": "System.Reflection.RuntimeAssembly::GetManifestModule(System.Reflection.RuntimeAssembly)",
+    "func": "SystemReflectionRuntimeAssembly::get_manifest_module_internal",
+    "header": "icalls/system_reflection_runtimeassembly.h"
+  },
+  {
+    "name": "System.Reflection.RuntimeAssembly::GetTokenInternal(System.Reflection.RuntimeAssembly)",
+    "func": "SystemReflectionRuntimeAssembly::get_token_internal",
     "header": "icalls/system_reflection_runtimeassembly.h"
   },
   {
@@ -350,18 +455,23 @@
     "header": "icalls/system_runtimefieldhandle.h"
   },
   {
+    "name": "System.RuntimeFieldHandle::GetStaticFieldForGenericType(System.RuntimeFieldHandleInternal,System.Runtime.CompilerServices.MethodTable*)",
+    "func": "SystemRuntimeFieldHandle::get_static_field_for_generic_type",
+    "header": "icalls/system_runtimefieldhandle.h"
+  },
+  {
     "name": "System.RuntimeMethodHandle::GetFunctionPointer(System.IntPtr)",
     "func": "SystemRuntimeMethodHandle::get_function_pointer",
     "header": "icalls/system_runtimemethodhandle.h"
   },
   {
-    "name": "System.RuntimeMethodHandle::GetName(System.RuntimeMethodHandleInternal)",
-    "func": "SystemRuntimeMethodHandle::get_name",
-    "header": "icalls/system_runtimemethodhandle.h"
-  },
-  {
     "name": "System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)",
     "func": "SystemRuntimeTypeHandle::get_array_rank",
+    "header": "icalls/system_runtimetypehandle.h"
+  },
+  {
+    "name": "System.RuntimeTypeHandle::GetElementTypeHandle(System.IntPtr)",
+    "func": "SystemRuntimeTypeHandle::get_element_type_handle",
     "header": "icalls/system_runtimetypehandle.h"
   },
   {

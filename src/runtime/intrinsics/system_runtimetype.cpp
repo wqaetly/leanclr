@@ -188,50 +188,7 @@ static bool property_matches_binding_flags(const metadata::RtPropertyInfo* prope
 
 static RtResult<vm::RtObject*> get_or_create_runtime_type_cache(vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
-    if (runtime_type == nullptr)
-    {
-        RET_ERR(RtErr::NullReference);
-    }
-
-    if (runtime_type->reflection_type.cache != nullptr)
-    {
-        RET_OK(reinterpret_cast<vm::RtObject*>(runtime_type->reflection_type.cache));
-    }
-
-    metadata::RtModuleDef* corlib = metadata::RtModuleDef::get_corlib_module();
-    if (corlib == nullptr)
-    {
-        RET_ERR(RtErr::BadImageFormat);
-    }
-
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, cache_klass,
-                                            corlib->get_class_by_nested_full_name("System.RuntimeType+RuntimeTypeCache", false, true));
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, cache_obj,
-                                            LEANCLR_NEWOBJ_INTERNAL(cache_klass, "SystemRuntimeType::get_or_create_runtime_type_cache"));
-
-    const metadata::RtFieldInfo* runtime_type_field = vm::Class::get_field_for_name(cache_klass, "m_runtimeType", true);
-    if (runtime_type_field == nullptr)
-    {
-        RET_ERR(RtErr::MissingField);
-    }
-    RET_ERR_ON_FAIL(vm::Field::set_instance_value(runtime_type_field, cache_obj, &runtime_type));
-
-    const metadata::RtFieldInfo* type_code_field = vm::Class::get_field_for_name(cache_klass, "m_typeCode", true);
-    if (type_code_field != nullptr)
-    {
-        int32_t type_code_empty = 0;
-        RET_ERR_ON_FAIL(vm::Field::set_instance_value(type_code_field, cache_obj, &type_code_empty));
-    }
-
-    const metadata::RtFieldInfo* is_global_field = vm::Class::get_field_for_name(cache_klass, "m_isGlobal", true);
-    if (is_global_field != nullptr)
-    {
-        bool is_global = false;
-        RET_ERR_ON_FAIL(vm::Field::set_instance_value(is_global_field, cache_obj, &is_global));
-    }
-
-    runtime_type->reflection_type.cache = cache_obj;
-    RET_OK(cache_obj);
+    return vm::Reflection::get_or_create_runtime_type_cache(runtime_type);
 }
 
 static RtResult<bool> is_generic_type_by_typesig(const metadata::RtTypeSig* type_sig) noexcept
@@ -290,7 +247,8 @@ RtResult<vm::RtReflectionField*> SystemRuntimeType::get_field(vm::RtReflectionRu
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->by_ref)
     {
         RET_OK(nullptr);
@@ -338,7 +296,8 @@ RtResult<vm::RtArray*> SystemRuntimeType::get_methods(vm::RtReflectionRuntimeTyp
     }
 
     const auto& corlib_types = vm::Class::get_corlib_types();
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->by_ref)
     {
         return LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(corlib_types.cls_reflection_method,
@@ -391,7 +350,8 @@ RtResult<vm::RtArray*> SystemRuntimeType::get_properties(vm::RtReflectionRuntime
     }
 
     const auto& corlib_types = vm::Class::get_corlib_types();
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->by_ref)
     {
         return LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(corlib_types.cls_reflection_property,
@@ -438,7 +398,7 @@ RtResult<vm::RtArray*> SystemRuntimeType::get_properties(vm::RtReflectionRuntime
         bool is_private = false;
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
             vm::RtObject*, property_info,
-            icalls::SystemReflectionRuntimePropertyInfo::create_net10_property_info(
+            vm::Reflection::create_runtime_property_info_object(
                 properties[static_cast<size_t>(i)], reinterpret_cast<vm::RtReflectionRuntimeType*>(declaring_type), reflected_type_cache,
                 &is_private));
         vm::Array::set_array_data_at<vm::RtObject*>(result, i, property_info);
@@ -460,10 +420,13 @@ RtResult<vm::RtArray*> SystemRuntimeType::get_custom_attributes(vm::RtReflection
     metadata::RtClass* attr_klass = nullptr;
     if (attribute_type != nullptr)
     {
-        UNWRAP_OR_RET_ERR_ON_FAIL(attr_klass, vm::Class::get_class_from_typesig(attribute_type->reflection_type.type_handle));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, attribute_type_sig,
+                                                vm::Reflection::get_type_sig_from_runtime_type_object(attribute_type));
+        UNWRAP_OR_RET_ERR_ON_FAIL(attr_klass, vm::Class::get_class_from_typesig(attribute_type_sig));
     }
 
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->by_ref)
     {
         return LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(vm::Class::get_corlib_types().cls_attribute,
@@ -481,7 +444,8 @@ RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeType::get_parent_type(vm::Rt
         RET_ERR(RtErr::NullReference);
     }
 
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->by_ref)
     {
         RET_OK(nullptr);
@@ -505,16 +469,20 @@ RtResult<bool> SystemRuntimeType::is_subclass_of(vm::RtReflectionRuntimeType* ru
     {
         RET_ERR(RtErr::ArgumentNull);
     }
-    const auto& corlib_types = vm::Class::get_corlib_types();
-    if (target_type->reflection_type.header.klass != corlib_types.cls_runtimetype)
+    auto target_type_sig_result = vm::Reflection::get_type_sig_from_runtime_type_object(target_type);
+    if (!target_type_sig_result.is_ok())
     {
         RET_OK(false);
     }
+    const auto& corlib_types = vm::Class::get_corlib_types();
 
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
+    const metadata::RtTypeSig* target_type_sig = target_type_sig_result.unwrap();
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass,
-                                            vm::Class::get_class_from_typesig(runtime_type->reflection_type.type_handle));
+                                            vm::Class::get_class_from_typesig(type_sig));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, target_klass,
-                                            vm::Class::get_class_from_typesig(target_type->reflection_type.type_handle));
+                                            vm::Class::get_class_from_typesig(target_type_sig));
     if (klass == target_klass)
     {
         RET_OK(false);
@@ -535,7 +503,8 @@ RtResult<bool> SystemRuntimeType::get_is_actual_interface(vm::RtReflectionRuntim
         RET_ERR(RtErr::NullReference);
     }
 
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->by_ref)
     {
         RET_OK(false);
@@ -552,7 +521,8 @@ RtResult<bool> SystemRuntimeType::get_is_actual_enum(vm::RtReflectionRuntimeType
         RET_ERR(RtErr::NullReference);
     }
 
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->by_ref)
     {
         RET_OK(false);
@@ -569,7 +539,8 @@ RtResult<bool> SystemRuntimeType::is_delegate(vm::RtReflectionRuntimeType* runti
         RET_ERR(RtErr::NullReference);
     }
 
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     if (type_sig->by_ref)
     {
         RET_OK(false);
@@ -587,7 +558,8 @@ RtResult<bool> SystemRuntimeType::get_is_generic_type(vm::RtReflectionRuntimeTyp
         RET_ERR(RtErr::NullReference);
     }
 
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, is_generic_type_by_typesig(type_sig));
     RET_OK(result);
 }
@@ -599,7 +571,8 @@ RtResult<bool> SystemRuntimeType::get_is_generic_type_definition(vm::RtReflectio
         RET_ERR(RtErr::NullReference);
     }
 
-    auto type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, is_generic_type_definition_by_typesig(type_sig));
     RET_OK(result);
 }
@@ -611,7 +584,8 @@ RtResult<vm::RtObject*> SystemRuntimeType::create_instance(vm::RtReflectionRunti
         RET_ERR(RtErr::NullReference);
     }
 
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     RET_ERR_ON_FAIL(vm::Class::initialize_all(klass));
 
@@ -635,7 +609,8 @@ RtResultVoid SystemRuntimeType::call_default_struct_constructor(vm::RtReflection
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    const metadata::RtTypeSig* type_sig = runtime_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     RET_ERR_ON_FAIL(vm::Class::initialize_methods(klass));
     const metadata::RtMethodInfo* ctor = vm::Method::find_matched_method_in_class_by_name_and_param_count(klass, ".ctor", 0);

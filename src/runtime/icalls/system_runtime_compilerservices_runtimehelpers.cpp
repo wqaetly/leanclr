@@ -5,6 +5,7 @@
 #include "vm/class.h"
 #include "vm/field.h"
 #include "vm/object.h"
+#include "vm/reflection.h"
 #include "vm/runtime.h"
 #include "vm/rt_string.h"
 
@@ -20,7 +21,8 @@ RtResultVoid SystemRuntimeCompilerServicesRuntimeHelpers::initialize_array(vm::R
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    const metadata::RtFieldInfo* field = reinterpret_cast<const metadata::RtFieldInfo*>(runtime_field_handle);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field,
+                                            vm::Reflection::get_field_info_from_handle_arg(reinterpret_cast<const void*>(runtime_field_handle)));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const uint8_t*, rva_data, vm::Field::get_field_rva_data(field));
 
     if (rva_data == nullptr)
@@ -66,7 +68,8 @@ RtResult<int32_t> SystemRuntimeCompilerServicesRuntimeHelpers::get_hash_code(vm:
 
 RtResultVoid SystemRuntimeCompilerServicesRuntimeHelpers::run_class_constructor(intptr_t type_handle) noexcept
 {
-    const metadata::RtTypeSig* type_sig = reinterpret_cast<const metadata::RtTypeSig*>(type_handle);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_handle_arg(reinterpret_cast<const void*>(type_handle)));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     return vm::Runtime::run_class_static_constructor(klass);
 }

@@ -1,6 +1,7 @@
 #include "system_monocustomattrs.h"
 #include "vm/class.h"
 #include "vm/customattribute.h"
+#include "vm/reflection.h"
 #include "interp/eval_stack_op.h"
 
 using namespace leanclr::core;
@@ -17,7 +18,7 @@ namespace icalls
 
 RtResult<bool> SystemMonoCustomAttrs::is_defined_internal(RtObject* obj, RtReflectionType* attribute_type) noexcept
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtClass*, attr_klass, Class::get_class_from_typesig(attribute_type->type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtClass*, attr_klass, Reflection::get_class_from_reflection_type_object(attribute_type));
     return CustomAttribute::has_attribute(obj, attr_klass);
 }
 
@@ -26,7 +27,7 @@ RtResult<RtArray*> SystemMonoCustomAttrs::get_custom_attributes_internal(RtObjec
     metadata::RtClass* attr_klass = nullptr;
     if (attribute_type != nullptr)
     {
-        UNWRAP_OR_RET_ERR_ON_FAIL(attr_klass, Class::get_class_from_typesig(attribute_type->type_handle));
+        UNWRAP_OR_RET_ERR_ON_FAIL(attr_klass, Reflection::get_class_from_reflection_type_object(attribute_type));
     }
     return CustomAttribute::get_customattributes_on_target_object(obj, attr_klass);
 }

@@ -78,6 +78,10 @@
 #include "interop.h"
 #include "leanclr_profile.h"
 
+#ifndef LEANCLR_ENABLE_LEGACY_MONO_ICALLS
+#define LEANCLR_ENABLE_LEGACY_MONO_ICALLS 0
+#endif
+
 namespace leanclr
 {
 namespace icalls
@@ -89,21 +93,65 @@ static void Append(utils::Vector<T>& entries, const utils::Span<T>& sub_entries)
     entries.push_range(sub_entries.begin(), sub_entries.size());
 }
 
-void InternalCallStubs::get_internal_call_entries(utils::Vector<vm::InternalCallEntry>& entries) noexcept
+static void AppendLegacyMonoInternalCalls(utils::Vector<vm::InternalCallEntry>& entries) noexcept
 {
-    entries.reserve(1000);
-    // append all internal call entries here
     Append(entries, MonoRuntimeClassHandle::get_internal_call_entries());
     Append(entries, MonoRuntimeGPtrArrayHandle::get_internal_call_entries());
     Append(entries, MonoRuntimeMarshal::get_internal_call_entries());
     Append(entries, MonoSafeStringMarshal::get_internal_call_entries());
+    Append(entries, SystemRuntimeTypeHandle::get_internal_call_entries());
+    Append(entries, SystemRuntimeFieldHandle::get_internal_call_entries());
+    Append(entries, SystemRuntimeRemotingActivationActivationServices::get_internal_call_entries());
+    Append(entries, SystemRuntimeRemotingRemotingServices::get_internal_call_entries());
+    Append(entries, SystemMonoCustomAttrs::get_internal_call_entries());
+    Append(entries, SystemReflectionMonoMethodInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionAssembly::get_internal_call_entries());
+    Append(entries, SystemReflectionAssemblyName::get_internal_call_entries());
+    Append(entries, SystemReflectionFieldInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionEventInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionCustomAttributeData::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeMethodInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeConstructorInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeFieldInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimePropertyInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeEventInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeParameterInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeAssembly::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeModule::get_internal_call_entries());
+    Append(entries, SystemArgIterator::get_internal_call_entries());
+    Append(entries, SystemAppDomain::get_internal_call_entries());
+    Append(entries, SystemConsoleWindowsConsole::get_internal_call_entries());
+    Append(entries, SystemConsoleDriver::get_internal_call_entries());
+    Append(entries, SystemCurrentSystemTimeZone::get_internal_call_entries());
+    Append(entries, SystemDiagnosticsDebugger::get_internal_call_entries());
+    Append(entries, SystemDiagnosticsStackFrame::get_internal_call_entries());
+    Append(entries, SystemDiagnosticsStackTrace::get_internal_call_entries());
+    Append(entries, SystemDiagnosticsStopwatch::get_internal_call_entries());
+    Append(entries, SystemException::get_internal_call_entries());
+    Append(entries, SystemIOMonoIO::get_internal_call_entries());
+    Append(entries, SystemSecurityCryptographyRNGCryptoServiceProvider::get_internal_call_entries());
+    Append(entries, SystemSecuritySecurityManager::get_internal_call_entries());
+    Append(entries, SystemThreadingInternalThread::get_internal_call_entries());
+    Append(entries, SystemThreadingNativeEventCalls::get_internal_call_entries());
+    Append(entries, SystemThreadingOSSpecificSynchronizationContext::get_internal_call_entries());
+    Append(entries, SystemThreadingThread::get_internal_call_entries());
+    Append(entries, SystemThreadingThreadPool::get_internal_call_entries());
+    Append(entries, SystemThreadingTimer::get_internal_call_entries());
+    Append(entries, SystemWindowsConsoleDriver::get_internal_call_entries());
+}
+
+void InternalCallStubs::get_internal_call_entries(utils::Vector<vm::InternalCallEntry>& entries) noexcept
+{
+    entries.reserve(1000);
+    // append all internal call entries here
+#if LEANCLR_ENABLE_LEGACY_MONO_ICALLS
+    AppendLegacyMonoInternalCalls(entries);
+#endif
     Append(entries, SystemArray::get_internal_call_entries());
     Append(entries, SystemObject::get_internal_call_entries());
-    Append(entries, SystemReflectionRuntimeMethodInfo::get_internal_call_entries());
     Append(entries, SystemRuntimeCompilerServicesRuntimeHelpers::get_internal_call_entries());
-    Append(entries, SystemDiagnosticsStopwatch::get_internal_call_entries());
     Append(entries, SystemRuntimeType::get_internal_call_entries());
-    Append(entries, SystemRuntimeTypeHandle::get_internal_call_entries());
+    Append(entries, SystemRuntimeTypeHandle::get_net10_internal_call_entries());
     Append(entries, SystemString::get_internal_call_entries());
     Append(entries, SystemGlobalizationCultureInfo::get_internal_call_entries());
     Append(entries, SystemGlobalizationCultureData::get_internal_call_entries());
@@ -111,9 +159,7 @@ void InternalCallStubs::get_internal_call_entries(utils::Vector<vm::InternalCall
     Append(entries, SystemGlobalizationCompareInfo::get_internal_call_entries());
     Append(entries, SystemEnvironment::get_internal_call_entries());
     Append(entries, SystemThreadingInterlocked::get_internal_call_entries());
-    Append(entries, SystemThreadingThread::get_internal_call_entries());
-    Append(entries, SystemThreadingThreadPool::get_internal_call_entries());
-    Append(entries, SystemThreadingInternalThread::get_internal_call_entries());
+    Append(entries, SystemThreadingThread::get_net10_internal_call_entries());
     Append(entries, SystemType::get_internal_call_entries());
     Append(entries, SystemValueType::get_internal_call_entries());
     Append(entries, SystemTypedReference::get_internal_call_entries());
@@ -122,53 +168,25 @@ void InternalCallStubs::get_internal_call_entries(utils::Vector<vm::InternalCall
     Append(entries, SystemRuntimeInteropServicesRuntimeInformation::get_internal_call_entries());
     Append(entries, SystemRuntimeDependentHandle::get_internal_call_entries());
     Append(entries, SystemRuntimeRuntimeImports::get_internal_call_entries());
-    Append(entries, SystemRuntimeRemotingActivationActivationServices::get_internal_call_entries());
-    Append(entries, SystemRuntimeRemotingRemotingServices::get_internal_call_entries());
-    Append(entries, SystemRuntimeFieldHandle::get_internal_call_entries());
-    Append(entries, SystemRuntimeMethodHandle::get_internal_call_entries());
-    Append(entries, SystemConsoleWindowsConsole::get_internal_call_entries());
-    Append(entries, SystemConsoleDriver::get_internal_call_entries());
-    Append(entries, SystemWindowsConsoleDriver::get_internal_call_entries());
+    Append(entries, SystemRuntimeFieldHandle::get_net10_internal_call_entries());
+    Append(entries, SystemRuntimeMethodHandle::get_net10_internal_call_entries());
     Append(entries, Interop::get_internal_call_entries());
     Append(entries, SystemEnum::get_internal_call_entries());
-    Append(entries, SystemMonoCustomAttrs::get_internal_call_entries());
     Append(entries, SystemBuffer::get_internal_call_entries());
-    Append(entries, SystemReflectionFieldInfo::get_internal_call_entries());
-    Append(entries, SystemReflectionMonoMethodInfo::get_internal_call_entries());
-    Append(entries, SystemReflectionRuntimeConstructorInfo::get_internal_call_entries());
-    Append(entries, SystemReflectionRuntimeFieldInfo::get_internal_call_entries());
-    Append(entries, SystemReflectionRuntimePropertyInfo::get_internal_call_entries());
-    Append(entries, SystemReflectionAssembly::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeMethodInfo::get_net10_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeFieldInfo::get_net10_internal_call_entries());
     Append(entries, SystemReflectionMethodBase::get_internal_call_entries());
-    Append(entries, SystemReflectionRuntimeAssembly::get_internal_call_entries());
-    Append(entries, SystemReflectionAssemblyName::get_internal_call_entries());
-    Append(entries, SystemReflectionCustomAttributeData::get_internal_call_entries());
-    Append(entries, SystemReflectionEventInfo::get_internal_call_entries());
-    Append(entries, SystemReflectionRuntimeEventInfo::get_internal_call_entries());
-    Append(entries, SystemReflectionRuntimeParameterInfo::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeAssembly::get_net10_internal_call_entries());
     Append(entries, SystemThreadingMonitor::get_internal_call_entries());
-    Append(entries, SystemThreadingTimer::get_internal_call_entries());
-    Append(entries, SystemThreadingNativeEventCalls::get_internal_call_entries());
-    Append(entries, SystemThreadingOSSpecificSynchronizationContext::get_internal_call_entries());
     Append(entries, SystemThreadingVolatile::get_internal_call_entries());
-    Append(entries, SystemAppDomain::get_internal_call_entries());
     Append(entries, SystemDelegate::get_internal_call_entries());
-    Append(entries, SystemArgIterator::get_internal_call_entries());
-    Append(entries, SystemDiagnosticsDebugger::get_internal_call_entries());
-    Append(entries, SystemDiagnosticsStackFrame::get_internal_call_entries());
-    Append(entries, SystemDiagnosticsStackTrace::get_internal_call_entries());
-    Append(entries, SystemException::get_internal_call_entries());
-    Append(entries, SystemReflectionRuntimeModule::get_internal_call_entries());
+    Append(entries, SystemReflectionRuntimeModule::get_net10_internal_call_entries());
     Append(entries, SystemGC::get_internal_call_entries());
-    Append(entries, SystemCurrentSystemTimeZone::get_internal_call_entries());
     Append(entries, SystemDateTime::get_internal_call_entries());
     Append(entries, SystemMath::get_internal_call_entries());
     Append(entries, SystemMathF::get_internal_call_entries());
     Append(entries, SystemIOPath::get_internal_call_entries());
-    Append(entries, SystemIOMonoIO::get_internal_call_entries());
     Append(entries, SystemTextEncodingHelper::get_internal_call_entries());
-    Append(entries, SystemSecurityCryptographyRNGCryptoServiceProvider::get_internal_call_entries());
-    Append(entries, SystemSecuritySecurityManager::get_internal_call_entries());
     Append(entries, LeanCLRProfile::get_internal_call_entries());
 }
 

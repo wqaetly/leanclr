@@ -8,40 +8,14 @@ namespace leanclr
 namespace intrinsics
 {
 
-RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_runtime_type(const metadata::RtClass* method_table) noexcept
+RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_runtime_type(const void* method_table) noexcept
 {
-    if (method_table == nullptr)
-    {
-        RET_ERR(RtErr::ArgumentNull);
-    }
-
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass,
-                                            vm::Reflection::get_class_from_net10_method_table(method_table));
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, ref_type, vm::Reflection::get_klass_reflection_object(klass));
-    RET_OK(reinterpret_cast<vm::RtReflectionRuntimeType*>(ref_type));
+    return vm::Reflection::get_runtime_type_from_handle_arg(method_table);
 }
 
 RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeTypeHandle::get_runtime_type_from_handle(void* runtime_type_handle) noexcept
 {
-    if (runtime_type_handle == nullptr)
-    {
-        RET_ERR(RtErr::ArgumentNull);
-    }
-
-    auto runtime_type_klass = vm::Class::get_corlib_types().cls_runtimetype;
-    auto direct_runtime_type = reinterpret_cast<vm::RtReflectionRuntimeType*>(runtime_type_handle);
-    if (direct_runtime_type->reflection_type.header.klass == runtime_type_klass)
-    {
-        RET_OK(direct_runtime_type);
-    }
-
-    auto runtime_type = *reinterpret_cast<vm::RtReflectionRuntimeType**>(runtime_type_handle);
-    if (runtime_type == nullptr)
-    {
-        RET_ERR(RtErr::ArgumentNull);
-    }
-
-    RET_OK(runtime_type);
+    return vm::Reflection::get_runtime_type_from_handle_arg(runtime_type_handle);
 }
 
 RtResult<bool> SystemRuntimeTypeHandle::can_cast_to(vm::RtReflectionRuntimeType* source_type, vm::RtReflectionRuntimeType* target_type) noexcept
@@ -51,12 +25,15 @@ RtResult<bool> SystemRuntimeTypeHandle::can_cast_to(vm::RtReflectionRuntimeType*
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    const metadata::RtTypeSig* source_type_sig = source_type->reflection_type.type_handle;
-    const metadata::RtTypeSig* target_type_sig = target_type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, source_type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(source_type));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, target_type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(target_type));
     if (source_type_sig == target_type_sig)
     {
         RET_OK(true);
     }
+
     if (source_type_sig->is_by_ref() || target_type_sig->is_by_ref())
     {
         RET_OK(false);
@@ -77,7 +54,7 @@ static RtResultVoid get_runtime_type_invoker(metadata::RtManagedMethodPointer me
 {
     (void)methodPtr;
     (void)method;
-    const metadata::RtClass* method_table = interp::EvalStackOp::get_param<const metadata::RtClass*>(params, 0);
+    const void* method_table = interp::EvalStackOp::get_param<const void*>(params, 0);
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, runtime_type, SystemRuntimeTypeHandle::get_runtime_type(method_table));
     interp::EvalStackOp::set_return(ret, runtime_type);

@@ -1,3 +1,23 @@
 {
-  "staticLinkedMethods": {}
+  "staticLinkedMethods": {},
+  "runtimeApiNames": [
+    "System.Reflection.CustomAttribute::<CreateCustomAttributeInstance>g____PInvoke|30_0(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.IntPtr*,System.IntPtr,System.Int32*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.Reflection.MetadataImport::<Enum>g____PInvoke|8_0(System.IntPtr,System.Int32,System.Int32,System.Int32*,System.Int32*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.ModuleHandle::GetMDStreamVersion(System.Runtime.CompilerServices.QCallModule)",
+    "System.Reflection.RuntimeAssembly::<GetCodeBase>g____PInvoke|14_0(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
+    "System.Reflection.RuntimeAssembly::<GetVersion>g____PInvoke|71_0(System.Runtime.CompilerServices.QCallAssembly,System.Int32*,System.Int32*,System.Int32*,System.Int32*)",
+    "System.Reflection.RuntimeAssembly::<InternalLoad>g____PInvoke|48_0(System.Reflection.NativeAssemblyNameParts*,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.StackCrawlMarkHandle,System.Boolean,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.Reflection.RuntimeAssembly::GetFlags(System.Runtime.CompilerServices.QCallAssembly)",
+    "System.Reflection.RuntimeAssembly::GetFullName(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
+    "System.Reflection.RuntimeAssembly::GetHashAlgorithm(System.Runtime.CompilerServices.QCallAssembly)",
+    "System.Reflection.RuntimeAssembly::GetLocale(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
+    "System.Reflection.RuntimeAssembly::GetPublicKey(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.Reflection.RuntimeAssembly::GetReferencedAssemblies(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.Reflection.RuntimeAssembly::GetSimpleName(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
+    "System.RuntimeMethodHandle::GetMethodBody(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.RuntimeMethodHandle::InvokeMethod(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Void**,System.Runtime.CompilerServices.ObjectHandleOnStack,Interop/BOOL,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.RuntimeMethodHandle::IsCAVisibleFromDecoratedType(System.Runtime.CompilerServices.QCallTypeHandle,System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallModule)",
+    "System.RuntimeTypeHandle::FreeGCHandle(System.Runtime.CompilerServices.QCallTypeHandle,System.IntPtr)",
+    "System.RuntimeTypeHandle::GetGCHandle(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.InteropServices.GCHandleType)"
+  ]
 }

@@ -171,6 +171,11 @@ static RtResult<uint64_t> read_customattribute_elem_simple_value(utils::BinaryRe
 
 static RtResult<uint64_t> read_customattribute_elem_value(metadata::RtModuleDef* mod, utils::BinaryReader* reader, metadata::RtElementType ele_type);
 
+static RtResult<metadata::RtClass*> get_class_from_reflection_type(RtReflectionType* type_obj)
+{
+    return Reflection::get_class_from_reflection_type_object(type_obj);
+}
+
 static RtResult<metadata::RtElementType> get_custom_attribute_elem_type_from_typesig(const metadata::RtTypeSig* type_sig)
 {
     metadata::RtElementType original_ele_type = type_sig->ele_type;
@@ -409,7 +414,7 @@ static RtResult<uint64_t> read_customattribute_elem_value(metadata::RtModuleDef*
             auto& enum_name_span = opt_enum_name.value();
             DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, type_obj,
                                                     CustomAttribute::parse_assembly_qualified_type(mod, enum_name_span.data(), enum_name_span.size(), false));
-            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, enum_klass, Class::get_class_from_typesig(type_obj->type_handle));
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, enum_klass, get_class_from_reflection_type(type_obj));
             if (!Class::is_enum_type(enum_klass))
                 RET_ASSERT_ERR(RtErr::BadImageFormat);
             DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(uint64_t, enum_value,
@@ -569,7 +574,7 @@ static RtResult<metadata::RtElementType> read_field_or_prop_type(metadata::RtMod
         auto& enum_name_span = opt_enum_name.value();
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, type_obj,
                                                 CustomAttribute::parse_assembly_qualified_type(mod, enum_name_span.data(), enum_name_span.size(), false));
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, enum_klass, Class::get_class_from_typesig(type_obj->type_handle));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, enum_klass, get_class_from_reflection_type(type_obj));
         if (!Class::is_enum_type(enum_klass))
             RET_ASSERT_ERR(RtErr::BadImageFormat);
         result = Class::get_element_type(enum_klass->element_class);
@@ -991,11 +996,12 @@ RtResult<bool> CustomAttribute::has_customattribute_on_event(const metadata::RtE
 
 RtResult<bool> CustomAttribute::has_customattribute_on_parameter(RtReflectionParameter* parameter, const metadata::RtClass* customattribute_klass)
 {
-    auto ref_method = reinterpret_cast<RtReflectionMethod*>(parameter->member);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, Reflection::get_method_info_from_reflection_object(ref_method));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method,
+                                            Reflection::get_parameter_method_info_from_reflection_object(parameter));
     metadata::RtModuleDef* mod = method->parent->image;
 
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<uint32_t>, opt_param_token, Method::get_parameter_token(method, parameter->index));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<uint32_t>, opt_param_token,
+                                            Reflection::get_parameter_token_from_reflection_object(parameter));
     if (!opt_param_token)
         RET_OK(false);
     uint32_t param_token = opt_param_token.value();
@@ -1014,22 +1020,23 @@ static RtResult<CustomAttributeProvider> get_token_of_customattribute_provider(R
         RET_ERR(RtErr::NullReference);
 
     const CorLibTypes& corlib_types = Class::get_corlib_types();
-    const metadata::RtClass* obj_klass = obj->klass;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, provider_obj, Reflection::normalize_coreclr_reflection_object(obj));
+    const metadata::RtClass* obj_klass = provider_obj->klass;
 
     CustomAttributeProvider provider{};
 
     if (obj_klass == corlib_types.cls_runtimetype)
     {
-        RtReflectionType* type_obj = reinterpret_cast<RtReflectionType*>(obj);
-        const metadata::RtTypeSig* type_sig = type_obj->type_handle;
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, target_klass, Class::get_class_from_typesig(type_sig));
+        RtReflectionType* type_obj = reinterpret_cast<RtReflectionType*>(provider_obj);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, target_klass,
+                                                Reflection::get_class_from_reflection_type_object(type_obj));
         metadata::RtModuleDef* mod = target_klass->image;
         provider.mod = mod;
         provider.token = target_klass->token;
     }
     else if (obj_klass == corlib_types.cls_reflection_method || obj_klass == corlib_types.cls_reflection_constructor)
     {
-        RtReflectionMethod* method_obj = reinterpret_cast<RtReflectionMethod*>(obj);
+        RtReflectionMethod* method_obj = reinterpret_cast<RtReflectionMethod*>(provider_obj);
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, Reflection::get_method_info_from_reflection_object(method_obj));
         metadata::RtModuleDef* mod = method->parent->image;
         provider.mod = mod;
@@ -1037,7 +1044,7 @@ static RtResult<CustomAttributeProvider> get_token_of_customattribute_provider(R
     }
     else if (obj_klass == corlib_types.cls_reflection_field)
     {
-        RtReflectionField* field_obj = reinterpret_cast<RtReflectionField*>(obj);
+        RtReflectionField* field_obj = reinterpret_cast<RtReflectionField*>(provider_obj);
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field, Reflection::get_field_info_from_reflection_object(field_obj));
         metadata::RtModuleDef* mod = field->parent->image;
         provider.mod = mod;
@@ -1045,26 +1052,29 @@ static RtResult<CustomAttributeProvider> get_token_of_customattribute_provider(R
     }
     else if (obj_klass == corlib_types.cls_reflection_property)
     {
-        RtReflectionProperty* prop_obj = reinterpret_cast<RtReflectionProperty*>(obj);
-        const metadata::RtPropertyInfo* property = prop_obj->property;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtPropertyInfo*, property,
+                                                Reflection::get_property_info_from_reflection_object(
+                                                    reinterpret_cast<RtReflectionProperty*>(provider_obj)));
         metadata::RtModuleDef* mod = property->parent->image;
         provider.mod = mod;
         provider.token = property->token;
     }
     else if (obj_klass == corlib_types.cls_reflection_event)
     {
-        RtReflectionEventInfo* event_obj = reinterpret_cast<RtReflectionEventInfo*>(obj);
-        const metadata::RtEventInfo* event = event_obj->event;
+        RtReflectionEventInfo* event_obj = reinterpret_cast<RtReflectionEventInfo*>(provider_obj);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtEventInfo*, event,
+                                                Reflection::get_event_info_from_reflection_object(event_obj));
         metadata::RtModuleDef* mod = event->parent->image;
         provider.mod = mod;
         provider.token = event->token;
     }
     else if (obj_klass == corlib_types.cls_reflection_parameter)
     {
-        RtReflectionParameter* param_obj = reinterpret_cast<RtReflectionParameter*>(obj);
-        RtReflectionMethod* ref_method = reinterpret_cast<RtReflectionMethod*>(param_obj->member);
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, Reflection::get_method_info_from_reflection_object(ref_method));
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<uint32_t>, opt_param_token, Method::get_parameter_token(method, param_obj->index));
+        RtReflectionParameter* param_obj = reinterpret_cast<RtReflectionParameter*>(provider_obj);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method,
+                                                Reflection::get_parameter_method_info_from_reflection_object(param_obj));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(std::optional<uint32_t>, opt_param_token,
+                                                Reflection::get_parameter_token_from_reflection_object(param_obj));
         uint32_t param_token = opt_param_token.value_or(0);
         metadata::RtModuleDef* mod = method->parent->image;
         provider.mod = mod;
@@ -1072,11 +1082,20 @@ static RtResult<CustomAttributeProvider> get_token_of_customattribute_provider(R
     }
     else if (obj_klass == corlib_types.cls_reflection_assembly)
     {
-        RtReflectionAssembly* assembly_obj = reinterpret_cast<RtReflectionAssembly*>(obj);
-        metadata::RtAssembly* assembly = assembly_obj->assembly;
+        RtReflectionAssembly* assembly_obj = reinterpret_cast<RtReflectionAssembly*>(provider_obj);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly,
+                                                Reflection::get_assembly_from_reflection_object(assembly_obj));
         metadata::RtModuleDef* mod = assembly->mod;
         provider.mod = mod;
         provider.token = mod->get_assembly_token();
+    }
+    else if (obj_klass == corlib_types.cls_reflection_module)
+    {
+        RtReflectionModule* module_obj = reinterpret_cast<RtReflectionModule*>(provider_obj);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, mod,
+                                                Reflection::get_module_from_reflection_object(module_obj));
+        provider.mod = mod;
+        provider.token = mod->get_module_token();
     }
     else
     {

@@ -148,6 +148,7 @@ RtResult<InternalCallInvoker> InternalCalls::get_newobj_internal_call_by_method(
     }
 
     // Try with method name without parameters
+    if (!is_coreclr_corlib_method(method))
     {
         sb.clear();
         RET_ERR_ON_FAIL(metadata::MetadataName::append_method_full_name_without_params(sb, method, metadata::TypeNameFormat::InternalName));

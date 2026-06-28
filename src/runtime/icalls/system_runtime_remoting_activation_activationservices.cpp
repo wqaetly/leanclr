@@ -2,6 +2,7 @@
 
 #include "vm/class.h"
 #include "vm/object.h"
+#include "vm/reflection.h"
 
 namespace leanclr
 {
@@ -15,7 +16,8 @@ RtResult<vm::RtObject*> SystemRuntimeRemotingActivationActivationServices::alloc
         RET_OK(nullptr);
     }
 
-    const metadata::RtTypeSig* type_sig = type->reflection_type.type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(&type->reflection_type));
     return LEANCLR_CREATE_INSTANCE_INTERNAL(type_sig, "ActivationServices::AllocateUninitializedClassInstance");
 }
 

@@ -7,6 +7,7 @@
 #include "delegate.h"
 #include "field.h"
 #include "object.h"
+#include "reflection.h"
 #include "type.h"
 #include "rt_exception.h"
 #include "method.h"
@@ -163,7 +164,7 @@ RtResultVoid Marshal::ptr_to_structure(void* ptr, vm::RtObject* obj)
 
 RtResult<vm::RtObject*> Marshal::ptr_to_structure_type(void* ptr, vm::RtReflectionType* ref_type)
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Class::get_class_from_typesig(ref_type->type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Reflection::get_class_from_reflection_type_object(ref_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj, LEANCLR_NEWOBJ_INTERNAL(klass, "Marshal::ptr_to_structure_type"));
     RET_ERR_ON_FAIL(ptr_to_structure_impl(ptr, obj));
     RET_OK(obj);
@@ -180,14 +181,14 @@ RtResultVoid Marshal::structure_to_ptr(vm::RtObject* obj, void* ptr, bool delete
 
 RtResultVoid Marshal::destroy_structure(void* ptr, vm::RtReflectionType* ref_type)
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Class::get_class_from_typesig(ref_type->type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Reflection::get_class_from_reflection_type_object(ref_type));
     RET_ERR_ON_FAIL(Class::initialize_all(klass));
     return destroy_structure_impl(ptr, klass);
 }
 
 RtResult<int32_t> Marshal::sizeof_type(vm::RtReflectionType* ref_type)
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(ref_type->type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Reflection::get_class_from_reflection_type_object(ref_type));
     RET_ERR_ON_FAIL(Class::initialize_fields(klass));
     int32_t size = static_cast<int32_t>(vm::Class::get_instance_size_without_object_header(klass));
     RET_OK(size);
@@ -195,7 +196,7 @@ RtResult<int32_t> Marshal::sizeof_type(vm::RtReflectionType* ref_type)
 
 RtResult<intptr_t> Marshal::offset_of(vm::RtReflectionType* ref_type, const char* field_name)
 {
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Class::get_class_from_typesig(ref_type->type_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Reflection::get_class_from_reflection_type_object(ref_type));
     RET_ERR_ON_FAIL(Class::initialize_fields(klass));
     const metadata::RtFieldInfo* field_info = Class::get_field_for_name(klass, field_name, false);
     if (!field_info)

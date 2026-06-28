@@ -46,7 +46,9 @@ static RtResultVoid get_virtual_method_internal_invoker(metadata::RtManagedMetho
 RtResult<vm::RtMulticastDelegate*> SystemDelegate::create_delegate_internal(vm::RtReflectionType* delegate_type, vm::RtObject* target,
                                                                             vm::RtReflectionMethod* method, bool throw_on_bind) noexcept
 {
-    return vm::Delegate::create_delegate_from_reflection(delegate_type, target, method->method, throw_on_bind);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method_info,
+                                            vm::Reflection::get_method_info_from_reflection_object(method));
+    return vm::Delegate::create_delegate_from_reflection(delegate_type, target, method_info, throw_on_bind);
 }
 
 /// @icall: System.Delegate::CreateDelegate_internal(System.Type,System.Object,System.Reflection.MethodInfo,System.Boolean)
@@ -119,7 +121,9 @@ static RtResultVoid alloc_delegate_like_internal_invoker(metadata::RtManagedMeth
 static RtResultVoid get_multicast_invoke_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                  interp::RtStackObject* ret) noexcept
 {
-    auto delegate_klass = EvalStackOp::get_param<const metadata::RtClass*>(params, 0);
+    auto method_table = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, delegate_klass,
+                                            vm::Reflection::get_class_from_net10_method_table(method_table));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(void*, invoke, SystemDelegate::get_multicast_invoke(delegate_klass));
     EvalStackOp::set_return(ret, invoke);
     RET_VOID_OK();
@@ -129,7 +133,9 @@ static RtResultVoid get_multicast_invoke_invoker(metadata::RtManagedMethodPointe
 static RtResultVoid get_invoke_method_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject* ret) noexcept
 {
-    auto delegate_klass = EvalStackOp::get_param<const metadata::RtClass*>(params, 0);
+    auto method_table = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, delegate_klass,
+                                            vm::Reflection::get_class_from_net10_method_table(method_table));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(void*, invoke, SystemDelegate::get_invoke_method(delegate_klass));
     EvalStackOp::set_return(ret, invoke);
     RET_VOID_OK();

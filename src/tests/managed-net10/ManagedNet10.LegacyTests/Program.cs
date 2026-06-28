@@ -12,6 +12,83 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunAssembly(typeof(Program).Assembly);
         }
 
+        public static void RunLegacyDiscoverySmoke()
+        {
+            System.Type targetType = typeof(Tests.Instruments.Ariths.TC_sub);
+            System.Type[] assemblyTypes = typeof(Program).Assembly.GetTypes();
+            bool foundType = false;
+            for (int i = 0; i < assemblyTypes.Length; i++)
+            {
+                if (assemblyTypes[i] == targetType)
+                {
+                    foundType = true;
+                    break;
+                }
+            }
+
+            if (!foundType)
+            {
+                Assert.Fail("Assembly.GetTypes did not return TC_sub; count=" + assemblyTypes.Length);
+            }
+            if (System.Attribute.IsDefined(targetType, typeof(IgnoreTestAttribute), inherit: true))
+            {
+                Assert.Fail("Attribute.IsDefined incorrectly reported IgnoreTestAttribute on TC_sub");
+            }
+
+            System.Reflection.BindingFlags flags =
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Static;
+            System.Reflection.MethodInfo[] methods = targetType.GetMethods(flags);
+            System.Reflection.MethodInfo selectedMethod = null;
+            bool foundMethod = false;
+            bool foundUnitTestAttribute = false;
+            for (int i = 0; i < methods.Length; i++)
+            {
+                if (methods[i].Name == "int_vv_1")
+                {
+                    selectedMethod = methods[i];
+                    foundMethod = true;
+                    foundUnitTestAttribute = System.Attribute.IsDefined(methods[i], typeof(UnitTestAttribute), inherit: true);
+                    break;
+                }
+            }
+
+            if (!foundMethod)
+            {
+                Assert.Fail("TC_sub.GetMethods did not return int_vv_1; count=" + methods.Length);
+            }
+            if (!foundUnitTestAttribute)
+            {
+                Assert.Fail("Attribute.IsDefined did not see UnitTestAttribute on TC_sub.int_vv_1");
+            }
+            System.Type returnType = selectedMethod.ReturnType;
+            System.Type expectedReturnType = typeof(void);
+            if (returnType != expectedReturnType)
+            {
+                Assert.Fail(
+                    "TC_sub.int_vv_1 ReturnType is not System.Void: " + returnType.FullName +
+                    "; referenceEquals=" + object.ReferenceEquals(returnType, expectedReturnType) +
+                    "; equals=" + returnType.Equals(expectedReturnType) +
+                    "; handleEquals=" + returnType.TypeHandle.Equals(expectedReturnType.TypeHandle));
+            }
+            if (selectedMethod.GetParameters().Length != 0)
+            {
+                Assert.Fail("TC_sub.int_vv_1 unexpectedly has parameters: " + selectedMethod.GetParameters().Length);
+            }
+            if (!selectedMethod.IsStatic)
+            {
+                Assert.Fail("TC_sub.int_vv_1 should be static.");
+            }
+
+            int executed = LegacyTestRunner.RunType(targetType);
+            if (executed <= 0)
+            {
+                Assert.Fail("LegacyTestRunner.RunType(TC_sub) did not execute any UnitTest methods.");
+            }
+        }
+
         public static void RunActivator()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Activator));

@@ -10,6 +10,7 @@ class SystemThreadingThread
 {
   public:
     static utils::Span<vm::InternalCallEntry> get_internal_call_entries() noexcept;
+    static utils::Span<vm::InternalCallEntry> get_net10_internal_call_entries() noexcept;
 
     // Thread management
     static RtResultVoid get_current_thread_icall(vm::RtThread** thread) noexcept;

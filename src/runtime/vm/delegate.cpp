@@ -4,6 +4,7 @@
 #include "object.h"
 #include "rt_array.h"
 #include "class.h"
+#include "reflection.h"
 #include "interp/eval_stack_op.h"
 
 namespace leanclr
@@ -30,7 +31,8 @@ void Delegate::set_target_method(RtDelegate* del, const metadata::RtMethodInfo* 
 RtResult<RtMulticastDelegate*> Delegate::create_delegate_from_reflection(RtReflectionType* delegate_type, RtObject* target,
                                                                          const metadata::RtMethodInfo* method, bool throw_on_bind) noexcept
 {
-    const metadata::RtTypeSig* type_sig = delegate_type->type_handle;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            Reflection::get_type_sig_from_reflection_type_object(delegate_type));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, delegate_klass, vm::Class::get_class_from_typesig(type_sig));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, del_obj, LEANCLR_NEWOBJ_INTERNAL(delegate_klass, "Delegate::create_delegate_from_reflection"));
     RtMulticastDelegate* del = reinterpret_cast<RtMulticastDelegate*>(del_obj);
@@ -71,7 +73,9 @@ RtResultVoid Delegate::call_delegate_ctor_invoker(metadata::RtManagedMethodPoint
 {
     RtMulticastDelegate* del_obj = interp::EvalStackOp::get_param<RtMulticastDelegate*>(params, 0);
     RtObject* target = interp::EvalStackOp::get_param<RtObject*>(params, 1);
-    const metadata::RtMethodInfo* method_info = interp::EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 2);
+    auto method_arg = interp::EvalStackOp::get_param<const void*>(params, 2);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method_info,
+                                            Reflection::get_method_info_from_handle_arg(method_arg));
     RET_ERR_ON_FAIL(constructor_delegate(del_obj, target, method_info));
     interp::EvalStackOp::set_return(ret, del_obj);
     RET_VOID_OK();
@@ -81,7 +85,9 @@ RtResultVoid Delegate::newobj_delegate_invoker(metadata::RtManagedMethodPointer 
                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
     RtObject* target = interp::EvalStackOp::get_param<RtObject*>(params, 0);
-    const metadata::RtMethodInfo* method_info = interp::EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 1);
+    auto method_arg = interp::EvalStackOp::get_param<const void*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method_info,
+                                            Reflection::get_method_info_from_handle_arg(method_arg));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtMulticastDelegate*, del, new_delegate(method->parent, target, method_info));
     interp::EvalStackOp::set_return(ret, del);
     RET_VOID_OK();
