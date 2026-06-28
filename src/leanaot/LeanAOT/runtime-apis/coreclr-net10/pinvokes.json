@@ -40,6 +40,7 @@
     "System.Reflection.RuntimeAssembly::GetFullName(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
     "System.Reflection.RuntimeAssembly::GetHashAlgorithm(System.Runtime.CompilerServices.QCallAssembly)",
     "System.Reflection.RuntimeAssembly::GetImageRuntimeVersion(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
+    "System.Reflection.RuntimeAssembly::GetIsCollectible(System.Runtime.CompilerServices.QCallAssembly)",
     "System.Reflection.RuntimeAssembly::GetLocale(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
     "System.Reflection.RuntimeAssembly::GetManifestResourceNames(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.Reflection.RuntimeAssembly::GetPublicKey(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.ObjectHandleOnStack)",
@@ -49,6 +50,7 @@
     "System.RuntimeFieldHandle::SetValueDirect(System.IntPtr,System.Void*,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallTypeHandle)",
     "System.RuntimeFieldHandle::<SetValue>g____PInvoke|34_0(System.IntPtr,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallTypeHandle,System.Int32*)",
     "System.Runtime.Loader.AssemblyLoadContext::GetLoadedAssemblies(System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.RuntimeMethodHandle::GetIsCollectible(System.RuntimeMethodHandleInternal)",
     "System.RuntimeMethodHandle::GetMethodBody(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.RuntimeMethodHandle::GetMethodInstantiation(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.ObjectHandleOnStack,Interop/BOOL)",
     "System.RuntimeMethodHandle::GetStubIfNeededSlow(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
@@ -59,6 +61,8 @@
     "System.RuntimeTypeHandle::FreeGCHandle(System.Runtime.CompilerServices.QCallTypeHandle,System.IntPtr)",
     "System.RuntimeTypeHandle::GetGCHandle(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.InteropServices.GCHandleType)",
     "System.RuntimeTypeHandle::GetMethodAt(System.Runtime.CompilerServices.MethodTable*,System.Int32)",
-    "System.RuntimeTypeHandle::RegisterCollectibleTypeDependency(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallAssembly)"
+    "System.RuntimeTypeHandle::IsCollectible(System.Runtime.CompilerServices.QCallTypeHandle)",
+    "System.RuntimeTypeHandle::RegisterCollectibleTypeDependency(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallAssembly)",
+    "System.RuntimeType/BoxCache::GetBoxInfo(System.Runtime.CompilerServices.QCallTypeHandle,System.Object (System.Void*)*,System.Void**,System.Int32*,System.UInt32*)"
   ]
 }

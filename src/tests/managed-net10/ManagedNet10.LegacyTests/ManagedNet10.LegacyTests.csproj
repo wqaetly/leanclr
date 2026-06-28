@@ -55,6 +55,7 @@
     <Compile Include="CorlibReflectionModuleTestEntries.cs" />
     <Compile Include="CorlibReflectionAssemblyNameTestEntries.cs" />
     <Compile Include="CorlibStringTestEntries.cs" />
+    <Compile Include="CoreRegressionTestEntries.cs" />
     <Compile Include="ToStringRegressionTestEntries.cs" />
     <Compile Include="Net10SpanRegressionTestEntries.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
@@ -72,6 +73,7 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\CustomAttributes.cs" Link="Fixtures\CustomAttributes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdftnDefs.cs" Link="Fixtures\LdftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdvirftnDefs.cs" Link="Fixtures\LdvirftnDefs.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\MethodRefs.cs" Link="Fixtures\MethodRefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\NullableTypeUtil.cs" Link="Fixtures\NullableTypeUtil.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTCtorParam.cs" Link="Fixtures\TestAOTCtorParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTParam.cs" Link="Fixtures\TestAOTParam.cs" />
@@ -187,8 +189,8 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_ValueType.cs" Link="CorlibTests\InternalCall\TC_System_ValueType.cs" />
     <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_String.cs" Link="CorlibTests\Intrinsic\TC_String.cs" />
     <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_System_Object.cs" Link="CorlibTests\Intrinsic\TC_System_Object.cs" />
-    <Compile Include="..\..\managed\CoreTests\Regression\Bug_2022_9_27.cs" Link="Regression\Bug_2022_9_27.cs" />
-    <Compile Include="..\..\managed\CoreTests\Regression\Bug_ValueTypeToString_2022_7_22.cs" Link="Regression\Bug_ValueTypeToString_2022_7_22.cs" />
+    <Compile Include="..\..\managed\CoreTests\Regression\*.cs" LinkBase="Regression" />
+    <Compile Include="..\..\managed\CoreTests\Regression\GenericStruct\*.cs" LinkBase="Regression\GenericStruct" />
     <Compile Include="..\..\managed\GcTests\Fixtures\GcGraphTypes.cs" Link="GcTests\Fixtures\GcGraphTypes.cs" />
     <Compile Include="..\..\managed\GcTests\Fixtures\GcTestCaseBase.cs" Link="GcTests\Fixtures\GcTestCaseBase.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />

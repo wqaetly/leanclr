@@ -2670,11 +2670,27 @@ RtResult<RtObject*> Reflection::invoke_method(const metadata::RtMethodInfo* meth
                     RET_ERR(RtErr::InvalidCast);
                 }
             }
-            if (Method::is_virtual(method))
+        }
+        else
+        {
+            if (obj == nullptr)
             {
-                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, virt_method, Method::get_virtual_method_impl(obj, method));
-                method = virt_method;
+                if (out_ex)
+                {
+                    *out_ex = Exception::raise_internal_runtime_exception(corlib_types.cls_target_exception, "Non-static method requires a target.");
+                }
+                RET_OK(nullptr);
             }
+            if (!Object::is_inst(obj, klass))
+            {
+                RET_ERR(RtErr::InvalidCast);
+            }
+        }
+
+        if (Method::is_virtual(method))
+        {
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, virt_method, Method::get_virtual_method_impl(obj, method));
+            method = virt_method;
         }
     }
 

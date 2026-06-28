@@ -100,6 +100,14 @@ RtResult<const PInvokeRegistry*> PInvokes::get_pinvoke_by_method(const metadata:
             RET_OK(&it->second);
     }
 
+    if (is_coreclr_corlib_method(method) && method->parent->namespaze != nullptr && method->parent->namespaze[0] == '\0' &&
+        std::strcmp(method->parent->name, "BoxCache") == 0 && std::strcmp(method->name, "GetBoxInfo") == 0)
+    {
+        auto it = g_internalcall_map.find("BoxCache::GetBoxInfo");
+        if (it != g_internalcall_map.end())
+            RET_OK(&it->second);
+    }
+
     RET_OK(nullptr);
 }
 

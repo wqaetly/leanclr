@@ -12,7 +12,7 @@ from pathlib import Path
 LINE_RE = re.compile(r"^\[[^\]]+\]\s+(.+)$")
 # DeclaringType::MemberName with optional (params) at end of dnlib FullName tail.
 MEMBER_SIG_RE = re.compile(
-    r"((?:[\w/`\.`][\w/`\.`<>,*&\[\]+\-|]*)::\.?[\w`<>|]+)(\([^)]*\))?\s*$"
+    r"((?:[\w/`\.`][\w/`\.`<>,*&\[\]+\-|]*)::\.?[\w`<>|]+)(\(.*\))?\s*$"
 )
 
 # Extra LeanCLR implementations not listed in externs.txt (exact `name` field match).

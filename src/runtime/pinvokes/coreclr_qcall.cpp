@@ -4208,6 +4208,43 @@ RtResultVoid runtime_type_handle_register_collectible_type_dependency_invoker(me
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_type_handle_is_collectible_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                        const interp::RtStackObject*, interp::RtStackObject* ret) noexcept
+{
+    // LeanCLR currently treats all loaded metadata as non-collectible.
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_type_box_cache_get_box_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                         const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    (void)interp::EvalStackOp::get_param<void*>(params, 0);
+    (void)interp::EvalStackOp::get_param<void*>(params, 1);
+    auto box_helper = interp::EvalStackOp::get_param<void**>(params, 2);
+    auto cached_boxes = interp::EvalStackOp::get_param<void**>(params, 3);
+    auto cached_box_count = interp::EvalStackOp::get_param<int32_t*>(params, 4);
+    auto cache_flags = interp::EvalStackOp::get_param<uint32_t*>(params, 5);
+
+    if (box_helper != nullptr)
+    {
+        *box_helper = nullptr;
+    }
+    if (cached_boxes != nullptr)
+    {
+        *cached_boxes = nullptr;
+    }
+    if (cached_box_count != nullptr)
+    {
+        *cached_box_count = 0;
+    }
+    if (cache_flags != nullptr)
+    {
+        *cache_flags = 0;
+    }
+    RET_VOID_OK();
+}
+
 RtResultVoid module_handle_get_token_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject* ret) noexcept
 {
@@ -5630,6 +5667,33 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    runtime_type_handle_register_collectible_type_dependency_invoker);
     vm::PInvokes::register_pinvoke("RuntimeTypeHandle_RegisterCollectibleTypeDependency", nullptr,
                                    runtime_type_handle_register_collectible_type_dependency_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeTypeHandle::IsCollectible(System.Runtime.CompilerServices.QCallTypeHandle)", nullptr,
+        runtime_type_handle_is_collectible_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::IsCollectible", nullptr,
+                                   runtime_type_handle_is_collectible_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_IsCollectible", nullptr,
+                                   runtime_type_handle_is_collectible_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeMethodHandle::GetIsCollectible(System.RuntimeMethodHandleInternal)", nullptr,
+        runtime_type_handle_is_collectible_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeMethodHandle::GetIsCollectible", nullptr,
+                                   runtime_type_handle_is_collectible_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeMethodHandle_GetIsCollectible", nullptr,
+                                   runtime_type_handle_is_collectible_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeAssembly::GetIsCollectible(System.Runtime.CompilerServices.QCallAssembly)", nullptr,
+        runtime_type_handle_is_collectible_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeAssembly::GetIsCollectible", nullptr,
+                                   runtime_type_handle_is_collectible_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_GetIsCollectible", nullptr,
+                                   runtime_type_handle_is_collectible_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeType/BoxCache::GetBoxInfo(System.Runtime.CompilerServices.QCallTypeHandle,System.Object (System.Void*)*,System.Void**,System.Int32*,System.UInt32*)",
+        nullptr, runtime_type_box_cache_get_box_info_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeType/BoxCache::GetBoxInfo", nullptr, runtime_type_box_cache_get_box_info_invoker);
+    vm::PInvokes::register_pinvoke("BoxCache::GetBoxInfo", nullptr, runtime_type_box_cache_get_box_info_invoker);
+    vm::PInvokes::register_pinvoke(".BoxCache::GetBoxInfo", nullptr, runtime_type_box_cache_get_box_info_invoker);
     vm::PInvokes::register_pinvoke("System.ModuleHandle::GetToken(System.Runtime.CompilerServices.QCallModule)", nullptr,
                                    module_handle_get_token_invoker);
     vm::PInvokes::register_pinvoke("System.ModuleHandle::GetToken", nullptr, module_handle_get_token_invoker);
