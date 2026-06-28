@@ -619,7 +619,7 @@ internal static class Program
         Require(ctorArgs[1].Value is Type targetType && targetType == typeof(Payload<int>), "custom attribute data Type arg failed");
         ValidateIntTypedArgumentArray(ctorArgs[2], [1, 2, 3]);
         ValidateTypeTypedArgumentArray(ctorArgs[3], [typeof(string), typeof(Pair)]);
-        Require(ctorArgs[4].ArgumentType == typeof(object), "custom attribute data object arg type failed");
+        Require(ctorArgs[4].ArgumentType == typeof(int), "custom attribute data object arg encoded type failed");
         Require(ctorArgs[4].Value is int boxed && boxed == 42, "custom attribute data object arg value failed");
         ValidateObjectTypedArgumentArray(ctorArgs[5]);
 

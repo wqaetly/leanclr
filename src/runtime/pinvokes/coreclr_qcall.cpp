@@ -3427,6 +3427,14 @@ RtResultVoid runtime_type_handle_get_interfaces_invoker(metadata::RtManagedMetho
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_type_handle_register_collectible_type_dependency_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                              const interp::RtStackObject*, interp::RtStackObject*) noexcept
+{
+    // LeanCLR does not model collectible AssemblyLoadContext / LoaderAllocator yet.
+    // The .NET QCall is therefore a no-op for the current minimal net10 profile.
+    RET_VOID_OK();
+}
+
 RtResultVoid module_handle_get_token_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject* ret) noexcept
 {
@@ -4537,6 +4545,13 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, runtime_type_handle_get_interfaces_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetInterfaces", nullptr, runtime_type_handle_get_interfaces_invoker);
     vm::PInvokes::register_pinvoke("RuntimeTypeHandle_GetInterfaces", nullptr, runtime_type_handle_get_interfaces_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeTypeHandle::RegisterCollectibleTypeDependency(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallAssembly)",
+        nullptr, runtime_type_handle_register_collectible_type_dependency_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::RegisterCollectibleTypeDependency", nullptr,
+                                   runtime_type_handle_register_collectible_type_dependency_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_RegisterCollectibleTypeDependency", nullptr,
+                                   runtime_type_handle_register_collectible_type_dependency_invoker);
     vm::PInvokes::register_pinvoke("System.ModuleHandle::GetToken(System.Runtime.CompilerServices.QCallModule)", nullptr,
                                    module_handle_get_token_invoker);
     vm::PInvokes::register_pinvoke("System.ModuleHandle::GetToken", nullptr, module_handle_get_token_invoker);

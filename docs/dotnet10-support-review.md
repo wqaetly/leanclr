@@ -875,6 +875,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 在解释执行 runner 中修复 `TestBoxingMetadata`，让 boxed value type 的 `Object.GetType()` / `RuntimeType.Name` 子路径在 `System.Private.CoreLib` 下通过。
 - [ ] 将原作者 managed / Mono 测试资产分阶段迁移到 `.NET 10` 验证路径，并以最终全量跑通作为 LeanCLR `.NET 10` 接入合格线。
 - [ ] 将 `ManagedNet10.Smoke` 整理为阶段性定位集：保留真实会用到的纯逻辑能力，同时和原作者测试资产全量迁移计划对齐。
+- [x] 建立 `ManagedNet10.Smoke` 子入口矩阵门禁：`scripts/dotnet10/interp-smoke-matrix.ps1` 自动枚举并逐项执行 cold-start independent `Test*` 入口，当前默认 55 个子入口通过。
 - [x] 在官方 `.NET 10` SDK 下跑通 `C:\study\wqaetly\new\NKGGameFramework` 基线：Release 构建成功，`NKGGameFramework.Tests` 142/142 通过。
 - [x] 接入 `C:\study\wqaetly\new\NKGGameFramework` 真实 workload smoke 第一版：`ManagedNet10.NkgSmoke` + `scripts/dotnet10/nkg-smoke.ps1` 覆盖核心程序集加载、类型/成员枚举和 Odin/NKG 常见 `CustomAttributeData` 读取路径。
 - [x] 扩展 NKG smoke 到 async / serialization surface：默认 `RunCoreWorkloadSurfaceSmoke` 继续覆盖 reflection / attribute，并新增 `GameAsync`、`IGameTimer`、`IGameSerializer`、`IBinaryGameSerializer`、`IJsonGameSerializer`、`OdinGameSerializer` 的真实方法 surface 解析与泛型方法参数计数校验；后续再进入 UniTask 行为执行、Odin 序列化往返和 engine bridge。
@@ -1043,9 +1044,17 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - `ManagedNet10.NkgSmoke.Program::RunAsyncAndSerializationSurfaceSmoke` 已恢复泛型方法参数计数校验，覆盖 `GameAsync.FromResult<T>`、generic `WhenAll<T>` 以及 NKG serializer interface / implementation 的泛型方法 surface；包含方法泛型参数的构造泛型返回类型精确匹配仍后置。
 - 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` 通过并输出 `ok!`，`powershell -ExecutionPolicy Bypass -File scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`，`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 报告 `All entries matched extern signatures.`。
 
+2026-06-28 已建立 `ManagedNet10.Smoke` 子入口矩阵门禁：
+
+- 新增 `scripts/dotnet10/interp-smoke-matrix.ps1` / `.bat`，自动枚举 `ManagedNet10.Smoke.Program` 内的零参数 `Test*` 子入口，先复用 `interp-smoke.ps1 -BuildOnly` 构建一次，再逐项用 `leanrun -e` 进行冷启动解释执行验证。
+- 默认矩阵当前纳入 55 个 cold-start independent 子入口，并在本机通过 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke-matrix.ps1 -Configuration Release` 验证，输出 `ok! 55 smoke entries passed.`。
+- 默认排除项不是从覆盖范围删除测试，而是标记“聚合 `ManagedNet10.Smoke` 已覆盖、但尚未适合作为独立冷启动 gate”的深反射或复合场景，包括 `TestBasics`、`TestCustomAttributeDataOnly`、`TestFieldRawConstantValueOnly`、`TestGenericsDelegatesAndExceptions`、`TestReflection`、`TestReflectionInvokeMethodOnly`、`TestResolveUserStringOnly`、`TestSpan`、`TestStructLayoutAttributeOnly`。后续整理 smoke 时应优先把这些入口拆成更小的稳定切片，或补齐其冷启动前置状态。
+- 本轮还为 `.NET 10` CoreLib 触发的 `System.RuntimeTypeHandle::RegisterCollectibleTypeDependency(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallAssembly)` 增加最小 no-op QCall façade。LeanCLR 当前 minimal profile 不建模 collectible AssemblyLoadContext / LoaderAllocator，故该入口只用于保持 metadata/custom attribute 路径可继续执行。
+- `ManagedNet10.Smoke.Program::TestCustomAttributeDataBlobShapesOnly` 中 object-typed custom attribute argument 的 `ArgumentType` 期望已校准为 `.NET 10` 实际编码类型 `typeof(int)`，而不是旧探路预期的 `typeof(object)`。
+
 仍未完成：
 
-- `ManagedNet10.Smoke` 仍需要按 minimal profile 重新整理：保留真实会用到的纯逻辑能力，标注或移除仅用于 BCL 探路的深水区场景。
+- `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
 - 原作者 managed / Mono 测试资产仍需继续分阶段迁移并最终全量跑通；当前 `ManagedNet10.LegacyTests.Program::RunAll` 只证明已迁入 net10 测试程序集的集合绿色。
 - NKGGameFramework 真实纯逻辑 gate 还需要从 surface 扩展到 UniTask 行为执行、Odin 序列化/反序列化往返、核心 gameplay / ECS 样例执行；Hosting、Unity、Godot 仍不属于第一阶段边界。
 - Unity/Godot bridge、opaque handle registry、主线程 dispatcher 和 mock host 验证尚未实现。
