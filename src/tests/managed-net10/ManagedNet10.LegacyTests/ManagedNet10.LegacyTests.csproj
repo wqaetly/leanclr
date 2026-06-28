@@ -41,6 +41,7 @@
     <Compile Include="CorlibRuntimeServicesTestEntries.cs" />
     <Compile Include="CorlibDiagnosticsTestEntries.cs" />
     <Compile Include="CorlibGlobalizationTestEntries.cs" />
+    <Compile Include="CorlibLightLambdaTestEntries.cs" />
     <Compile Include="CorlibReflectionAssemblyTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeAssemblyTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeConstructorInfoTestEntries.cs" />
@@ -137,6 +138,7 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Objects\*.cs" LinkBase="Instructions\Objects" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\IcallReflection.cs" Link="CorlibTests\InternalCall\IcallReflection.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_Interop_Sys.cs" Link="CorlibTests\InternalCall\TC_Interop_Sys.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_LightLambda.cs" Link="CorlibTests\InternalCall\TC_LightLambda.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_AppDomain.cs" Link="CorlibTests\InternalCall\TC_System_AppDomain.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Console.cs" Link="CorlibTests\InternalCall\TC_System_Console.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Diagnostics_StackTrace.cs" Link="CorlibTests\InternalCall\TC_System_Diagnostics_StackTrace.cs" />
@@ -157,6 +159,8 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_OSSpecificSynchronizationContext.cs" Link="CorlibTests\InternalCall\TC_System_Threading_OSSpecificSynchronizationContext.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Thread.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Thread.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_ThreadPool.cs" Link="CorlibTests\InternalCall\TC_System_Threading_ThreadPool.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_WaitHandle.cs" Link="CorlibTests\InternalCall\TC_System_Threading_WaitHandle.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Object_Icalls.cs" Link="CorlibTests\InternalCall\TC_System_Object_Icalls.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_Assembly.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_Assembly.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_AssemblyName.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_AssemblyName.cs" />
