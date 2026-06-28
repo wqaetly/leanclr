@@ -7,6 +7,7 @@
 #include "gc/gc_roots.h"
 #include "icalls/system_enum.h"
 #include "icalls/system_runtimemethodhandle.h"
+#include "icalls/system_threading_monitor.h"
 #include "interp/eval_stack_op.h"
 #include "interp/machine_state.h"
 #include "metadata/metadata_name.h"
@@ -2247,6 +2248,18 @@ RtResultVoid thread_join_invoker(metadata::RtManagedMethodPointer, const metadat
     (void)interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
     (void)interp::EvalStackOp::get_param<int32_t>(params, 1);
     interp::EvalStackOp::set_return(ret, static_cast<int32_t>(1));
+    RET_VOID_OK();
+}
+
+RtResultVoid monitor_wait_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                  interp::RtStackObject* ret) noexcept
+{
+    vm::RtObject** monitor_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    vm::RtObject* monitor = monitor_slot != nullptr ? *monitor_slot : nullptr;
+    int32_t milliseconds_timeout = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result,
+                                            icalls::SystemThreadingMonitor::monitor_wait(monitor, milliseconds_timeout));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
 }
 
@@ -4959,6 +4972,10 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Threading.Thread::Join", nullptr, thread_join_invoker);
     vm::PInvokes::register_pinvoke("ThreadNative_Join(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)", nullptr, thread_join_invoker);
     vm::PInvokes::register_pinvoke("ThreadNative_Join", nullptr, thread_join_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Threading.Monitor::<Wait>g____PInvoke|24_0(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)", nullptr,
+        monitor_wait_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Monitor::<Wait>g____PInvoke|24_0", nullptr, monitor_wait_invoker);
     vm::PInvokes::register_pinvoke("System.Threading.Thread::PollGCInternal()", nullptr, thread_poll_gc_invoker);
     vm::PInvokes::register_pinvoke("System.Threading.Thread::PollGCInternal", nullptr, thread_poll_gc_invoker);
     vm::PInvokes::register_pinvoke("ThreadNative_PollGC()", nullptr, thread_poll_gc_invoker);
