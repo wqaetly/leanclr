@@ -435,6 +435,11 @@
     "header": "icalls/system_runtime_compilerservices_runtimehelpers.h"
   },
   {
+    "name": "System.Runtime.CompilerServices.RuntimeHelpers::TryEnsureSufficientExecutionStack",
+    "func": "SystemRuntimeCompilerServicesRuntimeHelpers::sufficient_execution_stack",
+    "header": "icalls/system_runtime_compilerservices_runtimehelpers.h"
+  },
+  {
     "name": "System.Runtime.InteropServices.Marshal::GetDelegateForFunctionPointerInternal(System.IntPtr,System.Type)",
     "func": "SystemRuntimeInteropServicesMarshal::get_delegate_for_function_pointer_internal",
     "header": "icalls/system_runtime_interopservices_marshal.h"

@@ -168,6 +168,10 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtime_compilerserv
      (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::run_class_constructor, run_class_constructor_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::SufficientExecutionStack",
      (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::sufficient_execution_stack, sufficient_execution_stack_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::TryEnsureSufficientExecutionStack()",
+     (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::sufficient_execution_stack, sufficient_execution_stack_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::TryEnsureSufficientExecutionStack",
+     (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::sufficient_execution_stack, sufficient_execution_stack_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::RunModuleConstructor(System.IntPtr)",
      (vm::InternalCallFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::run_module_constructor, run_module_constructor_invoker},
 };
