@@ -6,6 +6,7 @@
 #endif
 
 #include "build_config.h"
+#include "platform/rt_time.h"
 #include "utils/rt_vector.h"
 #include "vm/rt_string.h"
 
@@ -31,6 +32,16 @@ int32_t Kernel32::get_console_output_cp()
     return static_cast<int32_t>(::GetConsoleOutputCP());
 #else
     return 0;
+#endif
+}
+
+uint64_t Kernel32::get_tick_count64()
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return static_cast<uint64_t>(::GetTickCount64());
+#else
+    int64_t milliseconds = os::Time::get_current_time_nanos() / 1000000;
+    return milliseconds > 0 ? static_cast<uint64_t>(milliseconds) : 0;
 #endif
 }
 

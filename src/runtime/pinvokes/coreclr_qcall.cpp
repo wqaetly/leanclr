@@ -2338,6 +2338,13 @@ RtResultVoid kernel32_get_console_output_cp_invoker(metadata::RtManagedMethodPoi
     RET_VOID_OK();
 }
 
+RtResultVoid kernel32_get_tick_count64_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                               interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, platform::Kernel32::get_tick_count64());
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_get_std_handle_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject* ret) noexcept
 {
@@ -5004,6 +5011,12 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Kernel32::GetConsoleOutputCP", nullptr, kernel32_get_console_output_cp_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetConsoleOutputCP()", nullptr, kernel32_get_console_output_cp_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetConsoleOutputCP", nullptr, kernel32_get_console_output_cp_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetTickCount64()", nullptr, kernel32_get_tick_count64_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetTickCount64", nullptr, kernel32_get_tick_count64_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetTickCount64()", nullptr, kernel32_get_tick_count64_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetTickCount64", nullptr, kernel32_get_tick_count64_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetTickCount64()", nullptr, kernel32_get_tick_count64_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetTickCount64", nullptr, kernel32_get_tick_count64_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetStdHandle(System.Int32)", nullptr, kernel32_get_std_handle_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetStdHandle", nullptr, kernel32_get_std_handle_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetStdHandle(System.Int32)", nullptr, kernel32_get_std_handle_invoker);
