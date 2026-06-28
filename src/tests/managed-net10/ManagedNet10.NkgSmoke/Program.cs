@@ -7,7 +7,13 @@ internal static class Program
 {
     private static void Main()
     {
+        RunCoreWorkloadSurfaceSmoke();
+    }
+
+    public static void RunCoreWorkloadSurfaceSmoke()
+    {
         RunReflectionAttributeSmoke();
+        RunAsyncAndSerializationSurfaceSmoke();
     }
 
     public static void RunReflectionAttributeSmoke()
@@ -75,6 +81,39 @@ internal static class Program
         var serializerType = assembly.GetType("NKGGameFramework.Serialization.OdinGameSerializer");
         Require(serializerType != null, "NKG OdinGameSerializer type lookup failed");
         Require(serializerType!.GetConstructors(BindingFlags.Public | BindingFlags.Instance).Length > 0, "NKG OdinGameSerializer constructors missing");
+    }
+
+    public static void RunAsyncAndSerializationSurfaceSmoke()
+    {
+        var assembly = Assembly.Load("NKGGameFramework");
+
+        var gameAsyncType = RequireType(assembly, "NKGGameFramework.Async.GameAsync");
+        var gameTimerType = RequireType(assembly, "NKGGameFramework.Core.IGameTimer");
+        RequireProperty(gameAsyncType, "CompletedTask", "Cysharp.Threading.Tasks.UniTask");
+        RequireMethod(gameAsyncType, "FromResult", null, parameterCount: 1);
+        RequireMethod(gameAsyncType, "WhenAll", "Cysharp.Threading.Tasks.UniTask", parameterCount: 1);
+        RequireMethod(gameAsyncType, "WhenAny", null, parameterCount: 1);
+        RequireMethod(gameAsyncType, "Delay", "Cysharp.Threading.Tasks.UniTask", parameterCount: 3);
+        RequireMethod(gameAsyncType, "NextFrame", "Cysharp.Threading.Tasks.UniTask", parameterCount: 2);
+        RequireMethod(gameAsyncType, "DelayFrame", "Cysharp.Threading.Tasks.UniTask", parameterCount: 3);
+        RequireMethod(gameTimerType, "DelayAsync", "Cysharp.Threading.Tasks.UniTask", parameterCount: 2);
+        RequireMethod(gameTimerType, "NextFrameAsync", "Cysharp.Threading.Tasks.UniTask", parameterCount: 1);
+        RequireMethod(gameTimerType, "DelayFrameAsync", "Cysharp.Threading.Tasks.UniTask", parameterCount: 2);
+
+        var gameSerializerType = RequireType(assembly, "NKGGameFramework.Serialization.IGameSerializer");
+        var binarySerializerType = RequireType(assembly, "NKGGameFramework.Serialization.IBinaryGameSerializer");
+        var jsonSerializerType = RequireType(assembly, "NKGGameFramework.Serialization.IJsonGameSerializer");
+        var odinSerializerType = RequireType(assembly, "NKGGameFramework.Serialization.OdinGameSerializer");
+
+        RequireMethod(gameSerializerType, "Serialize", "System.String", parameterCount: 1);
+        RequireMethod(gameSerializerType, "Deserialize", null, parameterCount: 1);
+        RequireMethod(binarySerializerType, "SerializeToBytes", null, parameterCount: 1);
+        RequireMethod(binarySerializerType, "DeserializeFromBytes", null, parameterCount: 1);
+        RequireMethod(jsonSerializerType, "SerializeToJson", "System.String", parameterCount: 1);
+        RequireMethod(jsonSerializerType, "DeserializeFromJson", null, parameterCount: 1);
+        RequireMethod(odinSerializerType, "Serialize", "System.String", parameterCount: 1);
+        RequireMethod(odinSerializerType, "SerializeToBytes", null, parameterCount: 1);
+        RequireMethod(odinSerializerType, "SerializeToJson", "System.String", parameterCount: 1);
     }
 
     public static void RunAssemblyNameSmoke()
@@ -282,6 +321,55 @@ internal static class Program
         }
 
         return false;
+    }
+
+    private static Type RequireType(Assembly assembly, string fullName)
+    {
+        var type = assembly.GetType(fullName);
+        Require(type != null, fullName + " type lookup failed");
+        return type!;
+    }
+
+    private static void RequireProperty(Type declaringType, string name, string expectedPropertyTypeName)
+    {
+        var property = declaringType.GetProperty(name, BindingFlags.Public | BindingFlags.Static);
+        Require(property != null, declaringType.FullName + "." + name + " property missing");
+        Require(TypeShapeName(property!.PropertyType) == expectedPropertyTypeName, declaringType.FullName + "." + name + " property type mismatch");
+    }
+
+    private static void RequireMethod(
+        Type declaringType,
+        string name,
+        string? expectedReturnTypeName,
+        int parameterCount)
+    {
+        var methods = declaringType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        for (int i = 0; i < methods.Length; i++)
+        {
+            var method = methods[i];
+            if (method.Name != name ||
+                method.GetParameters().Length != parameterCount)
+            {
+                continue;
+            }
+
+            if (expectedReturnTypeName == null || TypeShapeName(method.ReturnType) == expectedReturnTypeName)
+            {
+                return;
+            }
+        }
+
+        throw new InvalidOperationException(declaringType.FullName + "." + name + " method surface missing");
+    }
+
+    private static string? TypeShapeName(Type type)
+    {
+        if (type.IsGenericType)
+        {
+            return type.GetGenericTypeDefinition().FullName;
+        }
+
+        return type.FullName;
     }
 
     private static void Require([DoesNotReturnIf(false)] bool condition, string message)

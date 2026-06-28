@@ -876,7 +876,8 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [ ] 将原作者 managed / Mono 测试资产分阶段迁移到 `.NET 10` 验证路径，并以最终全量跑通作为 LeanCLR `.NET 10` 接入合格线。
 - [ ] 将 `ManagedNet10.Smoke` 整理为阶段性定位集：保留真实会用到的纯逻辑能力，同时和原作者测试资产全量迁移计划对齐。
 - [x] 在官方 `.NET 10` SDK 下跑通 `C:\study\wqaetly\new\NKGGameFramework` 基线：Release 构建成功，`NKGGameFramework.Tests` 142/142 通过。
-- [x] 接入 `C:\study\wqaetly\new\NKGGameFramework` 真实 workload smoke 第一版：`ManagedNet10.NkgSmoke` + `scripts/dotnet10/nkg-smoke.ps1` 覆盖核心程序集加载、类型/成员枚举和 Odin/NKG 常见 `CustomAttributeData` 读取路径；后续扩展到 async、序列化和 bridge。
+- [x] 接入 `C:\study\wqaetly\new\NKGGameFramework` 真实 workload smoke 第一版：`ManagedNet10.NkgSmoke` + `scripts/dotnet10/nkg-smoke.ps1` 覆盖核心程序集加载、类型/成员枚举和 Odin/NKG 常见 `CustomAttributeData` 读取路径。
+- [x] 扩展 NKG smoke 到 async / serialization surface：默认 `RunCoreWorkloadSurfaceSmoke` 继续覆盖 reflection / attribute，并新增 `GameAsync`、`IGameTimer`、`IGameSerializer`、`IBinaryGameSerializer`、`IJsonGameSerializer`、`OdinGameSerializer` 的真实方法 surface 解析；后续再进入泛型方法反射细节、UniTask 行为执行、Odin 序列化往返和 engine bridge。
 - [ ] 接口静态虚函数、`static abstract`、generic math 等能力改为按需触发：只有真实纯逻辑 DLL 使用时才新增 fixture 和 runtime 支持。
 - [x] 根据 `coreclr-net10` extern diff 优先补齐启动路径 icalls / intrinsics，让最小 `ManagedNet10.Smoke` 能在 LeanCLR 解释执行 runner 中端到端执行。
 - [ ] 完整 `System.Private.CoreLib` / `.NET 10` runtime pack assembly resolver 后置：当前只保留 minimal profile 所需解析能力，遇到真实依赖再补。
@@ -1029,11 +1030,17 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - `System.Threading.ThreadPool`、`InternalThread`、`Timer`、`NativeEventCalls`、`OSSpecificSynchronizationContext` 均只出现在 `mono45` catalog，本轮已从默认 `.NET 10` icall 注册面移入 legacy 路径；`Monitor` 暂不整组迁移，因为当前实现中同时包含 `.NET 10` fast-path 形状，需要后续单独拆表。
 - 本机再次验证默认 `ManagedNet10.Smoke.Program::Main`、`ManagedNet10.LegacyTests.Program::RunAll`、`ManagedNet10.NkgSmoke.Program::RunReflectionAttributeSmoke` 三条目标入口均输出 `ok!`。
 
+2026-06-28 已把 NKGGameFramework smoke 从 reflection / attribute 第一版扩展到 async / serialization surface：
+
+- `ManagedNet10.NkgSmoke.Program::RunCoreWorkloadSurfaceSmoke` 成为默认 NKG gate，聚合原有 `RunReflectionAttributeSmoke` 与新增 `RunAsyncAndSerializationSurfaceSmoke`。
+- 新增 surface 检查覆盖 `NKGGameFramework.Async.GameAsync`、`NKGGameFramework.Core.IGameTimer`、`NKGGameFramework.Serialization.IGameSerializer`、`IBinaryGameSerializer`、`IJsonGameSerializer` 与 `OdinGameSerializer` 的真实方法 surface，并对当前 minimal profile 已稳定支持的非泛型 `UniTask` / `string` 返回形状做精确校验。
+- `scripts/dotnet10/nkg-smoke.ps1` 默认入口已切到 `RunCoreWorkloadSurfaceSmoke`；这仍是 metadata / reflection 级 gate，不代表 UniTask 调度行为或 Odin 序列化往返已经在 LeanCLR 内执行通过。
+- 本机已验证 `dotnet build src\tests\managed-net10\managed-net10.sln -c Release --no-restore`、`scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` 和 `scripts\dotnet10\api-scan.ps1 -Configuration Release` 通过；API scan 中 managed smoke/NKG smoke 与 NKG core/Odin/UniTask 均为 `unsupported: 0`。
+
 仍未完成：
 
-- `minimal-net10` API 白名单尚未形成正式清单。
-- `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描尚未实现。
 - `ManagedNet10.Smoke` 仍需要按 minimal profile 重新整理：保留真实会用到的纯逻辑能力，标注或移除仅用于 BCL 探路的深水区场景。
-- 项目真实纯逻辑 `net10.0` DLL smoke 尚未接入。
+- 原作者 managed / Mono 测试资产仍需继续分阶段迁移并最终全量跑通；当前 `ManagedNet10.LegacyTests.Program::RunAll` 只证明已迁入 net10 测试程序集的集合绿色。
+- NKGGameFramework 真实纯逻辑 gate 还需要从 surface 扩展到 UniTask 行为执行、Odin 序列化/反序列化往返、核心 gameplay / ECS 样例执行；Hosting、Unity、Godot 仍不属于第一阶段边界。
 - Unity/Godot bridge、opaque handle registry、主线程 dispatcher 和 mock host 验证尚未实现。
 - 完整 Microsoft.NETCore.App、generic math/static abstract、完整 ThreadPool、完整 resolver、AOT native run 均已后置，暂不作为当前未完成主线。

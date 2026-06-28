@@ -5,7 +5,7 @@ param(
     [string]$NativeBuildDir,
     [string]$CMakeGenerator,
     [string]$CMakeArchitecture,
-    [string]$Entry = "ManagedNet10.NkgSmoke.Program::RunReflectionAttributeSmoke",
+    [string]$Entry = "ManagedNet10.NkgSmoke.Program::RunCoreWorkloadSurfaceSmoke",
     [switch]$SkipNkgBuild
 )
 
