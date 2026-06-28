@@ -2906,6 +2906,224 @@ RtResultVoid kernel32_get_locale_info_ex_invoker(metadata::RtManagedMethodPointe
     RET_VOID_OK();
 }
 
+RtResultVoid kernel32_get_locale_info_ex_ptr_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                     const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 0);
+    uint32_t lc_type = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    void* locale_data = interp::EvalStackOp::get_param<void*>(params, 2);
+    int32_t locale_data_length = interp::EvalStackOp::get_param<int32_t>(params, 3);
+
+    int32_t result = platform::RtSys::get_locale_info_ex(locale_name, lc_type, reinterpret_cast<Utf16Char*>(locale_data), locale_data_length);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_lcid_to_locale_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    int32_t locale_id = interp::EvalStackOp::get_param<int32_t>(params, 0);
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+    int32_t locale_name_length = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    uint32_t flags = interp::EvalStackOp::get_param<uint32_t>(params, 3);
+
+    int32_t result = platform::RtSys::lcid_to_locale_name(locale_id, locale_name, locale_name_length, flags);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_locale_name_to_lcid_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 0);
+    uint32_t flags = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+
+    int32_t result = platform::RtSys::locale_name_to_lcid(locale_name, flags);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_resolve_locale_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 0);
+    Utf16Char* locale_name_buffer = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+    int32_t locale_name_buffer_length = interp::EvalStackOp::get_param<int32_t>(params, 2);
+
+    int32_t result = platform::RtSys::resolve_locale_name(locale_name, locale_name_buffer, locale_name_buffer_length);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+struct EnumSystemLocalesExManagedContext
+{
+    const metadata::RtMethodInfo* callback;
+    void* callback_context;
+    RtErr invoke_error;
+};
+
+int32_t enum_system_locales_ex_managed_callback(Utf16Char* locale_name, uint32_t flags, void* context) noexcept
+{
+    auto* managed_context = reinterpret_cast<EnumSystemLocalesExManagedContext*>(context);
+    if (managed_context == nullptr || managed_context->callback == nullptr)
+    {
+        return 0;
+    }
+
+    interp::RtStackObject callback_params[3]{};
+    interp::RtStackObject callback_ret[1]{};
+    interp::EvalStackOp::set_param(callback_params, 0, locale_name);
+    interp::EvalStackOp::set_param(callback_params, 1, flags);
+    interp::EvalStackOp::set_param(callback_params, 2, managed_context->callback_context);
+
+    const metadata::RtMethodInfo* callback = managed_context->callback;
+    RtResultVoid invoke_result = callback->invoke_method_ptr(callback->method_ptr, callback, callback_params, callback_ret);
+    if (invoke_result.is_err())
+    {
+        managed_context->invoke_error = invoke_result.unwrap_err();
+        return 0;
+    }
+
+    return interp::EvalStackOp::get_param<int32_t>(callback_ret, 0);
+}
+
+RtResultVoid kernel32_enum_system_locales_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                     const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto callback = interp::EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    uint32_t flags = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    void* context = interp::EvalStackOp::get_param<void*>(params, 2);
+    intptr_t reserved = interp::EvalStackOp::get_param<intptr_t>(params, 3);
+
+    EnumSystemLocalesExManagedContext managed_context{callback, context, RtErr::None};
+    int32_t result = platform::RtSys::enum_system_locales_ex(enum_system_locales_ex_managed_callback, flags, &managed_context, reserved);
+    if (managed_context.invoke_error != RtErr::None)
+    {
+        RET_ERR(managed_context.invoke_error);
+    }
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_calendar_info_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                   const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 0);
+    uint32_t calendar = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    intptr_t reserved = interp::EvalStackOp::get_param<intptr_t>(params, 2);
+    uint32_t cal_type = interp::EvalStackOp::get_param<uint32_t>(params, 3);
+    void* cal_data = interp::EvalStackOp::get_param<void*>(params, 4);
+    int32_t cal_data_length = interp::EvalStackOp::get_param<int32_t>(params, 5);
+    int32_t* value = interp::EvalStackOp::get_param<int32_t*>(params, 6);
+
+    int32_t result = platform::RtSys::get_calendar_info_ex(locale_name, calendar, reserved, cal_type, cal_data, cal_data_length, value);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+struct EnumCalendarInfoExExManagedContext
+{
+    const metadata::RtMethodInfo* callback;
+    void* callback_context;
+    RtErr invoke_error;
+};
+
+int32_t enum_calendar_info_ex_ex_managed_callback(Utf16Char* calendar_info, uint32_t calendar, intptr_t reserved, void* context) noexcept
+{
+    auto* managed_context = reinterpret_cast<EnumCalendarInfoExExManagedContext*>(context);
+    if (managed_context == nullptr || managed_context->callback == nullptr)
+    {
+        return 0;
+    }
+
+    interp::RtStackObject callback_params[4]{};
+    interp::RtStackObject callback_ret[1]{};
+    interp::EvalStackOp::set_param(callback_params, 0, calendar_info);
+    interp::EvalStackOp::set_param(callback_params, 1, calendar);
+    interp::EvalStackOp::set_param(callback_params, 2, reserved);
+    interp::EvalStackOp::set_param(callback_params, 3, managed_context->callback_context);
+
+    const metadata::RtMethodInfo* callback = managed_context->callback;
+    RtResultVoid invoke_result = callback->invoke_method_ptr(callback->method_ptr, callback, callback_params, callback_ret);
+    if (invoke_result.is_err())
+    {
+        managed_context->invoke_error = invoke_result.unwrap_err();
+        return 0;
+    }
+
+    return interp::EvalStackOp::get_param<int32_t>(callback_ret, 0);
+}
+
+RtResultVoid kernel32_enum_calendar_info_ex_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto callback = interp::EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+    uint32_t calendar = interp::EvalStackOp::get_param<uint32_t>(params, 2);
+    Utf16Char* reserved = interp::EvalStackOp::get_param<Utf16Char*>(params, 3);
+    uint32_t cal_type = interp::EvalStackOp::get_param<uint32_t>(params, 4);
+    void* context = interp::EvalStackOp::get_param<void*>(params, 5);
+
+    EnumCalendarInfoExExManagedContext managed_context{callback, context, RtErr::None};
+    int32_t result = platform::RtSys::enum_calendar_info_ex_ex(enum_calendar_info_ex_ex_managed_callback, locale_name, calendar,
+                                                               reserved, cal_type, &managed_context);
+    if (managed_context.invoke_error != RtErr::None)
+    {
+        RET_ERR(managed_context.invoke_error);
+    }
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+struct EnumTimeFormatsExManagedContext
+{
+    const metadata::RtMethodInfo* callback;
+    void* callback_context;
+    RtErr invoke_error;
+};
+
+int32_t enum_time_formats_ex_managed_callback(Utf16Char* time_format, void* context) noexcept
+{
+    auto* managed_context = reinterpret_cast<EnumTimeFormatsExManagedContext*>(context);
+    if (managed_context == nullptr || managed_context->callback == nullptr)
+    {
+        return 0;
+    }
+
+    interp::RtStackObject callback_params[2]{};
+    interp::RtStackObject callback_ret[1]{};
+    interp::EvalStackOp::set_param(callback_params, 0, time_format);
+    interp::EvalStackOp::set_param(callback_params, 1, managed_context->callback_context);
+
+    const metadata::RtMethodInfo* callback = managed_context->callback;
+    RtResultVoid invoke_result = callback->invoke_method_ptr(callback->method_ptr, callback, callback_params, callback_ret);
+    if (invoke_result.is_err())
+    {
+        managed_context->invoke_error = invoke_result.unwrap_err();
+        return 0;
+    }
+
+    return interp::EvalStackOp::get_param<int32_t>(callback_ret, 0);
+}
+
+RtResultVoid kernel32_enum_time_formats_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                   const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto callback = interp::EvalStackOp::get_param<const metadata::RtMethodInfo*>(params, 0);
+    Utf16Char* locale_name = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+    uint32_t flags = interp::EvalStackOp::get_param<uint32_t>(params, 2);
+    void* context = interp::EvalStackOp::get_param<void*>(params, 3);
+
+    EnumTimeFormatsExManagedContext managed_context{callback, context, RtErr::None};
+    int32_t result = platform::RtSys::enum_time_formats_ex(enum_time_formats_ex_managed_callback, locale_name, flags, &managed_context);
+    if (managed_context.invoke_error != RtErr::None)
+    {
+        RET_ERR(managed_context.invoke_error);
+    }
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_lc_map_string_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -5294,17 +5512,129 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
                                    kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx", nullptr, kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0(System.UInt16*,System.UInt32,System.Void*,System.Int32)",
+                                   nullptr, kernel32_get_locale_info_ex_ptr_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0(System.String,System.UInt32,System.Char*,System.Int32)",
                                    nullptr, kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0", nullptr,
-                                   kernel32_get_locale_info_ex_invoker);
+                                   kernel32_get_locale_info_ex_ptr_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetLocaleInfoEx(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
                                    kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetLocaleInfoEx", nullptr, kernel32_get_locale_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0(System.UInt16*,System.UInt32,System.Void*,System.Int32)",
+                                   nullptr, kernel32_get_locale_info_ex_ptr_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
                                    kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0", nullptr,
-                                   kernel32_get_locale_info_ex_invoker);
+                                   kernel32_get_locale_info_ex_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::LCIDToLocaleName(System.Int32,System.Char*,System.Int32,System.UInt32)", nullptr,
+                                   kernel32_lcid_to_locale_name_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::LCIDToLocaleName", nullptr, kernel32_lcid_to_locale_name_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::LCIDToLocaleName(System.Int32,System.Char*,System.Int32,System.UInt32)", nullptr,
+                                   kernel32_lcid_to_locale_name_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::LCIDToLocaleName", nullptr, kernel32_lcid_to_locale_name_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::LCIDToLocaleName(System.Int32,System.Char*,System.Int32,System.UInt32)", nullptr,
+                                   kernel32_lcid_to_locale_name_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::LCIDToLocaleName", nullptr, kernel32_lcid_to_locale_name_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<LocaleNameToLCID>g____PInvoke|26_0(System.UInt16*,System.UInt32)", nullptr,
+                                   kernel32_locale_name_to_lcid_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<LocaleNameToLCID>g____PInvoke|26_0", nullptr,
+                                   kernel32_locale_name_to_lcid_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<LocaleNameToLCID>g____PInvoke|26_0(System.UInt16*,System.UInt32)", nullptr,
+                                   kernel32_locale_name_to_lcid_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<LocaleNameToLCID>g____PInvoke|26_0", nullptr,
+                                   kernel32_locale_name_to_lcid_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<LocaleNameToLCID>g____PInvoke|26_0(System.UInt16*,System.UInt32)", nullptr,
+                                   kernel32_locale_name_to_lcid_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<LocaleNameToLCID>g____PInvoke|26_0", nullptr,
+                                   kernel32_locale_name_to_lcid_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ResolveLocaleName>g____PInvoke|45_0(System.UInt16*,System.Char*,System.Int32)", nullptr,
+                                   kernel32_resolve_locale_name_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ResolveLocaleName>g____PInvoke|45_0", nullptr,
+                                   kernel32_resolve_locale_name_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ResolveLocaleName>g____PInvoke|45_0(System.UInt16*,System.Char*,System.Int32)", nullptr,
+                                   kernel32_resolve_locale_name_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ResolveLocaleName>g____PInvoke|45_0", nullptr,
+                                   kernel32_resolve_locale_name_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ResolveLocaleName>g____PInvoke|45_0(System.UInt16*,System.Char*,System.Int32)", nullptr,
+                                   kernel32_resolve_locale_name_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ResolveLocaleName>g____PInvoke|45_0", nullptr,
+                                   kernel32_resolve_locale_name_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<EnumSystemLocalesEx>g____PInvoke|35_0(Interop/BOOL (System.Char*,System.UInt32,System.Void*),System.UInt32,System.Void*,System.IntPtr)",
+        nullptr, kernel32_enum_system_locales_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<EnumSystemLocalesEx>g____PInvoke|35_0", nullptr,
+                                   kernel32_enum_system_locales_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<EnumSystemLocalesEx>g____PInvoke|35_0(Interop/BOOL (System.Char*,System.UInt32,System.Void*),System.UInt32,System.Void*,System.IntPtr)",
+        nullptr, kernel32_enum_system_locales_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<EnumSystemLocalesEx>g____PInvoke|35_0", nullptr,
+                                   kernel32_enum_system_locales_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<EnumSystemLocalesEx>g____PInvoke|35_0(Interop/BOOL (System.Char*,System.UInt32,System.Void*),System.UInt32,System.Void*,System.IntPtr)",
+        nullptr, kernel32_enum_system_locales_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<EnumSystemLocalesEx>g____PInvoke|35_0", nullptr,
+                                   kernel32_enum_system_locales_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<GetCalendarInfoEx>g____PInvoke|37_0(System.UInt16*,System.UInt32,System.IntPtr,System.UInt32,System.IntPtr,System.Int32,System.Int32*)",
+        nullptr, kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetCalendarInfoEx>g____PInvoke|37_0", nullptr,
+                                   kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<GetCalendarInfoEx>g____PInvoke|37_0(System.UInt16*,System.UInt32,System.IntPtr,System.UInt32,System.IntPtr,System.Int32,System.Int32*)",
+        nullptr, kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetCalendarInfoEx>g____PInvoke|37_0", nullptr,
+                                   kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<GetCalendarInfoEx>g____PInvoke|37_0(System.UInt16*,System.UInt32,System.IntPtr,System.UInt32,System.IntPtr,System.Int32,System.Int32*)",
+        nullptr, kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetCalendarInfoEx>g____PInvoke|37_0", nullptr,
+                                   kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<GetCalendarInfoEx>g____PInvoke|38_0(System.UInt16*,System.UInt32,System.IntPtr,System.UInt32,System.IntPtr,System.Int32,System.IntPtr)",
+        nullptr, kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetCalendarInfoEx>g____PInvoke|38_0", nullptr,
+                                   kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<GetCalendarInfoEx>g____PInvoke|38_0(System.UInt16*,System.UInt32,System.IntPtr,System.UInt32,System.IntPtr,System.Int32,System.IntPtr)",
+        nullptr, kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetCalendarInfoEx>g____PInvoke|38_0", nullptr,
+                                   kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<GetCalendarInfoEx>g____PInvoke|38_0(System.UInt16*,System.UInt32,System.IntPtr,System.UInt32,System.IntPtr,System.Int32,System.IntPtr)",
+        nullptr, kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetCalendarInfoEx>g____PInvoke|38_0", nullptr,
+                                   kernel32_get_calendar_info_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<EnumCalendarInfoExEx>g____PInvoke|41_0(Interop/BOOL (System.Char*,System.UInt32,System.IntPtr,System.Void*),System.UInt16*,System.UInt32,System.UInt16*,System.UInt32,System.Void*)",
+        nullptr, kernel32_enum_calendar_info_ex_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<EnumCalendarInfoExEx>g____PInvoke|41_0", nullptr,
+                                   kernel32_enum_calendar_info_ex_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<EnumCalendarInfoExEx>g____PInvoke|41_0(Interop/BOOL (System.Char*,System.UInt32,System.IntPtr,System.Void*),System.UInt16*,System.UInt32,System.UInt16*,System.UInt32,System.Void*)",
+        nullptr, kernel32_enum_calendar_info_ex_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<EnumCalendarInfoExEx>g____PInvoke|41_0", nullptr,
+                                   kernel32_enum_calendar_info_ex_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<EnumCalendarInfoExEx>g____PInvoke|41_0(Interop/BOOL (System.Char*,System.UInt32,System.IntPtr,System.Void*),System.UInt16*,System.UInt32,System.UInt16*,System.UInt32,System.Void*)",
+        nullptr, kernel32_enum_calendar_info_ex_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<EnumCalendarInfoExEx>g____PInvoke|41_0", nullptr,
+                                   kernel32_enum_calendar_info_ex_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<EnumTimeFormatsEx>g____PInvoke|36_0(Interop/BOOL (System.Char*,System.Void*),System.UInt16*,System.UInt32,System.Void*)",
+        nullptr, kernel32_enum_time_formats_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<EnumTimeFormatsEx>g____PInvoke|36_0", nullptr,
+                                   kernel32_enum_time_formats_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<EnumTimeFormatsEx>g____PInvoke|36_0(Interop/BOOL (System.Char*,System.Void*),System.UInt16*,System.UInt32,System.Void*)",
+        nullptr, kernel32_enum_time_formats_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<EnumTimeFormatsEx>g____PInvoke|36_0", nullptr,
+                                   kernel32_enum_time_formats_ex_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<EnumTimeFormatsEx>g____PInvoke|36_0(Interop/BOOL (System.Char*,System.Void*),System.UInt16*,System.UInt32,System.Void*)",
+        nullptr, kernel32_enum_time_formats_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<EnumTimeFormatsEx>g____PInvoke|36_0", nullptr,
+                                   kernel32_enum_time_formats_ex_invoker);
     vm::PInvokes::register_pinvoke(
         "Interop/Kernel32::<LCMapStringEx>g____PInvoke|27_0(System.UInt16*,System.UInt32,System.Char*,System.Int32,System.Void*,System.Int32,System.Void*,System.Void*,System.IntPtr)",
         nullptr, kernel32_lc_map_string_ex_invoker);
