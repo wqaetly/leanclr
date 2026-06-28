@@ -44,6 +44,11 @@ namespace ManagedNet10.LegacyTests
             return RunType(type, skipNet10ReplacedLegacyTests: false);
         }
 
+        public static int RunTypeWithNet10Replacements(Type type)
+        {
+            return RunType(type, skipNet10ReplacedLegacyTests: true);
+        }
+
         private static int RunType(Type type, bool skipNet10ReplacedLegacyTests)
         {
             if (Attribute.IsDefined(type, typeof(IgnoreTestAttribute), inherit: true))
@@ -103,8 +108,16 @@ namespace ManagedNet10.LegacyTests
         {
             // The linked legacy source still carries Mono/mscorlib expectations for this case.
             // RunAssembly uses the net10-specific replacement in CorlibStringNet10Semantics instead.
-            return type == typeof(CorlibTests.InternalCall.TC_System_String) &&
-                methodName == "LastIndexOf_EmptyString";
+            if (type == typeof(CorlibTests.InternalCall.TC_System_String) &&
+                methodName == "LastIndexOf_EmptyString")
+            {
+                return true;
+            }
+
+            // The original assembly name test was compiled into CorlibTests.dll. The linked
+            // net10 assembly intentionally runs under ManagedNet10.LegacyTests instead.
+            return type == typeof(CorlibTests.InternalCall.TC_System_Reflection_AssemblyName) &&
+                methodName == "GetNativeName";
         }
     }
 }

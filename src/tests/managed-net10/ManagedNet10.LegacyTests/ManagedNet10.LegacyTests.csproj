@@ -33,6 +33,7 @@
     <Compile Include="CorlibRuntimeServicesTestEntries.cs" />
     <Compile Include="CorlibDiagnosticsTestEntries.cs" />
     <Compile Include="CorlibReflectionModuleTestEntries.cs" />
+    <Compile Include="CorlibReflectionAssemblyNameTestEntries.cs" />
     <Compile Include="CorlibStringTestEntries.cs" />
     <Compile Include="ToStringRegressionTestEntries.cs" />
     <Compile Include="Net10SpanRegressionTestEntries.cs" />
@@ -130,6 +131,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Math.cs" Link="CorlibTests\InternalCall\TC_System_Math.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Object_Icalls.cs" Link="CorlibTests\InternalCall\TC_System_Object_Icalls.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_AssemblyName.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_AssemblyName.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_RuntimeModule.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_RuntimeModule.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Runtime_CompilerServices_RuntimeHelper.cs" Link="CorlibTests\InternalCall\TC_System_Runtime_CompilerServices_RuntimeHelper.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Runtime_InteropServices_GCHandle.cs" Link="CorlibTests\InternalCall\TC_System_Runtime_InteropServices_GCHandle.cs" />

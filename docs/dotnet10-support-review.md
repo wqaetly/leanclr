@@ -866,6 +866,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 优先完成 `RuntimeType` 身份与 `System.Type` 相等性 façade：统一 `typeof(T)`、`Object.GetType()`、`Type.GetTypeFromHandle()`、`Signature.Init` / `MethodInfo.ReturnType` 的 canonical `RuntimeType`，并用 `ManagedNet10.LegacyTests.Program::RunLegacyDiscoverySmoke` 验收。
 - [x] 实现 `System.Reflection.RuntimeAssembly::GetFullName(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)` 的 .NET 10 QCall façade，并用 `ManagedNet10.Smoke.Program::TestAssemblyFullNameOnly` / `TestReflection` 验收。
 - [x] 修复 `RuntimeModule.ResolveField` 相关字段反射 façade：`RuntimeFieldHandleInternal` 支持 direct field desc、栈槽、boxed handle、`RtFieldInfo` 与 runtime field info stub 解码，并用 `ManagedNet10.LegacyTests.Program::RunCorlibReflectionRuntimeModule` 验收。
+- [x] 迁移旧 `TC_System_Reflection_AssemblyName` 反射素材：保留 `AssemblyName` 解析与 `CustomAttributeData` 参数读取，使用 net10 replacement 覆盖当前程序集名差异，并用 `RunCorlibReflectionAssemblyName` 验收。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1051,6 +1052,12 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 默认排除项不是从覆盖范围删除测试，而是标记“聚合 `ManagedNet10.Smoke` 已覆盖、但尚未适合作为独立冷启动 gate”的深反射或复合场景，包括 `TestBasics`、`TestCustomAttributeDataOnly`、`TestFieldRawConstantValueOnly`、`TestGenericsDelegatesAndExceptions`、`TestReflection`、`TestReflectionInvokeMethodOnly`、`TestResolveUserStringOnly`、`TestSpan`、`TestStructLayoutAttributeOnly`。后续整理 smoke 时应优先把这些入口拆成更小的稳定切片，或补齐其冷启动前置状态。
 - 本轮还为 `.NET 10` CoreLib 触发的 `System.RuntimeTypeHandle::RegisterCollectibleTypeDependency(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallAssembly)` 增加最小 no-op QCall façade。LeanCLR 当前 minimal profile 不建模 collectible AssemblyLoadContext / LoaderAllocator，故该入口只用于保持 metadata/custom attribute 路径可继续执行。
 - `ManagedNet10.Smoke.Program::TestCustomAttributeDataBlobShapesOnly` 中 object-typed custom attribute argument 的 `ArgumentType` 期望已校准为 `.NET 10` 实际编码类型 `typeof(int)`，而不是旧探路预期的 `typeof(object)`。
+
+2026-06-28 已迁移旧 `AssemblyName` 反射用例：
+
+- 将旧 `CorlibTests.InternalCall.TC_System_Reflection_AssemblyName` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionAssemblyName` 定位入口，并让 `RunAll` 程序集级扫描覆盖旧素材中的 `AssemblyName` 解析和 `CustomAttributeData` constructor/named argument 读取。
+- 旧 `GetNativeName` 用例原本断言当前程序集名为 `CorlibTests`，在 net10 迁移项目中应为 `ManagedNet10.LegacyTests`；本轮将该旧预期纳入 net10 replacement 过滤，并新增 `CorlibReflectionAssemblyNameNet10Semantics.GetNameReturnsCurrentNet10AssemblyName` 作为替代断言。
+- 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunCorlibReflectionAssemblyName"` 通过并输出 `ok!`，`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 和 `scripts\dotnet10\api-scan.ps1 -Configuration Release` 也均通过。
 
 仍未完成：
 
