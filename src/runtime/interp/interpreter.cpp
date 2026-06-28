@@ -2206,15 +2206,15 @@ method_start:
             LEANCLR_CASE_BEGIN0(ConvU4R4Short)
             {
                 float src = get_stack_value_at<float>(eval_stack_base, ir->src);
-                int32_t value = cast_float_to_i32<float, uint32_t>(src);
-                set_stack_value_at<int32_t>(eval_stack_base, ir->dst, value);
+                uint32_t value = cast_float_to_u32(src);
+                set_stack_value_at<uint32_t>(eval_stack_base, ir->dst, value);
             }
             LEANCLR_CASE_END0()
             LEANCLR_CASE_BEGIN0(ConvU4R8Short)
             {
                 double src = get_stack_value_at<double>(eval_stack_base, ir->src);
-                int32_t value = cast_float_to_i32<double, uint32_t>(src);
-                set_stack_value_at<int32_t>(eval_stack_base, ir->dst, value);
+                uint32_t value = cast_float_to_u32(src);
+                set_stack_value_at<uint32_t>(eval_stack_base, ir->dst, value);
             }
             LEANCLR_CASE_END0()
             LEANCLR_CASE_BEGIN0(ConvI8I4Short)
@@ -6731,15 +6731,15 @@ method_start:
                     LEANCLR_CASE_BEGIN2(ConvU4R4)
                     {
                         float src = get_stack_value_at<float>(eval_stack_base, ir->src);
-                        int32_t value = cast_float_to_i32<float, uint32_t>(src);
-                        set_stack_value_at<int32_t>(eval_stack_base, ir->dst, value);
+                        uint32_t value = cast_float_to_u32(src);
+                        set_stack_value_at<uint32_t>(eval_stack_base, ir->dst, value);
                     }
                     LEANCLR_CASE_END2()
                     LEANCLR_CASE_BEGIN2(ConvU4R8)
                     {
                         double src = get_stack_value_at<double>(eval_stack_base, ir->src);
-                        int32_t value = cast_float_to_i32<double, uint32_t>(src);
-                        set_stack_value_at<int32_t>(eval_stack_base, ir->dst, value);
+                        uint32_t value = cast_float_to_u32(src);
+                        set_stack_value_at<uint32_t>(eval_stack_base, ir->dst, value);
                     }
                     LEANCLR_CASE_END2()
                     LEANCLR_CASE_BEGIN2(ConvI8I4)
@@ -6777,15 +6777,15 @@ method_start:
                     LEANCLR_CASE_BEGIN2(ConvU8R4)
                     {
                         float src = get_stack_value_at<float>(eval_stack_base, ir->src);
-                        int64_t value = cast_float_to_i64<float, uint64_t>(src);
-                        set_stack_value_at<int64_t>(eval_stack_base, ir->dst, value);
+                        uint64_t value = cast_float_to_u64(src);
+                        set_stack_value_at<uint64_t>(eval_stack_base, ir->dst, value);
                     }
                     LEANCLR_CASE_END2()
                     LEANCLR_CASE_BEGIN2(ConvU8R8)
                     {
                         double src = get_stack_value_at<double>(eval_stack_base, ir->src);
-                        int64_t value = cast_float_to_i64<double, uint64_t>(src);
-                        set_stack_value_at<int64_t>(eval_stack_base, ir->dst, value);
+                        uint64_t value = cast_float_to_u64(src);
+                        set_stack_value_at<uint64_t>(eval_stack_base, ir->dst, value);
                     }
                     LEANCLR_CASE_END2()
                     LEANCLR_CASE_BEGIN2(ConvR4I4)

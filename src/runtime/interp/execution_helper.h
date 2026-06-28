@@ -1,4 +1,7 @@
 #pragma once
+#include <cmath>
+#include <limits>
+
 #include "core/rt_base.h"
 
 namespace leanclr
@@ -35,6 +38,34 @@ inline int64_t cast_float_to_i64(Src value)
     {
         return (int64_t)(value);
     }
+}
+
+template <typename Src>
+inline uint32_t cast_float_to_u32(Src value)
+{
+    if (std::isnan(value) || value <= static_cast<Src>(0))
+    {
+        return 0;
+    }
+    if (value >= static_cast<Src>(std::numeric_limits<uint32_t>::max()))
+    {
+        return std::numeric_limits<uint32_t>::max();
+    }
+    return static_cast<uint32_t>(value);
+}
+
+template <typename Src>
+inline uint64_t cast_float_to_u64(Src value)
+{
+    if (std::isnan(value) || value <= static_cast<Src>(0))
+    {
+        return 0;
+    }
+    if (value >= static_cast<Src>(std::numeric_limits<uint64_t>::max()))
+    {
+        return std::numeric_limits<uint64_t>::max();
+    }
+    return static_cast<uint64_t>(value);
 }
 
 template <typename Src, typename Dst>
