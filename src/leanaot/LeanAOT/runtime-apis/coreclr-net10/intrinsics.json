@@ -75,6 +75,11 @@
     "header": "intrinsics/system_threading_interlocked.h"
   },
   {
+    "name": "System.Threading.Interlocked::MemoryBarrier()",
+    "func": "SystemThreadingInterlocked::memory_barrier",
+    "header": "intrinsics/system_threading_interlocked.h"
+  },
+  {
     "name": "System.Threading.Interlocked::MemoryBarrier",
     "func": "SystemThreadingInterlocked::memory_barrier",
     "header": "intrinsics/system_threading_interlocked.h"
