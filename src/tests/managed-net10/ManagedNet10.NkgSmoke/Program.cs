@@ -90,30 +90,31 @@ internal static class Program
         var gameAsyncType = RequireType(assembly, "NKGGameFramework.Async.GameAsync");
         var gameTimerType = RequireType(assembly, "NKGGameFramework.Core.IGameTimer");
         RequireProperty(gameAsyncType, "CompletedTask", "Cysharp.Threading.Tasks.UniTask");
-        RequireMethod(gameAsyncType, "FromResult", null, parameterCount: 1);
-        RequireMethod(gameAsyncType, "WhenAll", "Cysharp.Threading.Tasks.UniTask", parameterCount: 1);
-        RequireMethod(gameAsyncType, "WhenAny", null, parameterCount: 1);
-        RequireMethod(gameAsyncType, "Delay", "Cysharp.Threading.Tasks.UniTask", parameterCount: 3);
-        RequireMethod(gameAsyncType, "NextFrame", "Cysharp.Threading.Tasks.UniTask", parameterCount: 2);
-        RequireMethod(gameAsyncType, "DelayFrame", "Cysharp.Threading.Tasks.UniTask", parameterCount: 3);
-        RequireMethod(gameTimerType, "DelayAsync", "Cysharp.Threading.Tasks.UniTask", parameterCount: 2);
-        RequireMethod(gameTimerType, "NextFrameAsync", "Cysharp.Threading.Tasks.UniTask", parameterCount: 1);
-        RequireMethod(gameTimerType, "DelayFrameAsync", "Cysharp.Threading.Tasks.UniTask", parameterCount: 2);
+        RequireMethod(gameAsyncType, "FromResult", null, parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(gameAsyncType, "WhenAll", "Cysharp.Threading.Tasks.UniTask", parameterCount: 1, genericArgumentCount: 0);
+        RequireMethod(gameAsyncType, "WhenAll", null, parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(gameAsyncType, "WhenAny", null, parameterCount: 1, genericArgumentCount: 0);
+        RequireMethod(gameAsyncType, "Delay", "Cysharp.Threading.Tasks.UniTask", parameterCount: 3, genericArgumentCount: 0);
+        RequireMethod(gameAsyncType, "NextFrame", "Cysharp.Threading.Tasks.UniTask", parameterCount: 2, genericArgumentCount: 0);
+        RequireMethod(gameAsyncType, "DelayFrame", "Cysharp.Threading.Tasks.UniTask", parameterCount: 3, genericArgumentCount: 0);
+        RequireMethod(gameTimerType, "DelayAsync", "Cysharp.Threading.Tasks.UniTask", parameterCount: 2, genericArgumentCount: 0);
+        RequireMethod(gameTimerType, "NextFrameAsync", "Cysharp.Threading.Tasks.UniTask", parameterCount: 1, genericArgumentCount: 0);
+        RequireMethod(gameTimerType, "DelayFrameAsync", "Cysharp.Threading.Tasks.UniTask", parameterCount: 2, genericArgumentCount: 0);
 
         var gameSerializerType = RequireType(assembly, "NKGGameFramework.Serialization.IGameSerializer");
         var binarySerializerType = RequireType(assembly, "NKGGameFramework.Serialization.IBinaryGameSerializer");
         var jsonSerializerType = RequireType(assembly, "NKGGameFramework.Serialization.IJsonGameSerializer");
         var odinSerializerType = RequireType(assembly, "NKGGameFramework.Serialization.OdinGameSerializer");
 
-        RequireMethod(gameSerializerType, "Serialize", "System.String", parameterCount: 1);
-        RequireMethod(gameSerializerType, "Deserialize", null, parameterCount: 1);
-        RequireMethod(binarySerializerType, "SerializeToBytes", null, parameterCount: 1);
-        RequireMethod(binarySerializerType, "DeserializeFromBytes", null, parameterCount: 1);
-        RequireMethod(jsonSerializerType, "SerializeToJson", "System.String", parameterCount: 1);
-        RequireMethod(jsonSerializerType, "DeserializeFromJson", null, parameterCount: 1);
-        RequireMethod(odinSerializerType, "Serialize", "System.String", parameterCount: 1);
-        RequireMethod(odinSerializerType, "SerializeToBytes", null, parameterCount: 1);
-        RequireMethod(odinSerializerType, "SerializeToJson", "System.String", parameterCount: 1);
+        RequireMethod(gameSerializerType, "Serialize", "System.String", parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(gameSerializerType, "Deserialize", null, parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(binarySerializerType, "SerializeToBytes", "System.Byte[]", parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(binarySerializerType, "DeserializeFromBytes", null, parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(jsonSerializerType, "SerializeToJson", "System.String", parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(jsonSerializerType, "DeserializeFromJson", null, parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(odinSerializerType, "Serialize", "System.String", parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(odinSerializerType, "SerializeToBytes", "System.Byte[]", parameterCount: 1, genericArgumentCount: 1);
+        RequireMethod(odinSerializerType, "SerializeToJson", "System.String", parameterCount: 1, genericArgumentCount: 1);
     }
 
     public static void RunAssemblyNameSmoke()
@@ -341,14 +342,16 @@ internal static class Program
         Type declaringType,
         string name,
         string? expectedReturnTypeName,
-        int parameterCount)
+        int parameterCount,
+        int genericArgumentCount)
     {
         var methods = declaringType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly);
         for (int i = 0; i < methods.Length; i++)
         {
             var method = methods[i];
             if (method.Name != name ||
-                method.GetParameters().Length != parameterCount)
+                method.GetParameters().Length != parameterCount ||
+                method.GetGenericArguments().Length != genericArgumentCount)
             {
                 continue;
             }

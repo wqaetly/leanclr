@@ -6,6 +6,7 @@
 #include "alloc/general_allocation.h"
 #include "gc/gc_roots.h"
 #include "icalls/system_enum.h"
+#include "icalls/system_runtimemethodhandle.h"
 #include "interp/eval_stack_op.h"
 #include "interp/machine_state.h"
 #include "metadata/metadata_name.h"
@@ -3091,6 +3092,25 @@ RtResultVoid runtime_type_handle_get_instantiation_invoker(metadata::RtManagedMe
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_method_handle_get_method_instantiation_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                    const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto method_arg = interp::EvalStackOp::get_param<const void*>(params, 0);
+    auto types_slot = interp::EvalStackOp::get_param<vm::RtArray**>(params, 1);
+    bool runtime_array = interp::EvalStackOp::get_param<int32_t>(params, 2) != 0;
+    if (types_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method,
+                                            vm::Reflection::get_method_info_from_handle_arg(method_arg));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, instantiation,
+                                            icalls::SystemRuntimeMethodHandle::get_method_instantiation(method, runtime_array));
+    *types_slot = instantiation;
+    RET_VOID_OK();
+}
+
 RtResultVoid runtime_type_handle_instantiate_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                      const interp::RtStackObject* params, interp::RtStackObject*) noexcept
 {
@@ -4637,6 +4657,13 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.RuntimeMethodHandle::GetMethodBody(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, runtime_method_handle_get_method_body_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeMethodHandle::GetMethodBody", nullptr, runtime_method_handle_get_method_body_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeMethodHandle::GetMethodInstantiation(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.ObjectHandleOnStack,Interop/BOOL)",
+        nullptr, runtime_method_handle_get_method_instantiation_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeMethodHandle::GetMethodInstantiation", nullptr,
+                                   runtime_method_handle_get_method_instantiation_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeMethodHandle_GetMethodInstantiation", nullptr,
+                                   runtime_method_handle_get_method_instantiation_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeMethodHandle::IsCAVisibleFromDecoratedType(System.Runtime.CompilerServices.QCallTypeHandle,System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallModule)",
         nullptr, runtime_method_handle_is_ca_visible_from_decorated_type_invoker);

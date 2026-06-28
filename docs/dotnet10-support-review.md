@@ -877,7 +877,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [ ] 将 `ManagedNet10.Smoke` 整理为阶段性定位集：保留真实会用到的纯逻辑能力，同时和原作者测试资产全量迁移计划对齐。
 - [x] 在官方 `.NET 10` SDK 下跑通 `C:\study\wqaetly\new\NKGGameFramework` 基线：Release 构建成功，`NKGGameFramework.Tests` 142/142 通过。
 - [x] 接入 `C:\study\wqaetly\new\NKGGameFramework` 真实 workload smoke 第一版：`ManagedNet10.NkgSmoke` + `scripts/dotnet10/nkg-smoke.ps1` 覆盖核心程序集加载、类型/成员枚举和 Odin/NKG 常见 `CustomAttributeData` 读取路径。
-- [x] 扩展 NKG smoke 到 async / serialization surface：默认 `RunCoreWorkloadSurfaceSmoke` 继续覆盖 reflection / attribute，并新增 `GameAsync`、`IGameTimer`、`IGameSerializer`、`IBinaryGameSerializer`、`IJsonGameSerializer`、`OdinGameSerializer` 的真实方法 surface 解析；后续再进入泛型方法反射细节、UniTask 行为执行、Odin 序列化往返和 engine bridge。
+- [x] 扩展 NKG smoke 到 async / serialization surface：默认 `RunCoreWorkloadSurfaceSmoke` 继续覆盖 reflection / attribute，并新增 `GameAsync`、`IGameTimer`、`IGameSerializer`、`IBinaryGameSerializer`、`IJsonGameSerializer`、`OdinGameSerializer` 的真实方法 surface 解析与泛型方法参数计数校验；后续再进入 UniTask 行为执行、Odin 序列化往返和 engine bridge。
 - [ ] 接口静态虚函数、`static abstract`、generic math 等能力改为按需触发：只有真实纯逻辑 DLL 使用时才新增 fixture 和 runtime 支持。
 - [x] 根据 `coreclr-net10` extern diff 优先补齐启动路径 icalls / intrinsics，让最小 `ManagedNet10.Smoke` 能在 LeanCLR 解释执行 runner 中端到端执行。
 - [ ] 完整 `System.Private.CoreLib` / `.NET 10` runtime pack assembly resolver 后置：当前只保留 minimal profile 所需解析能力，遇到真实依赖再补。
@@ -1036,6 +1036,12 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 新增 surface 检查覆盖 `NKGGameFramework.Async.GameAsync`、`NKGGameFramework.Core.IGameTimer`、`NKGGameFramework.Serialization.IGameSerializer`、`IBinaryGameSerializer`、`IJsonGameSerializer` 与 `OdinGameSerializer` 的真实方法 surface，并对当前 minimal profile 已稳定支持的非泛型 `UniTask` / `string` 返回形状做精确校验。
 - `scripts/dotnet10/nkg-smoke.ps1` 默认入口已切到 `RunCoreWorkloadSurfaceSmoke`；这仍是 metadata / reflection 级 gate，不代表 UniTask 调度行为或 Odin 序列化往返已经在 LeanCLR 内执行通过。
 - 本机已验证 `dotnet build src\tests\managed-net10\managed-net10.sln -c Release --no-restore`、`scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` 和 `scripts\dotnet10\api-scan.ps1 -Configuration Release` 通过；API scan 中 managed smoke/NKG smoke 与 NKG core/Odin/UniTask 均为 `unsupported: 0`。
+
+2026-06-28 已补齐 `.NET 10` `RuntimeMethodHandle_GetMethodInstantiation` QCall 最小路径：
+
+- `System.RuntimeMethodHandle::GetMethodInstantiation(System.RuntimeMethodHandleInternal,ObjectHandleOnStack,Interop/BOOL)` 已加入 `coreclr-net10` pinvoke catalog 和 QCall registry，可返回 generic method definition 的 `MVar` 参数数组、closed generic method 的 method instantiation 参数数组，以及非泛型方法的空数组。
+- `ManagedNet10.NkgSmoke.Program::RunAsyncAndSerializationSurfaceSmoke` 已恢复泛型方法参数计数校验，覆盖 `GameAsync.FromResult<T>`、generic `WhenAll<T>` 以及 NKG serializer interface / implementation 的泛型方法 surface；包含方法泛型参数的构造泛型返回类型精确匹配仍后置。
+- 本机已验证 `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` 通过并输出 `ok!`，`powershell -ExecutionPolicy Bypass -File scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`，`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 报告 `All entries matched extern signatures.`。
 
 仍未完成：
 

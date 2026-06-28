@@ -1,8 +1,10 @@
 #include "system_runtimemethodhandle.h"
 
+#include "metadata/metadata_cache.h"
 #include "vm/class.h"
 #include "vm/method.h"
 #include "vm/reflection.h"
+#include "vm/rt_array.h"
 #include "vm/rt_string.h"
 #include "vm/shim.h"
 
@@ -133,6 +135,59 @@ RtResult<int32_t> SystemRuntimeMethodHandle::get_generic_parameter_count(const m
     }
 
     RET_OK(static_cast<int32_t>(vm::Method::get_generic_param_count(method)));
+}
+
+RtResult<vm::RtArray*> SystemRuntimeMethodHandle::get_method_instantiation(const metadata::RtMethodInfo* method, bool runtime_array) noexcept
+{
+    if (method == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    const auto& corlib_types = vm::Class::get_corlib_types();
+    metadata::RtClass* element_klass = runtime_array ? corlib_types.cls_runtimetype : corlib_types.cls_systemtype;
+
+    if (method->generic_method != nullptr && method->generic_method->generic_context.method_inst != nullptr)
+    {
+        const metadata::RtGenericInst* inst = method->generic_method->generic_context.method_inst;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+            vm::RtArray*, result,
+            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(element_klass, inst->generic_arg_count,
+                                                        "SystemRuntimeMethodHandle::get_method_instantiation"));
+        for (uint8_t i = 0; i < inst->generic_arg_count; ++i)
+        {
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, type_obj,
+                                                    vm::Reflection::get_type_reflection_object(inst->generic_args[i]));
+            vm::Array::set_array_data_at<vm::RtReflectionType*>(result, i, type_obj);
+        }
+        RET_OK(result);
+    }
+
+    if (method->generic_container != nullptr)
+    {
+        const metadata::RtGenericContainer* generic_container = method->generic_container;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+            vm::RtArray*, result,
+            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(element_klass, generic_container->generic_param_count,
+                                                        "SystemRuntimeMethodHandle::get_method_instantiation"));
+        for (uint8_t i = 0; i < generic_container->generic_param_count; ++i)
+        {
+            const metadata::RtGenericParam* generic_param = &generic_container->generic_params[i];
+            metadata::RtTypeSig generic_param_type_sig =
+                metadata::RtTypeSig::new_byval_with_data(metadata::RtElementType::MVar, generic_param);
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, pooled,
+                                                    metadata::MetadataCache::get_pooled_typesig(generic_param_type_sig));
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, type_obj,
+                                                    vm::Reflection::get_type_reflection_object(pooled));
+            vm::Array::set_array_data_at<vm::RtReflectionType*>(result, i, type_obj);
+        }
+        RET_OK(result);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        vm::RtArray*, result,
+        LEANCLR_NEW_EMPTY_SZARRAY_BY_ELE_KLASS_INTERNAL(element_klass, "SystemRuntimeMethodHandle::get_method_instantiation"));
+    RET_OK(result);
 }
 
 RtResult<bool> SystemRuntimeMethodHandle::is_typical_method_definition(const metadata::RtMethodInfo* method) noexcept
