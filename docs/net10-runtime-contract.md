@@ -275,4 +275,6 @@
 
 当前第一道自动化 gate 已落在 `src/generator/check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .`：它会用 .NET 10 runtime pack externs 校验 `coreclr-net10` catalog，并禁止 `Mono.*`、`System.IO.Mono*`、`System.Reflection.Mono*`、`System.Runtime.Remoting*`、`mscorlib` 以及 Mono-era implementation symbol/header 混入 active profile。
 
+NKG/Odin 真实 workload gate 使用 `scripts/dotnet10/nkg-smoke.ps1`。脚本默认查找仓库同级的 `NKGGameFramework`，构建 `samples/NKGGameFramework.Sampler`，再把带齐 `NKGGameFramework`、`OdinSerializer` 和 `UniTask` 的 `net10.0` 输出目录传给 `ManagedNet10.NkgSmoke`。如果本机目录不同，可显式传入 `-NkgRoot`。
+
 完整 `RunAll` 和原作者测试资产仍是最终质量线，但执行顺序后置。测试失败时先归类：contract 缺口、façade 映射缺口、LeanCLR VM 通用语义缺口、或白名单外 API。只有前两类进入本计划的 contract/model 重写循环。
