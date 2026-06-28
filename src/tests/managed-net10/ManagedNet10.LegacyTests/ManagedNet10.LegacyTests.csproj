@@ -35,6 +35,7 @@
     <Compile Include="CorlibArrayBufferIntrinsicTestEntries.cs" />
     <Compile Include="CorlibCoreObjectValueTestEntries.cs" />
     <Compile Include="CorlibEnvironmentTestEntries.cs" />
+    <Compile Include="CorlibDelegateTestEntries.cs" />
     <Compile Include="CorlibRuntimeServicesTestEntries.cs" />
     <Compile Include="CorlibDiagnosticsTestEntries.cs" />
     <Compile Include="CorlibReflectionAssemblyTestEntries.cs" />
@@ -138,6 +139,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Array.cs" Link="CorlibTests\InternalCall\TC_System_Array.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Buffer.cs" Link="CorlibTests\InternalCall\TC_System_Buffer.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_DateTime.cs" Link="CorlibTests\InternalCall\TC_System_DateTime.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Delegate.cs" Link="CorlibTests\InternalCall\TC_System_Delegate.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Diagnostics_Debugger.cs" Link="CorlibTests\InternalCall\TC_System_Diagnostics_Debugger.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Diagnostics_StackFrame.cs" Link="CorlibTests\InternalCall\TC_System_Diagnostics_StackFrame.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Diagnostics_StopWatch.cs" Link="CorlibTests\InternalCall\TC_System_Diagnostics_StopWatch.cs" />
