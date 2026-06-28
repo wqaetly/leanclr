@@ -24,6 +24,7 @@ class SystemRuntimeFieldHandle
     static RtResult<const metadata::RtFieldInfo*> get_static_field_for_generic_type(const metadata::RtFieldInfo* field, const void* method_table) noexcept;
     static RtResult<bool> acquires_context_from_this(const metadata::RtFieldInfo* field) noexcept;
     static RtResult<const char*> get_utf8_name(const metadata::RtFieldInfo* field) noexcept;
+    static RtResult<bool> is_fast_path_supported(vm::RtReflectionField* field) noexcept;
 };
 
 } // namespace icalls

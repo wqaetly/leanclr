@@ -460,6 +460,11 @@
     "header": "icalls/system_runtimefieldhandle.h"
   },
   {
+    "name": "System.RuntimeFieldHandle::IsFastPathSupported(System.Reflection.RtFieldInfo)",
+    "func": "SystemRuntimeFieldHandle::is_fast_path_supported",
+    "header": "icalls/system_runtimefieldhandle.h"
+  },
+  {
     "name": "System.RuntimeMethodHandle::GetFunctionPointer(System.IntPtr)",
     "func": "SystemRuntimeMethodHandle::get_function_pointer",
     "header": "icalls/system_runtimemethodhandle.h"

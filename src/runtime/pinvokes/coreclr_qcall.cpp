@@ -873,7 +873,7 @@ RtResult<int32_t> get_runtime_type_fields(void* method_table, RtIntPtrSpan data,
     for (uint32_t i = 0; i < klass->field_count; ++i)
     {
         const metadata::RtFieldInfo* field = klass->fields + i;
-        if (!vm::Field::is_static_literal(field))
+        if ((field->flags & static_cast<uint32_t>(metadata::RtFieldAttribute::Literal)) == 0)
         {
             fields.push_back(field);
         }
@@ -3079,6 +3079,30 @@ RtResultVoid get_rva_field_info_invoker(metadata::RtManagedMethodPointer, const 
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_field_handle_set_value_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                    const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto field_arg = interp::EvalStackOp::get_param<const void*>(params, 0);
+    auto obj_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 1);
+    auto value_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 2);
+    (void)interp::EvalStackOp::get_param<void*>(params, 3);
+    (void)interp::EvalStackOp::get_param<void*>(params, 4);
+    (void)interp::EvalStackOp::get_param<void*>(params, 5);
+    (void)interp::EvalStackOp::get_param<void*>(params, 6);
+    auto is_class_initialized = interp::EvalStackOp::get_param<int32_t*>(params, 7);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field,
+                                            vm::Reflection::get_field_info_from_handle_arg(field_arg));
+    vm::RtObject* obj = obj_slot != nullptr ? *obj_slot : nullptr;
+    vm::RtObject* value = value_slot != nullptr ? *value_slot : nullptr;
+    RET_ERR_ON_FAIL(vm::Field::set_value_object(field, obj, value));
+    if (is_class_initialized != nullptr)
+    {
+        *is_class_initialized = 1;
+    }
+    RET_VOID_OK();
+}
+
 RtResultVoid get_declaring_type_handle_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -4569,6 +4593,11 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, get_rva_field_info_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeFieldHandle::<GetRVAFieldInfo>g____PInvoke|24_0", nullptr,
                                    get_rva_field_info_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeFieldHandle::<SetValue>g____PInvoke|34_0(System.IntPtr,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallTypeHandle,System.Int32*)",
+        nullptr, runtime_field_handle_set_value_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeFieldHandle::<SetValue>g____PInvoke|34_0", nullptr,
+                                   runtime_field_handle_set_value_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetDeclaringTypeHandle(System.IntPtr)", nullptr,
                                    get_declaring_type_handle_invoker);
     vm::PInvokes::register_pinvoke(

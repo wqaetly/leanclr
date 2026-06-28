@@ -473,6 +473,8 @@ RtResult<utils::SafeGPtrArray<metadata::RtFieldInfo>*> SystemRuntimeType::get_fi
         for (uint32_t i = 0; i < current_klass->field_count; ++i)
         {
             const metadata::RtFieldInfo* field = current_klass->fields + i;
+            if ((field->flags & static_cast<uint32_t>(metadata::RtFieldAttribute::Literal)) != 0)
+                continue;
 
             // Check name match
             if (!matches_member_name(field->name, name, case_insensitive))

@@ -868,6 +868,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 修复 `RuntimeModule.ResolveField` 相关字段反射 façade：`RuntimeFieldHandleInternal` 支持 direct field desc、栈槽、boxed handle、`RtFieldInfo` 与 runtime field info stub 解码，并用 `ManagedNet10.LegacyTests.Program::RunCorlibReflectionRuntimeModule` 验收。
 - [x] 迁移旧 `TC_System_Reflection_AssemblyName` 反射素材：保留 `AssemblyName` 解析与 `CustomAttributeData` 参数读取，使用 net10 replacement 覆盖当前程序集名差异，并用 `RunCorlibReflectionAssemblyName` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeAssembly` 反射素材：补齐 `GetImageRuntimeVersion`、`GetEntryPoint`、`GetManifestResourceNames` 三个 CoreCLR QCall façade，并用 `RunCorlibReflectionRuntimeAssembly` 验收。
+- [x] 迁移旧 `TC_System_Reflection_RuntimeFieldInfo` 反射素材：补齐 `RuntimeFieldHandle.SetValue` QCall/PInvoke façade 与 `IsFastPathSupported` internal call，并用 `RunCorlibReflectionRuntimeFieldInfo` / `RunAll` 验收。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1066,6 +1067,14 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 为 `.NET 10` CoreLib 当前实际调用链补齐 `System.Reflection.RuntimeAssembly::GetImageRuntimeVersion(QCallAssembly,StringHandleOnStack)`、`GetEntryPoint(QCallAssembly,ObjectHandleOnStack)`、`GetManifestResourceNames(QCallAssembly,ObjectHandleOnStack)` 三个 QCall/PInvoke façade，并写入 `coreclr-net10` pinvoke catalog。
 - 旧 `GetFullName`、`GetEntryPoint`、`GetManifestModule` 用例带有 `CorlibTests.dll`/library 形态预期；本轮将它们纳入 net10 replacement 过滤，并新增 `CorlibReflectionRuntimeAssemblyNet10Semantics` 覆盖 `ManagedNet10.LegacyTests` 的 FullName、Program.Main entry point 与 manifest module 名称。
 - 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionRuntimeAssembly`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
+
+2026-06-28 已迁移旧 `RuntimeFieldInfo` 反射用例：
+
+- 将旧 `CorlibTests.InternalCall.TC_System_Reflection_RuntimeFieldInfo` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionRuntimeFieldInfo` 定位入口，并让 `RunAll` 程序集级扫描覆盖 FieldType、DeclaringType、MetadataToken、GetValue、SetValue 和 GetFieldOffset 等旧 RuntimeFieldInfo 素材。
+- 为 `.NET 10` CoreLib 当前实际调用链补齐 `System.RuntimeFieldHandle::<SetValue>g____PInvoke|34_0` QCall/PInvoke façade，并登记到 `coreclr-net10` pinvoke catalog；同时新增 `System.RuntimeFieldHandle::IsFastPathSupported(System.Reflection.RtFieldInfo)` internal call，当前返回 `false`，让 CoreLib 走通用 FieldAccessor 路径而不是未建模的 fast path。
+- 旧 `GetRawConstantValue_ForConstField` 用例依赖 Mono-era `RuntimeFieldInfo.GetRawConstantValue` 形态；`.NET 10` 会把 literal field 作为 `MdFieldInfo` 路径处理，当前 `RtFieldInfo.GetRawConstantValue()` 本身会抛 `InvalidOperationException`。本轮将该旧断言纳入 net10 replacement 过滤，保留默认 `ManagedNet10.Smoke` 的 raw constant gate 继续覆盖实际常量读取。
+- `RuntimeTypeHandle.GetFields` / `RuntimeType.GetFields_native` 只过滤 `Literal` 字段，避免把无 Constant row 时也返回 OK 默认值的 `get_const_or_default_value()` 当作“有常量”判断，从而误伤 custom attribute named field 解析。
+- 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionRuntimeFieldInfo`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
 
 仍未完成：
 

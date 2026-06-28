@@ -25,7 +25,16 @@ namespace ManagedNet10.LegacyTests
         public static int RunAssembly(Assembly assembly)
         {
             int executed = 0;
-            Type[] types = assembly.GetTypes();
+            Type[] types;
+            try
+            {
+                types = assembly.GetTypes();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Failed to enumerate legacy test types in " + assembly.FullName, ex);
+            }
+
             for (int i = 0; i < types.Length; i++)
             {
                 executed += RunType(types[i], skipNet10ReplacedLegacyTests: true);
@@ -51,19 +60,48 @@ namespace ManagedNet10.LegacyTests
 
         private static int RunType(Type type, bool skipNet10ReplacedLegacyTests)
         {
-            if (Attribute.IsDefined(type, typeof(IgnoreTestAttribute), inherit: true))
+            bool isIgnored;
+            try
+            {
+                isIgnored = Attribute.IsDefined(type, typeof(IgnoreTestAttribute), inherit: true);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Failed to inspect legacy test attributes on type " + type.FullName, ex);
+            }
+
+            if (isIgnored)
             {
                 return 0;
             }
 
             object instance = null;
-            MethodInfo[] methods = type.GetMethods(TestMethodFlags);
+            MethodInfo[] methods;
+            try
+            {
+                methods = type.GetMethods(TestMethodFlags);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Failed to enumerate legacy test methods on " + type.FullName, ex);
+            }
+
             int executed = 0;
 
             for (int i = 0; i < methods.Length; i++)
             {
                 MethodInfo method = methods[i];
-                if (!Attribute.IsDefined(method, typeof(UnitTestAttribute), inherit: true))
+                bool isUnitTest;
+                try
+                {
+                    isUnitTest = Attribute.IsDefined(method, typeof(UnitTestAttribute), inherit: true);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Failed to inspect legacy test attributes on " + type.FullName + "." + method.Name, ex);
+                }
+
+                if (!isUnitTest)
                 {
                     continue;
                 }
@@ -127,6 +165,11 @@ namespace ManagedNet10.LegacyTests
                 return methodName == "GetFullName" ||
                     methodName == "GetEntryPoint" ||
                     methodName == "GetManifestModule";
+            }
+
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Reflection_RuntimeFieldInfo))
+            {
+                return methodName == "GetRawConstantValue_ForConstField";
             }
 
             return false;

@@ -145,6 +145,16 @@ RtResult<const char*> SystemRuntimeFieldHandle::get_utf8_name(const metadata::Rt
     RET_OK(field->name);
 }
 
+RtResult<bool> SystemRuntimeFieldHandle::is_fast_path_supported(vm::RtReflectionField* field) noexcept
+{
+    if (field == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    RET_OK(false);
+}
+
 /// @icall: System.RuntimeFieldHandle::GetValueDirect(System.Reflection.RuntimeFieldInfo,System.RuntimeType,System.Void*,System.RuntimeType)
 static RtResultVoid get_value_direct_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject* ret) noexcept
@@ -247,6 +257,16 @@ static RtResultVoid get_utf8_name_invoker(metadata::RtManagedMethodPointer, cons
     RET_VOID_OK();
 }
 
+/// @icall: System.RuntimeFieldHandle::IsFastPathSupported(System.Reflection.RtFieldInfo)
+static RtResultVoid is_fast_path_supported_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                   const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto field = EvalStackOp::get_param<vm::RtReflectionField*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeFieldHandle::is_fast_path_supported(field));
+    EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 static vm::InternalCallEntry s_internal_call_entries_system_runtimefieldhandle[] = {
     {"System.RuntimeFieldHandle::GetValueDirect(System.Reflection.RuntimeFieldInfo,System.RuntimeType,System.Void*,System.RuntimeType)",
      (vm::InternalCallFunction)&SystemRuntimeFieldHandle::get_value_direct, get_value_direct_invoker},
@@ -300,6 +320,10 @@ static vm::InternalCallEntry s_net10_internal_call_entries_system_runtimefieldha
      (vm::InternalCallFunction)&SystemRuntimeFieldHandle::get_utf8_name, get_utf8_name_invoker},
     {"System.RuntimeFieldHandle::GetUtf8NameInternal", (vm::InternalCallFunction)&SystemRuntimeFieldHandle::get_utf8_name,
      get_utf8_name_invoker},
+    {"System.RuntimeFieldHandle::IsFastPathSupported(System.Reflection.RtFieldInfo)",
+     (vm::InternalCallFunction)&SystemRuntimeFieldHandle::is_fast_path_supported, is_fast_path_supported_invoker},
+    {"System.RuntimeFieldHandle::IsFastPathSupported",
+     (vm::InternalCallFunction)&SystemRuntimeFieldHandle::is_fast_path_supported, is_fast_path_supported_invoker},
 };
 
 utils::Span<vm::InternalCallEntry> SystemRuntimeFieldHandle::get_net10_internal_call_entries() noexcept
