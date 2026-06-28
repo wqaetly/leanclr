@@ -46,8 +46,8 @@ namespace ManagedNet10.LegacyTests
             executed++;
             LegacyTestRunner.RunMethod(typeof(Tests.Bugs.GenericVirtualMethodReflection), "CallGenericInterfaceVirtual");
             executed++;
-            // Pending runtime gap: generic member-ref handle resolution in expression-tree construction.
-            // Tests.Bugs.ReadRuntimeHandleFromMemberRef.GenericMemberRef currently raises MissingMethodException.
+            LegacyTestRunner.RunMethod(typeof(Tests.Bugs.ReadRuntimeHandleFromMemberRef), "GenericMemberRef");
+            executed++;
 
             if (executed == 0)
             {

@@ -169,6 +169,11 @@ static bool is_net10_array_interface_set_item_method(const char* iface_name, con
     return std::strcmp(method_name, "set_Item") == 0 && std::strcmp(iface_name, "IList`1") == 0;
 }
 
+static bool is_net10_array_interface_copy_to_method(const char* iface_name, const char* method_name)
+{
+    return std::strcmp(method_name, "CopyTo") == 0 && std::strcmp(iface_name, "ICollection`1") == 0;
+}
+
 static bool is_net10_array_interface_get_enumerator_method(const char* iface_name, const char* method_name)
 {
     return std::strcmp(method_name, "GetEnumerator") == 0 && std::strcmp(iface_name, "IEnumerable`1") == 0;
@@ -208,6 +213,15 @@ static RtResult<const RtMethodInfo*> build_net10_array_interface_set_item_method
     const char* method_name = make_net10_array_interface_method_name(iface_name, "set_Item");
     const RtTypeSig* parameters[2] = {corlib.cls_int32->by_val, element_type_sig};
     return build_array_method(klass, method_name, corlib.cls_void->by_val, parameters, 2);
+}
+
+static RtResult<const RtMethodInfo*> build_net10_array_interface_copy_to_method(RtClass* klass, const char* iface_name,
+                                                                               const RtTypeSig* const* parameters, size_t parameter_count)
+{
+    assert(parameter_count == 2);
+    const CorLibTypes& corlib = Class::get_corlib_types();
+    const char* method_name = make_net10_array_interface_method_name(iface_name, "CopyTo");
+    return build_array_method(klass, method_name, corlib.cls_void->by_val, parameters, parameter_count);
 }
 
 static RtResult<const RtMethodInfo*> build_net10_array_interface_get_enumerator_method(RtClass* klass, const char* iface_name,
@@ -569,6 +583,14 @@ RtResultVoid ArrayClass::setup_vtables(metadata::RtClass* klass)
             {
                 DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, final_m,
                                                         build_net10_array_interface_set_item_method(klass, iface_name, element_type_sig));
+                entry->method_impl = final_m;
+                found = true;
+            }
+            if (!found && is_net10_array_interface_copy_to_method(iface_name, method_name))
+            {
+                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, final_m,
+                                                        build_net10_array_interface_copy_to_method(klass, iface_name, method->parameters,
+                                                                                                   method->parameter_count));
                 entry->method_impl = final_m;
                 found = true;
             }

@@ -7,6 +7,7 @@
 #include "runtime.h"
 #include "metadata/metadata_cache.h"
 #include "metadata/module_def.h"
+#include "intrinsics/system_array.h"
 #include "utils/mem_op.h"
 #include "rt_managed_types.h"
 #include "interp/eval_stack_op.h"
@@ -424,6 +425,24 @@ RtResultVoid Array::szarray_interface_count_invoker(metadata::RtManagedMethodPoi
     }
 
     interp::EvalStackOp::set_return(ret, get_array_length(arr));
+    RET_VOID_OK();
+}
+
+RtResultVoid Array::szarray_interface_copy_to_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* method,
+                                                      const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    assert(method && params);
+    assert(method->parameter_count == 2);
+
+    RtArray* arr = interp::EvalStackOp::get_param<RtArray*>(params, 0);
+    if (arr == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    RtArray* destination = interp::EvalStackOp::get_param<RtArray*>(params, 1);
+    int32_t destination_index = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    RET_ERR_ON_FAIL(intrinsics::SystemArray::copy(arr, 0, destination, destination_index, get_array_length(arr)));
     RET_VOID_OK();
 }
 
