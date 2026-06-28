@@ -200,6 +200,12 @@ namespace ManagedNet10.LegacyTests
                 return methodName.StartsWith("HasInstantiation_", StringComparison.Ordinal);
             }
 
+            if (type == typeof(CorlibTests.InternalCall.TC_System_RuntimeType))
+            {
+                return methodName == "GetNestedTypes_Public_ReturnsPublicNestedTypesOnly" ||
+                    methodName == "GetNestedTypes_PublicAndNonPublic_ReturnsAllNestedTypes";
+            }
+
             return false;
         }
     }

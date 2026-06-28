@@ -490,6 +490,11 @@
     "header": "icalls/system_runtimetypehandle.h"
   },
   {
+    "name": "System.RuntimeTypeHandle::GetUtf8NameInternal(System.Runtime.CompilerServices.MethodTable*)",
+    "func": "SystemRuntimeTypeHandle::get_utf8_name",
+    "header": "icalls/system_runtimetypehandle.h"
+  },
+  {
     "name": "System.RuntimeTypeHandle::GetAttributes",
     "func": "SystemRuntimeTypeHandle::get_attributes",
     "header": "icalls/system_runtimetypehandle.h"

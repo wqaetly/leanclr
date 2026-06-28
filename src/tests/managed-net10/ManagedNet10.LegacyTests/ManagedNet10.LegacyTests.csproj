@@ -30,6 +30,7 @@
     <Compile Include="CorlibTypeSystemTestEntries.cs" />
     <Compile Include="CorlibTypedReferenceTestEntries.cs" />
     <Compile Include="CorlibRuntimeTypeHandleTestEntries.cs" />
+    <Compile Include="CorlibRuntimeTypeTestEntries.cs" />
     <Compile Include="CorlibArrayBufferIntrinsicTestEntries.cs" />
     <Compile Include="CorlibCoreObjectValueTestEntries.cs" />
     <Compile Include="CorlibEnvironmentTestEntries.cs" />
@@ -159,6 +160,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Runtime_CompilerServices_RuntimeHelper.cs" Link="CorlibTests\InternalCall\TC_System_Runtime_CompilerServices_RuntimeHelper.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Runtime_InteropServices_GCHandle.cs" Link="CorlibTests\InternalCall\TC_System_Runtime_InteropServices_GCHandle.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Runtime_InteropServices_RuntimeInformation.cs" Link="CorlibTests\InternalCall\TC_System_Runtime_InteropServices_RuntimeInformation.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_RuntimeType.cs" Link="CorlibTests\InternalCall\TC_System_RuntimeType.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_RuntimeTypeHandle.cs" Link="CorlibTests\InternalCall\TC_System_RuntimeTypeHandle.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_String.cs" Link="CorlibTests\InternalCall\TC_System_String.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Interlocked.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Interlocked.cs" />

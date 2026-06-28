@@ -51,6 +51,13 @@ constexpr int32_t FORMAT_ASSEMBLY = 0x00000004;
 constexpr int32_t CALLING_CONVENTION_STANDARD = 0x0001;
 constexpr int32_t CALLING_CONVENTION_HAS_THIS = 0x0020;
 
+static uint8_t fold_ascii_case(uint8_t value) noexcept
+{
+    return value >= static_cast<uint8_t>('A') && value <= static_cast<uint8_t>('Z')
+        ? static_cast<uint8_t>(value + ('a' - 'A'))
+        : value;
+}
+
 struct RtOsVersionInfoEx
 {
     uint32_t dwOSVersionInfoSize;
@@ -963,7 +970,7 @@ RtResult<int32_t> get_rva_field_info(const metadata::RtFieldInfo* field, void** 
     RET_OK(1);
 }
 
-RtResult<const metadata::RtTypeSig*> get_declaring_type_handle(void* type_handle) noexcept
+RtResult<const void*> get_declaring_type_handle(void* type_handle) noexcept
 {
     if (type_handle == nullptr)
     {
@@ -973,7 +980,12 @@ RtResult<const metadata::RtTypeSig*> get_declaring_type_handle(void* type_handle
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
                                             vm::Reflection::get_type_sig_from_qcall_type_handle(type_handle, type_handle));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, declaring_klass, vm::Type::get_declaring_type(type_sig));
-    RET_OK(declaring_klass != nullptr ? declaring_klass->by_val : nullptr);
+    if (declaring_klass == nullptr)
+    {
+        RET_OK(nullptr);
+    }
+
+    return vm::Reflection::get_net10_method_table(declaring_klass->by_val);
 }
 
 RtResult<int32_t> get_module_token(void* qcall_module, void* native_handle) noexcept
@@ -2040,6 +2052,31 @@ RtResultVoid get_current_thread_invoker(metadata::RtManagedMethodPointer, const 
     vm::RtObject* current_thread = reinterpret_cast<vm::RtObject*>(vm::Thread::get_current_thread());
     RET_ERR_ON_FAIL(ensure_coreclr_thread_initialized(current_thread, true));
     *thread_slot = current_thread;
+    RET_VOID_OK();
+}
+
+RtResultVoid md_utf8_string_equals_case_insensitive_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto lhs = interp::EvalStackOp::get_param<const uint8_t*>(params, 0);
+    auto rhs = interp::EvalStackOp::get_param<const uint8_t*>(params, 1);
+    int32_t count = interp::EvalStackOp::get_param<int32_t>(params, 2);
+
+    int32_t equals = 0;
+    if (count >= 0 && (count == 0 || (lhs != nullptr && rhs != nullptr)))
+    {
+        equals = 1;
+        for (int32_t i = 0; i < count; ++i)
+        {
+            if (fold_ascii_case(lhs[i]) != fold_ascii_case(rhs[i]))
+            {
+                equals = 0;
+                break;
+            }
+        }
+    }
+
+    interp::EvalStackOp::set_return(ret, equals);
     RET_VOID_OK();
 }
 
@@ -3205,7 +3242,7 @@ RtResultVoid get_declaring_type_handle_invoker(metadata::RtManagedMethodPointer,
                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
     auto type_handle = interp::EvalStackOp::get_param<void*>(params, 0);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, declaring_type_handle,
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const void*, declaring_type_handle,
                                             get_declaring_type_handle(type_handle));
     interp::EvalStackOp::set_return(ret, declaring_type_handle);
     RET_VOID_OK();
@@ -4742,6 +4779,12 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, method_table_can_compare_bits_or_use_fast_get_hash_code_invoker);
     vm::PInvokes::register_pinvoke("System.ValueType::<CanCompareBitsOrUseFastGetHashCodeHelper>g____PInvoke|2_0", nullptr,
                                    method_table_can_compare_bits_or_use_fast_get_hash_code_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.MdUtf8String::<EqualsCaseInsensitive>g____PInvoke|0_0(System.Void*,System.Void*,System.Int32)", nullptr,
+        md_utf8_string_equals_case_insensitive_invoker);
+    vm::PInvokes::register_pinvoke("System.MdUtf8String::<EqualsCaseInsensitive>g____PInvoke|0_0", nullptr,
+                                   md_utf8_string_equals_case_insensitive_invoker);
+    vm::PInvokes::register_pinvoke("MdUtf8String_EqualsCaseInsensitive", nullptr, md_utf8_string_equals_case_insensitive_invoker);
     vm::PInvokes::register_pinvoke("BCrypt::BCryptGenRandom(System.IntPtr,System.Byte*,System.Int32,System.Int32)", nullptr,
                                    bcrypt_gen_random_invoker);
     vm::PInvokes::register_pinvoke("BCrypt::BCryptGenRandom", nullptr, bcrypt_gen_random_invoker);

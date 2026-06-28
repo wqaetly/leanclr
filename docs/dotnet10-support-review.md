@@ -879,6 +879,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 迁移旧 `TC_System_Reflection_MonoMethodInfo` 反射素材：覆盖 MethodInfo.ReturnParameter、返回参数类型和返回值自定义特性读取，并用 `RunCorlibReflectionMonoMethodInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_TypedReference` 素材：覆盖 `__makeref` / `__refvalue` 和 `.NET 10` 托管 `TypedReference.ToObject`，并用 `RunCorlibTypedReference` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_RuntimeTypeHandle` 素材：将旧 `HasInstantiation` 私有 API 断言替换为 `.NET 10` 当前 `System.RuntimeTypeHandle` / `System.Type.IsGenericType` 语义覆盖，并用 `RunCorlibRuntimeTypeHandle` / `RunAll` 验收。
+- [x] 迁移旧 `TC_System_RuntimeType` 素材：覆盖 nested type name lookup、ignore-case lookup 和 nested type enumeration，并用 `RunCorlibRuntimeType` / `RunAll` 验收。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1075,6 +1076,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 将旧 `CorlibTests.InternalCall.TC_System_RuntimeTypeHandle` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibRuntimeTypeHandle` 定位入口；程序集级 `RunAll` 继续扫描该旧素材，但对旧 `HasInstantiation_*` 方法启用 net10 replacement 过滤。
 - 旧素材原先通过反射调用 Mono/mscorlib 私有 `System.RuntimeTypeHandle.HasInstantiation(System.RuntimeType)`；`.NET 10` `System.Private.CoreLib` 已移除该 managed declaration。本轮新增 `CorlibRuntimeTypeHandleNet10Semantics`，显式验证 `System.RuntimeType` 仍可从 CoreLib assembly 解析、旧私有方法在 net10 中不存在，以及 `Type.IsGenericType` 对 primitive、open/closed generic、nullable、delegate、nested generic、generic parameter、array、pointer 和 byref 的当前语义。
 - 本机已验证 `RunCorlibRuntimeTypeHandle` 输出 `ok!`；`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke`、`scripts\dotnet10\api-scan.ps1 -Configuration Release`、`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 和 `git diff --check` 均通过。
+
+2026-06-28 已迁移旧 `RuntimeType` 用例：
+- 将旧 `CorlibTests.InternalCall.TC_System_RuntimeType` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibRuntimeType` 定位入口，并保留 `RunCorlibRuntimeTypeLegacy`、`RunCorlibRuntimeTypeNet10Semantics`、`RunCorlibRuntimeTypeGetNestedTypeByName` 和 `RunCorlibRuntimeTypeGetNestedTypeIgnoreCase` 细分入口，方便后续区分旧素材、net10 replacement 和 nested type name lookup 路径。
+- 旧 nested type enumeration 用例使用 LINQ 形态，并带有 Mono-era 执行假设；本轮将 `GetNestedTypes_Public_ReturnsPublicNestedTypesOnly` 与 `GetNestedTypes_PublicAndNonPublic_ReturnsAllNestedTypes` 纳入 net10 replacement 过滤，新增 `CorlibRuntimeTypeNet10Semantics` 用显式循环覆盖 `.NET 10` 当前 public/non-public nested type 枚举语义。
+- 为 `.NET 10` CoreLib 当前实际调用链补齐 `System.RuntimeTypeHandle::GetUtf8NameInternal(System.Runtime.CompilerServices.MethodTable*)` internal call，从 net10 MethodTable façade 解析回 LeanCLR `RtClass` 并返回 metadata UTF-8 名称；同时将 `RuntimeTypeHandle_GetDeclaringTypeHandle` 的返回值改为 net10 MethodTable façade，避免 CoreLib `TypeHandle` 路径把 raw `RtTypeSig*` 当作 MethodTable 读取。
+- 为 `RuntimeType.GetNestedType(..., ignoreCase: true)` 触发的 `System.MdUtf8String::<EqualsCaseInsensitive>g____PInvoke|0_0(System.Void*,System.Void*,System.Int32)` 增加 QCall/PInvoke façade，并登记到 `coreclr-net10` pinvoke catalog；当前实现按 ASCII 大小写折叠比较 metadata 名称，非 ASCII 字节保持精确比较。
+- 本机已验证 `RunCorlibRuntimeType` 输出 `ok!`；`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 和 `scripts\dotnet10\api-scan.ps1 -Configuration Release` 均通过。
 
 2026-06-28 已迁移旧 `FieldInfo` 反射用例：
 

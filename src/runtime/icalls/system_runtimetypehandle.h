@@ -19,6 +19,9 @@ class SystemRuntimeTypeHandle
     // Get metadata token
     static RtResult<int32_t> get_metadata_token(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
 
+    // Get UTF-8 metadata name from a .NET 10 MethodTable facade
+    static RtResult<const char*> get_utf8_name(const void* method_table) noexcept;
+
     // Get COR element type
     static RtResult<metadata::RtElementType> get_cor_element_type(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
 

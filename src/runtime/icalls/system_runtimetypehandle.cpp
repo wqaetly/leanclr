@@ -36,6 +36,23 @@ RtResult<int32_t> SystemRuntimeTypeHandle::get_metadata_token(const vm::RtReflec
     RET_OK(static_cast<int32_t>(klass->token));
 }
 
+RtResult<const char*> SystemRuntimeTypeHandle::get_utf8_name(const void* method_table) noexcept
+{
+    if (method_table == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass,
+                                            vm::Reflection::get_class_from_net10_method_table(method_table));
+    if (klass == nullptr || klass->name == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    RET_OK(klass->name);
+}
+
 RtResult<metadata::RtElementType> SystemRuntimeTypeHandle::get_cor_element_type(const vm::RtReflectionRuntimeType* runtime_type) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
@@ -513,6 +530,16 @@ static RtResultVoid get_metadata_token_invoker_system_runtimetypehandle(metadata
     RET_VOID_OK();
 }
 
+/// @icall: System.RuntimeTypeHandle::GetUtf8NameInternal(System.Runtime.CompilerServices.MethodTable*)
+static RtResultVoid get_utf8_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                          interp::RtStackObject* ret) noexcept
+{
+    auto method_table = EvalStackOp::get_param<const void*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, name, SystemRuntimeTypeHandle::get_utf8_name(method_table));
+    EvalStackOp::set_return(ret, name);
+    RET_VOID_OK();
+}
+
 /// @icall: System.RuntimeTypeHandle::GetCorElementType
 static RtResultVoid get_cor_element_type_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -803,6 +830,9 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] 
      get_metadata_token_invoker_system_runtimetypehandle},
     {"System.RuntimeTypeHandle::GetToken", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_metadata_token,
      get_metadata_token_invoker_system_runtimetypehandle},
+    {"System.RuntimeTypeHandle::GetUtf8NameInternal(System.Runtime.CompilerServices.MethodTable*)",
+     (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_utf8_name, get_utf8_name_invoker},
+    {"System.RuntimeTypeHandle::GetUtf8NameInternal", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_utf8_name, get_utf8_name_invoker},
     {"System.RuntimeTypeHandle::GetCorElementType", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_cor_element_type, get_cor_element_type_invoker},
     {"System.RuntimeTypeHandle::HasInstantiation", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::has_instantiation, has_instantiation_invoker},
     {"System.RuntimeTypeHandle::IsComObject(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_com_object, is_com_object_invoker},
@@ -872,6 +902,9 @@ static vm::InternalCallEntry s_net10_internal_call_entries_system_runtimetypehan
      get_metadata_token_invoker_system_runtimetypehandle},
     {"System.RuntimeTypeHandle::GetToken(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_metadata_token,
      get_metadata_token_invoker_system_runtimetypehandle},
+    {"System.RuntimeTypeHandle::GetUtf8NameInternal(System.Runtime.CompilerServices.MethodTable*)",
+     (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_utf8_name, get_utf8_name_invoker},
+    {"System.RuntimeTypeHandle::GetUtf8NameInternal", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_utf8_name, get_utf8_name_invoker},
     {"System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_array_rank, get_array_rank_invoker},
     {"System.RuntimeTypeHandle::GetElementTypeHandle(System.IntPtr)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_element_type_handle,
      get_element_type_handle_invoker},
