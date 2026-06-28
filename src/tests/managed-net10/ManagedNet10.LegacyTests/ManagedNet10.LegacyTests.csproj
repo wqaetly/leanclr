@@ -37,6 +37,7 @@
     <Compile Include="CorlibReflectionRuntimeFieldInfoTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeMethodInfoTestEntries.cs" />
     <Compile Include="CorlibReflectionRuntimeParameterInfoTestEntries.cs" />
+    <Compile Include="CorlibReflectionRuntimePropertyInfoTestEntries.cs" />
     <Compile Include="CorlibReflectionModuleTestEntries.cs" />
     <Compile Include="CorlibReflectionAssemblyNameTestEntries.cs" />
     <Compile Include="CorlibStringTestEntries.cs" />
@@ -142,6 +143,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_RuntimeFieldInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_RuntimeFieldInfo.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_RuntimeMethodInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_RuntimeMethodInfo.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_RuntimeParameterInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_RuntimeParameterInfo.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_RuntimePropertyInfo.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_RuntimePropertyInfo.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_RuntimeModule.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_RuntimeModule.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Runtime_CompilerServices_RuntimeHelper.cs" Link="CorlibTests\InternalCall\TC_System_Runtime_CompilerServices_RuntimeHelper.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Runtime_InteropServices_GCHandle.cs" Link="CorlibTests\InternalCall\TC_System_Runtime_InteropServices_GCHandle.cs" />
