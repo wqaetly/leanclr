@@ -60,6 +60,20 @@ bool should_skip_legacy_il_internal_call(const metadata::RtMethodInfo* method) n
         return true;
     }
 
+    if (std::strcmp(klass->image->get_name_no_ext(), STR_SYSTEM_PRIVATE_CORELIB_NAME) == 0 &&
+        std::strcmp(klass->name, "Kernel32") == 0)
+    {
+        return std::strcmp(method->name, "CloseHandle") == 0 ||
+               std::strcmp(method->name, "CreateFilePrivate") == 0 ||
+               std::strcmp(method->name, "DeleteFilePrivate") == 0 ||
+               std::strcmp(method->name, "GetFileAttributesExPrivate") == 0 ||
+               std::strcmp(method->name, "GetFileInformationByHandle") == 0 ||
+               std::strcmp(method->name, "GetFileInformationByHandleEx") == 0 ||
+               std::strcmp(method->name, "ReadFile") == 0 ||
+               std::strcmp(method->name, "SetFilePointerEx") == 0 ||
+               std::strcmp(method->name, "WriteFile") == 0;
+    }
+
     return std::strcmp(klass->namespaze, "System.Reflection") == 0 && std::strcmp(klass->name, "MethodBase") == 0 &&
            std::strcmp(method->name, "GetCurrentMethod") == 0 && method->parameter_count == 0;
 }

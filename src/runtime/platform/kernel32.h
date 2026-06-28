@@ -37,6 +37,9 @@ class Kernel32
     static bool delete_volume_mount_point_private(vm::RtString* mount_point);
     static bool free_library(intptr_t h_module);
     static intptr_t load_library_ex(vm::RtString* lib_filename, intptr_t reserved, int32_t flags);
+    static intptr_t load_library_ex(const Utf16Char* lib_filename, intptr_t reserved, int32_t flags);
+    static intptr_t get_proc_address(intptr_t h_module, const char* proc_name);
+    static uint32_t get_temp_path(uint32_t buffer_length, Utf16Char* buffer);
 
     static bool close_handle(intptr_t handle);
     static bool query_performance_frequency(int64_t* frequency);
@@ -61,10 +64,15 @@ class Kernel32
     static bool create_directory_private(vm::RtString* path, void* security_attributes);
     static intptr_t create_file_private(vm::RtString* name, int32_t desired_access, int32_t share_mode, void* security_attributes, int32_t creation_disposition,
                                         int32_t flags_and_attributes, intptr_t template_file);
+    static intptr_t create_file_private(const Utf16Char* name, int32_t desired_access, int32_t share_mode, void* security_attributes,
+                                        int32_t creation_disposition, int32_t flags_and_attributes, intptr_t template_file);
     static bool delete_file_private(vm::RtString* path);
+    static bool delete_file_private(const Utf16Char* path);
     static bool find_next_file(intptr_t find_handle, void* find_file_data);
     // static int32_t format_message(int32_t flags, intptr_t source, uint32_t message_id, int32_t language_id, Utf16Char* buffer, int32_t buffer_chars,
     //                               intptr_t* arguments, int32_t argument_count);
+    static bool get_file_attributes_ex_private(const Utf16Char* name, uint32_t file_info_level, void* file_info);
+    static bool get_file_information_by_handle(intptr_t h_file, void* file_information);
     static bool get_file_information_by_handle_ex(intptr_t h_file, int32_t file_information_class, void* file_information, uint32_t buffer_size);
     static int32_t get_logical_drives();
     static bool move_file_ex_private(vm::RtString* src, vm::RtString* dst, uint32_t flags);

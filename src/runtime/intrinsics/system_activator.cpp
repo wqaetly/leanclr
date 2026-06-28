@@ -3,7 +3,9 @@
 #include <cstring>
 
 #include "vm/class.h"
+#include "vm/method.h"
 #include "vm/object.h"
+#include "vm/runtime.h"
 #include "vm/type.h"
 
 namespace leanclr
@@ -44,6 +46,13 @@ RtResultVoid SystemActivator::create_instance(const metadata::RtMethodInfo* meth
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
                                             LEANCLR_CREATE_INSTANCE_INTERNAL(type_sig, "SystemActivator::create_instance"));
+    const metadata::RtMethodInfo* ctor = vm::Method::find_matched_method_in_class_by_name_and_param_count(obj->klass, ".ctor", 0);
+    if (ctor != nullptr)
+    {
+        interp::RtStackObject args[1]{};
+        args[0].obj = obj;
+        RET_ERR_ON_FAIL(vm::Runtime::invoke_stackobject_arguments_without_run_cctor(ctor, args, nullptr));
+    }
     interp::EvalStackOp::set_return(ret, obj);
     RET_VOID_OK();
 }

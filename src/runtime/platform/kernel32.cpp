@@ -277,11 +277,31 @@ bool Kernel32::free_library(intptr_t h_module)
 
 intptr_t Kernel32::load_library_ex(vm::RtString* lib_filename, intptr_t reserved, int32_t flags)
 {
+    if (lib_filename == nullptr)
+        return 0;
+    return load_library_ex(vm::String::get_chars_ptr(lib_filename), reserved, flags);
+}
+
+intptr_t Kernel32::load_library_ex(const Utf16Char* lib_filename, intptr_t reserved, int32_t flags)
+{
     (void)reserved;
     if (lib_filename == nullptr)
         return 0;
-    HMODULE m = ::LoadLibraryExW(reinterpret_cast<LPCWSTR>(vm::String::get_chars_ptr(lib_filename)), nullptr, static_cast<DWORD>(flags));
+    HMODULE m = ::LoadLibraryExW(reinterpret_cast<LPCWSTR>(lib_filename), nullptr, static_cast<DWORD>(flags));
     return reinterpret_cast<intptr_t>(m);
+}
+
+intptr_t Kernel32::get_proc_address(intptr_t h_module, const char* proc_name)
+{
+    if (h_module == 0 || proc_name == nullptr)
+        return 0;
+    FARPROC proc = ::GetProcAddress(reinterpret_cast<HMODULE>(h_module), proc_name);
+    return reinterpret_cast<intptr_t>(proc);
+}
+
+uint32_t Kernel32::get_temp_path(uint32_t buffer_length, Utf16Char* buffer)
+{
+    return static_cast<uint32_t>(::GetTempPathW(static_cast<DWORD>(buffer_length), reinterpret_cast<LPWSTR>(buffer)));
 }
 
 bool Kernel32::close_handle(intptr_t handle)
@@ -440,7 +460,16 @@ bool Kernel32::create_directory_private(vm::RtString* path, void* security_attri
 intptr_t Kernel32::create_file_private(vm::RtString* name, int32_t desired_access, int32_t share_mode, void* security_attributes, int32_t creation_disposition,
                                        int32_t flags_and_attributes, intptr_t template_file)
 {
-    HANDLE h = ::CreateFileW(reinterpret_cast<LPCWSTR>(vm::String::get_chars_ptr(name)), static_cast<DWORD>(desired_access), static_cast<DWORD>(share_mode),
+    return create_file_private(vm::String::get_chars_ptr(name), desired_access, share_mode, security_attributes, creation_disposition,
+                               flags_and_attributes, template_file);
+}
+
+intptr_t Kernel32::create_file_private(const Utf16Char* name, int32_t desired_access, int32_t share_mode, void* security_attributes,
+                                       int32_t creation_disposition, int32_t flags_and_attributes, intptr_t template_file)
+{
+    if (name == nullptr)
+        return reinterpret_cast<intptr_t>(INVALID_HANDLE_VALUE);
+    HANDLE h = ::CreateFileW(reinterpret_cast<LPCWSTR>(name), static_cast<DWORD>(desired_access), static_cast<DWORD>(share_mode),
                              static_cast<LPSECURITY_ATTRIBUTES>(security_attributes), static_cast<DWORD>(creation_disposition),
                              static_cast<DWORD>(flags_and_attributes), reinterpret_cast<HANDLE>(template_file));
     return reinterpret_cast<intptr_t>(h);
@@ -448,9 +477,14 @@ intptr_t Kernel32::create_file_private(vm::RtString* name, int32_t desired_acces
 
 bool Kernel32::delete_file_private(vm::RtString* path)
 {
+    return delete_file_private(path != nullptr ? vm::String::get_chars_ptr(path) : nullptr);
+}
+
+bool Kernel32::delete_file_private(const Utf16Char* path)
+{
     if (path == nullptr)
         return false;
-    return ::DeleteFileW(reinterpret_cast<LPCWSTR>(vm::String::get_chars_ptr(path))) != 0;
+    return ::DeleteFileW(reinterpret_cast<LPCWSTR>(path)) != 0;
 }
 
 bool Kernel32::find_next_file(intptr_t find_handle, void* find_file_data)
@@ -478,6 +512,20 @@ bool Kernel32::find_next_file(intptr_t find_handle, void* find_file_data)
 //                                                  static_cast<DWORD>(language_id), reinterpret_cast<LPWSTR>(buffer), static_cast<DWORD>(buffer_chars),
 //                                                  reinterpret_cast<va_list*>(args_ptr)));
 // }
+
+bool Kernel32::get_file_attributes_ex_private(const Utf16Char* name, uint32_t file_info_level, void* file_info)
+{
+    if (name == nullptr || file_info == nullptr)
+        return false;
+    return ::GetFileAttributesExW(reinterpret_cast<LPCWSTR>(name), static_cast<GET_FILEEX_INFO_LEVELS>(file_info_level), file_info) != 0;
+}
+
+bool Kernel32::get_file_information_by_handle(intptr_t h_file, void* file_information)
+{
+    if (file_information == nullptr)
+        return false;
+    return ::GetFileInformationByHandle(reinterpret_cast<HANDLE>(h_file), static_cast<LPBY_HANDLE_FILE_INFORMATION>(file_information)) != 0;
+}
 
 bool Kernel32::get_file_information_by_handle_ex(intptr_t h_file, int32_t file_information_class, void* file_information, uint32_t buffer_size)
 {

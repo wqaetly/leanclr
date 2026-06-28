@@ -212,11 +212,6 @@ namespace ManagedNet10.LegacyTests
                     methodName == "GetNestedTypes_PublicAndNonPublic_ReturnsAllNestedTypes";
             }
 
-            if (type == typeof(CorlibTests.InternalCall.TC_System_IO_MonoIO))
-            {
-                return methodName == "FileStream_ReadWriteRoundTrip";
-            }
-
             if (type == typeof(CorlibTests.InternalCall.TC_System_Console))
             {
                 return methodName == "KeyAvailable_ReadWithoutThrow" ||

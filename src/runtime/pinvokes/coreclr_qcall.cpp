@@ -2445,6 +2445,103 @@ RtResultVoid kernel32_get_full_path_name_invoker(metadata::RtManagedMethodPointe
     RET_VOID_OK();
 }
 
+RtResultVoid native_library_load_from_path_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                   const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto library_name = interp::EvalStackOp::get_param<const Utf16Char*>(params, 0);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 1);
+
+    intptr_t result = platform::Kernel32::load_library_ex(library_name, 0, 0);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid native_library_load_by_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto library_name = interp::EvalStackOp::get_param<const Utf16Char*>(params, 0);
+    (void)interp::EvalStackOp::get_param<void*>(params, 1);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 2);
+    uint32_t dll_import_search_path_flag = interp::EvalStackOp::get_param<uint32_t>(params, 3);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 4);
+
+    intptr_t result = platform::Kernel32::load_library_ex(library_name, 0, static_cast<int32_t>(dll_import_search_path_flag));
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid native_get_temp_path_w_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                            interp::RtStackObject* ret) noexcept
+{
+    int32_t buffer_length = interp::EvalStackOp::get_param<int32_t>(params, 0);
+    auto buffer = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+
+    uint32_t result = platform::Kernel32::get_temp_path(static_cast<uint32_t>(buffer_length), buffer);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+const metadata::RtMethodInfo* get_native_get_temp_path_w_method() noexcept
+{
+    static metadata::RtMethodInfo method{};
+    method.name = "Kernel32.GetTempPathW";
+    method.invoke_method_ptr = native_get_temp_path_w_invoker;
+    method.parameter_count = 2;
+    method.invoker_type = metadata::RtInvokerType::RuntimeImpl;
+    return &method;
+}
+
+RtResultVoid native_library_get_symbol_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                               const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    auto symbol_name = interp::EvalStackOp::get_param<const Utf16Char*>(params, 1);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 2);
+
+    intptr_t result = 0;
+    if (symbol_name != nullptr)
+    {
+        utils::Utf8StringBuilder symbol(symbol_name, static_cast<size_t>(utils::StringUtil::get_utf16chars_length(symbol_name)));
+        symbol.sure_null_terminator_but_not_append();
+        if (std::strcmp(symbol.get_const_chars(), "GetTempPathW") == 0 ||
+            std::strcmp(symbol.get_const_chars(), "GetTempPath2W") == 0)
+        {
+            result = reinterpret_cast<intptr_t>(get_native_get_temp_path_w_method());
+        }
+        else
+        {
+            result = platform::Kernel32::get_proc_address(handle, symbol.get_const_chars());
+        }
+    }
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid native_library_free_lib_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                             interp::RtStackObject*) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    (void)platform::Kernel32::free_library(handle);
+    RET_VOID_OK();
+}
+
+RtResultVoid ole32_co_create_guid_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                          interp::RtStackObject* ret) noexcept
+{
+    auto guid = interp::EvalStackOp::get_param<uint8_t*>(params, 0);
+    if (guid == nullptr)
+    {
+        interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0x80004003u)); // E_POINTER
+        RET_VOID_OK();
+    }
+
+    platform::Bcrypt::gen_random(0, guid, 16, 0);
+    guid[7] = static_cast<uint8_t>((guid[7] & 0x0Fu) | 0x40u); // version 4
+    guid[8] = static_cast<uint8_t>((guid[8] & 0x3Fu) | 0x80u); // RFC 4122 variant
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_write_file_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                          interp::RtStackObject* ret) noexcept
 {
@@ -2471,6 +2568,58 @@ RtResultVoid kernel32_write_file_invoker(metadata::RtManagedMethodPointer, const
     RET_VOID_OK();
 }
 
+RtResultVoid kernel32_read_file_intptr_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                               interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    auto buffer = interp::EvalStackOp::get_param<uint8_t*>(params, 1);
+    int32_t count = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    intptr_t bytes_read_ptr = interp::EvalStackOp::get_param<intptr_t>(params, 3);
+    (void)interp::EvalStackOp::get_param<void*>(params, 4);
+
+    int32_t error = 0;
+    int32_t read = os::File::read(handle, buffer, count, &error);
+    if (bytes_read_ptr != 0)
+    {
+        *reinterpret_cast<int32_t*>(bytes_read_ptr) = read > 0 ? read : 0;
+    }
+    if (read < 0)
+    {
+        vm::Marshal::set_last_win32_error(error);
+        interp::EvalStackOp::set_return(ret, 0);
+        RET_VOID_OK();
+    }
+
+    interp::EvalStackOp::set_return(ret, 1);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_read_file_int_ptr_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    auto buffer = interp::EvalStackOp::get_param<uint8_t*>(params, 1);
+    int32_t count = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    auto bytes_read = interp::EvalStackOp::get_param<int32_t*>(params, 3);
+    (void)interp::EvalStackOp::get_param<void*>(params, 4);
+
+    int32_t error = 0;
+    int32_t read = os::File::read(handle, buffer, count, &error);
+    if (bytes_read != nullptr)
+    {
+        *bytes_read = read > 0 ? read : 0;
+    }
+    if (read < 0)
+    {
+        vm::Marshal::set_last_win32_error(error);
+        interp::EvalStackOp::set_return(ret, 0);
+        RET_VOID_OK();
+    }
+
+    interp::EvalStackOp::set_return(ret, 1);
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_get_file_type_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                             interp::RtStackObject* ret) noexcept
 {
@@ -2482,6 +2631,99 @@ RtResultVoid kernel32_get_file_type_invoker(metadata::RtManagedMethodPointer, co
         vm::Marshal::set_last_win32_error(error);
     }
     interp::EvalStackOp::set_return(ret, file_type);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_close_handle_pinvoke_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                   interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    int32_t result = platform::Kernel32::close_handle(handle) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_create_file_private_ptr_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                      const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto name = interp::EvalStackOp::get_param<const Utf16Char*>(params, 0);
+    int32_t desired_access = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    int32_t share_mode = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    void* security_attributes = interp::EvalStackOp::get_param<void*>(params, 3);
+    int32_t creation_disposition = interp::EvalStackOp::get_param<int32_t>(params, 4);
+    int32_t flags_and_attributes = interp::EvalStackOp::get_param<int32_t>(params, 5);
+    intptr_t template_file = interp::EvalStackOp::get_param<intptr_t>(params, 6);
+
+    intptr_t result = platform::Kernel32::create_file_private(name, desired_access, share_mode, security_attributes, creation_disposition,
+                                                              flags_and_attributes, template_file);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_delete_file_private_ptr_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                      const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto path = interp::EvalStackOp::get_param<const Utf16Char*>(params, 0);
+    int32_t result = platform::Kernel32::delete_file_private(path) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_file_attributes_ex_private_ptr_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto name = interp::EvalStackOp::get_param<const Utf16Char*>(params, 0);
+    uint32_t file_info_level = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    void* file_info = interp::EvalStackOp::get_param<void*>(params, 2);
+    int32_t result = platform::Kernel32::get_file_attributes_ex_private(name, file_info_level, file_info) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_file_information_by_handle_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                             const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    void* file_info = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t result = platform::Kernel32::get_file_information_by_handle(handle, file_info) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_file_information_by_handle_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    int32_t file_information_class = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    void* file_information = interp::EvalStackOp::get_param<void*>(params, 2);
+    uint32_t buffer_size = interp::EvalStackOp::get_param<uint32_t>(params, 3);
+    int32_t result = platform::Kernel32::get_file_information_by_handle_ex(handle, file_information_class, file_information, buffer_size) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_set_file_pointer_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    int64_t distance = interp::EvalStackOp::get_param<int64_t>(params, 1);
+    auto new_file_pointer = interp::EvalStackOp::get_param<int64_t*>(params, 2);
+    uint32_t move_method = interp::EvalStackOp::get_param<uint32_t>(params, 3);
+
+    int32_t error = 0;
+    int64_t result = os::File::seek(handle, distance, static_cast<int32_t>(move_method), &error);
+    if (new_file_pointer != nullptr)
+    {
+        *new_file_pointer = result >= 0 ? result : 0;
+    }
+    if (result < 0)
+    {
+        vm::Marshal::set_last_win32_error(error);
+        interp::EvalStackOp::set_return(ret, 0);
+        RET_VOID_OK();
+    }
+
+    interp::EvalStackOp::set_return(ret, 1);
     RET_VOID_OK();
 }
 
@@ -2990,6 +3232,25 @@ RtResultVoid array_create_instance_invoker(metadata::RtManagedMethodPointer, con
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, array,
                                             create_array_instance(qcall_type_handle, native_handle, rank, lengths, lower_bounds, from_array_type));
+    *ret_array = array;
+    RET_VOID_OK();
+}
+
+RtResultVoid gc_allocate_new_array_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                           interp::RtStackObject*) noexcept
+{
+    auto array_type_handle = interp::EvalStackOp::get_param<void*>(params, 0);
+    int32_t length = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 2);
+    auto ret_array = interp::EvalStackOp::get_param<vm::RtArray**>(params, 3);
+    if (ret_array == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    int32_t lengths[1] = {length};
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, array,
+                                            create_array_instance(array_type_handle, array_type_handle, 1, lengths, nullptr, true));
     *ret_array = array;
     RET_VOID_OK();
 }
@@ -4548,6 +4809,118 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke(".Kernel32::<GetFullPathNameW>g____PInvoke|143_0(System.Char*,System.UInt32,System.Char*,System.IntPtr)",
                                    nullptr, kernel32_get_full_path_name_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::<GetFullPathNameW>g____PInvoke|143_0", nullptr, kernel32_get_full_path_name_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.NativeLibrary::<LoadFromPath>g____PInvoke|1_0(System.UInt16*,System.Int32)",
+                                   nullptr, native_library_load_from_path_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.NativeLibrary::<LoadFromPath>g____PInvoke|1_0", nullptr,
+                                   native_library_load_from_path_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.InteropServices.NativeLibrary::<LoadByName>g____PInvoke|2_0(System.UInt16*,System.Runtime.CompilerServices.QCallAssembly,System.Int32,System.UInt32,System.Int32)",
+        nullptr, native_library_load_by_name_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.NativeLibrary::<LoadByName>g____PInvoke|2_0", nullptr,
+                                   native_library_load_by_name_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.NativeLibrary::<GetSymbol>g____PInvoke|4_0(System.IntPtr,System.UInt16*,System.Int32)",
+                                   nullptr, native_library_get_symbol_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.NativeLibrary::<GetSymbol>g____PInvoke|4_0", nullptr,
+                                   native_library_get_symbol_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.NativeLibrary::FreeLib(System.IntPtr)", nullptr,
+                                   native_library_free_lib_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.NativeLibrary::FreeLib", nullptr, native_library_free_lib_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Ole32::CoCreateGuid(System.Guid*)", nullptr, ole32_co_create_guid_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Ole32::CoCreateGuid", nullptr, ole32_co_create_guid_invoker);
+    vm::PInvokes::register_pinvoke("Ole32::CoCreateGuid(System.Guid*)", nullptr, ole32_co_create_guid_invoker);
+    vm::PInvokes::register_pinvoke("Ole32::CoCreateGuid", nullptr, ole32_co_create_guid_invoker);
+    vm::PInvokes::register_pinvoke(".Ole32::CoCreateGuid(System.Guid*)", nullptr, ole32_co_create_guid_invoker);
+    vm::PInvokes::register_pinvoke(".Ole32::CoCreateGuid", nullptr, ole32_co_create_guid_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<CloseHandle>g____PInvoke|277_0(System.IntPtr)", nullptr,
+                                   kernel32_close_handle_pinvoke_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<CloseHandle>g____PInvoke|277_0", nullptr, kernel32_close_handle_pinvoke_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<CloseHandle>g____PInvoke|277_0(System.IntPtr)", nullptr,
+                                   kernel32_close_handle_pinvoke_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<CloseHandle>g____PInvoke|277_0", nullptr, kernel32_close_handle_pinvoke_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<CloseHandle>g____PInvoke|277_0(System.IntPtr)", nullptr,
+                                   kernel32_close_handle_pinvoke_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<CloseHandle>g____PInvoke|277_0", nullptr, kernel32_close_handle_pinvoke_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<CreateFilePrivate_IntPtr>g____PInvoke|84_0(System.UInt16*,System.Int32,System.IO.FileShare,Interop/Kernel32/SECURITY_ATTRIBUTES*,System.IO.FileMode,System.Int32,System.IntPtr)",
+        nullptr, kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<CreateFilePrivate_IntPtr>g____PInvoke|84_0", nullptr,
+                                   kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<CreateFilePrivate_IntPtr>g____PInvoke|84_0(System.UInt16*,System.Int32,System.IO.FileShare,Interop/Kernel32/SECURITY_ATTRIBUTES*,System.IO.FileMode,System.Int32,System.IntPtr)",
+        nullptr, kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<CreateFilePrivate_IntPtr>g____PInvoke|84_0", nullptr,
+                                   kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<CreateFilePrivate_IntPtr>g____PInvoke|84_0(System.UInt16*,System.Int32,System.IO.FileShare,Interop/Kernel32/SECURITY_ATTRIBUTES*,System.IO.FileMode,System.Int32,System.IntPtr)",
+        nullptr, kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<CreateFilePrivate_IntPtr>g____PInvoke|84_0", nullptr,
+                                   kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<CreateFilePrivate>g____PInvoke|63_0(System.UInt16*,System.Int32,System.IO.FileShare,Interop/Kernel32/SECURITY_ATTRIBUTES*,System.IO.FileMode,System.Int32,System.IntPtr)",
+        nullptr, kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<CreateFilePrivate>g____PInvoke|63_0", nullptr,
+                                   kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<CreateFilePrivate>g____PInvoke|63_0(System.UInt16*,System.Int32,System.IO.FileShare,Interop/Kernel32/SECURITY_ATTRIBUTES*,System.IO.FileMode,System.Int32,System.IntPtr)",
+        nullptr, kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<CreateFilePrivate>g____PInvoke|63_0", nullptr,
+                                   kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<CreateFilePrivate>g____PInvoke|63_0(System.UInt16*,System.Int32,System.IO.FileShare,Interop/Kernel32/SECURITY_ATTRIBUTES*,System.IO.FileMode,System.Int32,System.IntPtr)",
+        nullptr, kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<CreateFilePrivate>g____PInvoke|63_0", nullptr,
+                                   kernel32_create_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<DeleteFilePrivate>g____PInvoke|80_0(System.UInt16*)", nullptr,
+                                   kernel32_delete_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<DeleteFilePrivate>g____PInvoke|80_0", nullptr,
+                                   kernel32_delete_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<DeleteFilePrivate>g____PInvoke|80_0(System.UInt16*)", nullptr,
+                                   kernel32_delete_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<DeleteFilePrivate>g____PInvoke|80_0", nullptr,
+                                   kernel32_delete_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<DeleteFilePrivate>g____PInvoke|80_0(System.UInt16*)", nullptr,
+                                   kernel32_delete_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<DeleteFilePrivate>g____PInvoke|80_0", nullptr,
+                                   kernel32_delete_file_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<GetFileAttributesExPrivate>g____PInvoke|136_0(System.UInt16*,Interop/Kernel32/GET_FILEEX_INFO_LEVELS,Interop/Kernel32/WIN32_FILE_ATTRIBUTE_DATA*)",
+        nullptr, kernel32_get_file_attributes_ex_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetFileAttributesExPrivate>g____PInvoke|136_0", nullptr,
+                                   kernel32_get_file_attributes_ex_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<GetFileAttributesExPrivate>g____PInvoke|136_0(System.UInt16*,Interop/Kernel32/GET_FILEEX_INFO_LEVELS,Interop/Kernel32/WIN32_FILE_ATTRIBUTE_DATA*)",
+        nullptr, kernel32_get_file_attributes_ex_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetFileAttributesExPrivate>g____PInvoke|136_0", nullptr,
+                                   kernel32_get_file_attributes_ex_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<GetFileAttributesExPrivate>g____PInvoke|136_0(System.UInt16*,Interop/Kernel32/GET_FILEEX_INFO_LEVELS,Interop/Kernel32/WIN32_FILE_ATTRIBUTE_DATA*)",
+        nullptr, kernel32_get_file_attributes_ex_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetFileAttributesExPrivate>g____PInvoke|136_0", nullptr,
+                                   kernel32_get_file_attributes_ex_private_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetFileInformationByHandle>g____PInvoke|138_0(System.IntPtr,Interop/Kernel32/BY_HANDLE_FILE_INFORMATION*)",
+                                   nullptr, kernel32_get_file_information_by_handle_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetFileInformationByHandle>g____PInvoke|138_0", nullptr,
+                                   kernel32_get_file_information_by_handle_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetFileInformationByHandle>g____PInvoke|138_0(System.IntPtr,Interop/Kernel32/BY_HANDLE_FILE_INFORMATION*)",
+                                   nullptr, kernel32_get_file_information_by_handle_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetFileInformationByHandle>g____PInvoke|138_0", nullptr,
+                                   kernel32_get_file_information_by_handle_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetFileInformationByHandle>g____PInvoke|138_0(System.IntPtr,Interop/Kernel32/BY_HANDLE_FILE_INFORMATION*)",
+                                   nullptr, kernel32_get_file_information_by_handle_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetFileInformationByHandle>g____PInvoke|138_0", nullptr,
+                                   kernel32_get_file_information_by_handle_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetFileInformationByHandleEx>g____PInvoke|139_0(System.IntPtr,System.Int32,System.Void*,System.UInt32)",
+                                   nullptr, kernel32_get_file_information_by_handle_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetFileInformationByHandleEx>g____PInvoke|139_0", nullptr,
+                                   kernel32_get_file_information_by_handle_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetFileInformationByHandleEx>g____PInvoke|139_0(System.IntPtr,System.Int32,System.Void*,System.UInt32)",
+                                   nullptr, kernel32_get_file_information_by_handle_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetFileInformationByHandleEx>g____PInvoke|139_0", nullptr,
+                                   kernel32_get_file_information_by_handle_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetFileInformationByHandleEx>g____PInvoke|139_0(System.IntPtr,System.Int32,System.Void*,System.UInt32)",
+                                   nullptr, kernel32_get_file_information_by_handle_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetFileInformationByHandleEx>g____PInvoke|139_0", nullptr,
+                                   kernel32_get_file_information_by_handle_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<WriteFile>g____PInvoke|58_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.IntPtr)",
                                    nullptr, kernel32_write_file_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<WriteFile>g____PInvoke|58_0", nullptr, kernel32_write_file_invoker);
@@ -4557,6 +4930,67 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke(".Kernel32::<WriteFile>g____PInvoke|58_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.IntPtr)",
                                    nullptr, kernel32_write_file_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::<WriteFile>g____PInvoke|58_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<WriteFile>g____PInvoke|269_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.IntPtr)",
+                                   nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<WriteFile>g____PInvoke|269_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<WriteFile>g____PInvoke|269_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.IntPtr)",
+                                   nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<WriteFile>g____PInvoke|269_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<WriteFile>g____PInvoke|269_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.IntPtr)",
+                                   nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<WriteFile>g____PInvoke|269_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<WriteFile>g____PInvoke|271_0(System.IntPtr,System.Byte*,System.Int32,System.IntPtr,System.Threading.NativeOverlapped*)",
+        nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<WriteFile>g____PInvoke|271_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<WriteFile>g____PInvoke|271_0(System.IntPtr,System.Byte*,System.Int32,System.IntPtr,System.Threading.NativeOverlapped*)",
+        nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<WriteFile>g____PInvoke|271_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<WriteFile>g____PInvoke|271_0(System.IntPtr,System.Byte*,System.Int32,System.IntPtr,System.Threading.NativeOverlapped*)",
+        nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<WriteFile>g____PInvoke|271_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<WriteFile>g____PInvoke|272_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.Threading.NativeOverlapped*)",
+        nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<WriteFile>g____PInvoke|272_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<WriteFile>g____PInvoke|272_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.Threading.NativeOverlapped*)",
+        nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<WriteFile>g____PInvoke|272_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<WriteFile>g____PInvoke|272_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.Threading.NativeOverlapped*)",
+        nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<WriteFile>g____PInvoke|272_0", nullptr, kernel32_write_file_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ReadFile>g____PInvoke|199_0(System.IntPtr,System.Byte*,System.Int32,System.IntPtr,System.Threading.NativeOverlapped*)",
+                                   nullptr, kernel32_read_file_intptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ReadFile>g____PInvoke|199_0", nullptr, kernel32_read_file_intptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ReadFile>g____PInvoke|199_0(System.IntPtr,System.Byte*,System.Int32,System.IntPtr,System.Threading.NativeOverlapped*)",
+                                   nullptr, kernel32_read_file_intptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ReadFile>g____PInvoke|199_0", nullptr, kernel32_read_file_intptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ReadFile>g____PInvoke|199_0(System.IntPtr,System.Byte*,System.Int32,System.IntPtr,System.Threading.NativeOverlapped*)",
+                                   nullptr, kernel32_read_file_intptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ReadFile>g____PInvoke|199_0", nullptr, kernel32_read_file_intptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ReadFile>g____PInvoke|200_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.Threading.NativeOverlapped*)",
+                                   nullptr, kernel32_read_file_int_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ReadFile>g____PInvoke|200_0", nullptr, kernel32_read_file_int_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ReadFile>g____PInvoke|200_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.Threading.NativeOverlapped*)",
+                                   nullptr, kernel32_read_file_int_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ReadFile>g____PInvoke|200_0", nullptr, kernel32_read_file_int_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ReadFile>g____PInvoke|200_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.Threading.NativeOverlapped*)",
+                                   nullptr, kernel32_read_file_int_ptr_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ReadFile>g____PInvoke|200_0", nullptr, kernel32_read_file_int_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetFilePointerEx>g____PInvoke|225_0(System.IntPtr,System.Int64,System.Int64*,System.UInt32)",
+                                   nullptr, kernel32_set_file_pointer_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetFilePointerEx>g____PInvoke|225_0", nullptr,
+                                   kernel32_set_file_pointer_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<SetFilePointerEx>g____PInvoke|225_0(System.IntPtr,System.Int64,System.Int64*,System.UInt32)",
+                                   nullptr, kernel32_set_file_pointer_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<SetFilePointerEx>g____PInvoke|225_0", nullptr, kernel32_set_file_pointer_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<SetFilePointerEx>g____PInvoke|225_0(System.IntPtr,System.Int64,System.Int64*,System.UInt32)",
+                                   nullptr, kernel32_set_file_pointer_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<SetFilePointerEx>g____PInvoke|225_0", nullptr, kernel32_set_file_pointer_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetFileType>g____PInvoke|37_0(System.IntPtr)", nullptr,
                                    kernel32_get_file_type_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetFileType>g____PInvoke|37_0", nullptr, kernel32_get_file_type_invoker);
@@ -4973,6 +5407,10 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, array_create_instance_invoker);
     vm::PInvokes::register_pinvoke("System.Array::<InternalCreate>g____PInvoke|0_0", nullptr, array_create_instance_invoker);
     vm::PInvokes::register_pinvoke("System.Array::InternalCreate", nullptr, array_create_instance_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.GC::AllocateNewArray(System.IntPtr,System.Int32,System.GC/GC_ALLOC_FLAGS,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, gc_allocate_new_array_invoker);
+    vm::PInvokes::register_pinvoke("System.GC::AllocateNewArray", nullptr, gc_allocate_new_array_invoker);
     vm::PInvokes::register_pinvoke("Enum_GetValuesAndNames", nullptr, enum_get_values_and_names_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Enum::GetEnumValuesAndNames(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)",
