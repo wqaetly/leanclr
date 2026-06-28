@@ -32,6 +32,7 @@
     "Interop/Kernel32::<PeekConsoleInput>g____PInvoke|42_0(System.IntPtr,Interop/INPUT_RECORD*,System.Int32,System.Int32*)",
     "Interop/Kernel32::<ReadConsoleInput>g____PInvoke|45_0(System.IntPtr,Interop/INPUT_RECORD*,System.Int32,System.Int32*)",
     "System.ModuleHandle::GetMDStreamVersion(System.Runtime.CompilerServices.QCallModule)",
+    "System.ModuleHandle::<GetDynamicMethod>g____PInvoke|9_0(System.Runtime.CompilerServices.QCallModule,System.Byte*,System.Byte*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.Reflection.RuntimeAssembly::<GetCodeBase>g____PInvoke|14_0(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
     "System.Reflection.RuntimeAssembly::<GetVersion>g____PInvoke|71_0(System.Runtime.CompilerServices.QCallAssembly,System.Int32*,System.Int32*,System.Int32*,System.Int32*)",
     "System.Reflection.RuntimeAssembly::<InternalLoad>g____PInvoke|48_0(System.Reflection.NativeAssemblyNameParts*,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.StackCrawlMarkHandle,System.Boolean,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack)",

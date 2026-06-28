@@ -34,6 +34,7 @@ class Reflection
                                                                            int32_t method_attributes,
                                                                            int32_t binding_flags,
                                                                            RtObject* keepalive);
+    static RtResult<RtObject*> create_runtime_method_info_stub(const metadata::RtMethodInfo* method, RtObject* keepalive);
     static RtResult<RtReflectionConstructor*> create_runtime_constructor_info_object(const metadata::RtMethodInfo* method,
                                                                                     RtReflectionRuntimeType* declaring_type,
                                                                                     RtObject* reflected_type_cache,

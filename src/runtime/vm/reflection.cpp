@@ -1392,6 +1392,39 @@ RtResult<RtReflectionMethod*> Reflection::create_runtime_method_info_object(cons
     RET_OK(method_obj);
 }
 
+RtResult<RtObject*> Reflection::create_runtime_method_info_stub(const metadata::RtMethodInfo* method, RtObject* keepalive)
+{
+    if (method == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtModuleDef* corlib = metadata::RtModuleDef::get_corlib_module();
+    if (corlib == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, stub_klass,
+                                            corlib->get_class_by_name("System.RuntimeMethodInfoStub", false, true));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, stub, LEANCLR_NEWOBJ_INTERNAL(stub_klass, "Reflection::create_runtime_method_info_stub"));
+
+    const metadata::RtFieldInfo* value_field = Class::get_field_for_name(stub_klass, "m_value", true);
+    if (value_field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+    RET_ERR_ON_FAIL(Field::set_instance_value(value_field, stub, &method));
+
+    const metadata::RtFieldInfo* keepalive_field = Class::get_field_for_name(stub_klass, "m_keepalive", true);
+    if (keepalive_field != nullptr)
+    {
+        RET_ERR_ON_FAIL(Field::set_instance_value(keepalive_field, stub, &keepalive));
+    }
+
+    RET_OK(stub);
+}
+
 RtResult<RtReflectionConstructor*> Reflection::create_runtime_constructor_info_object(const metadata::RtMethodInfo* method,
                                                                                      RtReflectionRuntimeType* declaring_type,
                                                                                      RtObject* reflected_type_cache,

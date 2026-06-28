@@ -4711,6 +4711,168 @@ RtResultVoid module_handle_get_module_type_invoker(metadata::RtManagedMethodPoin
     RET_VOID_OK();
 }
 
+RtResult<vm::RtObject*> get_object_field_value(vm::RtObject* obj, const char* field_name) noexcept
+{
+    if (obj == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    const metadata::RtFieldInfo* field = vm::Class::get_field_for_name(obj->klass, field_name, true);
+    if (field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+
+    vm::RtObject* value = nullptr;
+    RET_ERR_ON_FAIL(vm::Field::get_instance_value(field, obj, &value));
+    RET_OK(value);
+}
+
+RtResult<vm::RtArray*> get_array_field_value(vm::RtObject* obj, const char* field_name) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, value, get_object_field_value(obj, field_name));
+    RET_OK(reinterpret_cast<vm::RtArray*>(value));
+}
+
+RtResult<const metadata::RtMethodInfo*> get_method_from_runtime_method_handle_object(vm::RtObject* method_handle_obj) noexcept
+{
+    if (method_handle_obj == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    const metadata::RtFieldInfo* value_field = vm::Class::get_field_for_name(method_handle_obj->klass, "m_value", true);
+    if (value_field == nullptr)
+    {
+        return vm::Reflection::get_method_info_from_handle_arg(method_handle_obj);
+    }
+
+    vm::RtObject* value = nullptr;
+    RET_ERR_ON_FAIL(vm::Field::get_instance_value(value_field, method_handle_obj, &value));
+    return vm::Reflection::get_method_info_from_handle_arg(value);
+}
+
+RtResult<const metadata::RtMethodInfo*> get_method_from_dynamic_scope_token_object(vm::RtObject* token_obj) noexcept
+{
+    if (token_obj == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    const metadata::RtFieldInfo* generic_method_handle_field = vm::Class::get_field_for_name(token_obj->klass, "m_methodHandle", true);
+    if (generic_method_handle_field != nullptr)
+    {
+        vm::RtObject* method_handle_value = nullptr;
+        RET_ERR_ON_FAIL(vm::Field::get_instance_value(generic_method_handle_field, token_obj, &method_handle_value));
+        return vm::Reflection::get_method_info_from_handle_arg(method_handle_value);
+    }
+
+    return get_method_from_runtime_method_handle_object(token_obj);
+}
+
+RtResult<vm::RtObject*> get_dynamic_scope_token_object(vm::RtObject* scope, int32_t token) noexcept
+{
+    constexpr int32_t DYNAMIC_SCOPE_TOKEN_INDEX_MASK = 0x00ffffff;
+    int32_t index = token & DYNAMIC_SCOPE_TOKEN_INDEX_MASK;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, tokens_list, get_object_field_value(scope, "m_tokens"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, items, get_array_field_value(tokens_list, "_items"));
+
+    int32_t length = vm::Array::get_array_length(items);
+    if (index < 0 || index >= length)
+    {
+        RET_ERR(RtErr::ArgumentOutOfRange);
+    }
+
+    RET_OK(vm::Array::get_array_data_at<vm::RtObject*>(items, index));
+}
+
+RtResult<const metadata::RtMethodInfo*> try_get_target_method_from_dynamic_resolver(vm::RtObject* resolver) noexcept
+{
+    constexpr uint8_t IL_CALL = 0x28;
+    constexpr uint8_t IL_CALLVIRT = 0x6f;
+    constexpr uint8_t IL_NEWOBJ = 0x73;
+    constexpr int32_t DYNAMIC_SCOPE_METHOD_TOKEN = 0x06000000;
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtArray*, code, get_array_field_value(resolver, "m_code"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, scope, get_object_field_value(resolver, "m_scope"));
+    int32_t code_length = vm::Array::get_array_length(code);
+
+    for (int32_t i = 0; i + 4 < code_length; ++i)
+    {
+        uint8_t op = vm::Array::get_array_data_at<uint8_t>(code, i);
+        if (op != IL_CALL && op != IL_CALLVIRT && op != IL_NEWOBJ)
+        {
+            continue;
+        }
+
+        int32_t token = static_cast<int32_t>(vm::Array::get_array_data_at<uint8_t>(code, i + 1)) |
+                        (static_cast<int32_t>(vm::Array::get_array_data_at<uint8_t>(code, i + 2)) << 8) |
+                        (static_cast<int32_t>(vm::Array::get_array_data_at<uint8_t>(code, i + 3)) << 16) |
+                        (static_cast<int32_t>(vm::Array::get_array_data_at<uint8_t>(code, i + 4)) << 24);
+        if ((token & 0xff000000) != DYNAMIC_SCOPE_METHOD_TOKEN)
+        {
+            continue;
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, token_obj, get_dynamic_scope_token_object(scope, token));
+        return get_method_from_dynamic_scope_token_object(token_obj);
+    }
+
+    RET_ERR(RtErr::MissingMethod);
+}
+
+RtResultVoid module_handle_get_dynamic_method_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                       const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    (void)interp::EvalStackOp::get_param<void*>(params, 0);
+    (void)interp::EvalStackOp::get_param<void*>(params, 1);
+    (void)interp::EvalStackOp::get_param<void*>(params, 2);
+    (void)interp::EvalStackOp::get_param<void*>(params, 3);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 4);
+    auto resolver_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 5);
+    auto result_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 6);
+    if (resolver_slot == nullptr || *resolver_slot == nullptr || result_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    vm::RtObject* resolver = *resolver_slot;
+    const metadata::RtMethodInfo* dynamic_method = nullptr;
+    auto target_method_ret = try_get_target_method_from_dynamic_resolver(resolver);
+    if (target_method_ret.is_ok())
+    {
+        dynamic_method = target_method_ret.unwrap();
+    }
+    else
+    {
+        RET_ERR_ON_FAIL(vm::Class::initialize_methods(const_cast<metadata::RtClass*>(resolver->klass)));
+        const metadata::RtMethodInfo* get_dynamic_method = vm::Class::get_method_for_name(resolver->klass, "GetDynamicMethod", 0, true);
+        if (get_dynamic_method == nullptr)
+        {
+            RET_ERR(RtErr::MissingMethod);
+        }
+
+        vm::RtObject* invoke_exception = nullptr;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, dynamic_method_obj,
+                                                vm::Reflection::invoke_method(get_dynamic_method, resolver, nullptr, &invoke_exception));
+        if (invoke_exception != nullptr)
+        {
+            RET_ERR(RtErr::ManagedException);
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+            const metadata::RtMethodInfo*, reflected_method,
+            vm::Reflection::get_method_info_from_reflection_object(reinterpret_cast<vm::RtReflectionMethod*>(dynamic_method_obj)));
+        dynamic_method = reflected_method;
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, stub,
+                                            vm::Reflection::create_runtime_method_info_stub(dynamic_method, resolver));
+    *result_slot = stub;
+    RET_VOID_OK();
+}
+
 RtResultVoid runtime_module_get_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject*) noexcept
 {
@@ -6356,6 +6518,11 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.ModuleHandle::GetModuleType(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, module_handle_get_module_type_invoker);
     vm::PInvokes::register_pinvoke("System.ModuleHandle::GetModuleType", nullptr, module_handle_get_module_type_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.ModuleHandle::<GetDynamicMethod>g____PInvoke|9_0(System.Runtime.CompilerServices.QCallModule,System.Byte*,System.Byte*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, module_handle_get_dynamic_method_invoker);
+    vm::PInvokes::register_pinvoke("System.ModuleHandle::<GetDynamicMethod>g____PInvoke|9_0", nullptr,
+                                   module_handle_get_dynamic_method_invoker);
     vm::PInvokes::register_pinvoke("AssemblyNative_GetTypeCore", nullptr, assembly_get_type_core_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Reflection.RuntimeAssembly::<GetTypeCore>g____PInvoke|25_0(System.Runtime.CompilerServices.QCallAssembly,System.Byte*,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
