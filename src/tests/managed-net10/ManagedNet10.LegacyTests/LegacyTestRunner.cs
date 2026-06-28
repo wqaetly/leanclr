@@ -220,6 +220,14 @@ namespace ManagedNet10.LegacyTests
                     methodName == "TreatControlCAsInput_ToggleWithoutThrow";
             }
 
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Globalization_CultureData) &&
+                methodName == "FillNumberData_ReturnsRightValue")
+            {
+                // Modern .NET culture data reports 3 NumberDecimalDigits for en-US/zh-CN.
+                // RunAssembly covers that behavior through CorlibGlobalizationNet10Semantics.
+                return true;
+            }
+
             return false;
         }
     }
