@@ -55,6 +55,7 @@
     "System.Runtime.Loader.AssemblyLoadContext::PrepareForAssemblyLoadContextRelease(System.IntPtr,System.IntPtr)",
     "System.Runtime.Loader.AssemblyLoadContext::GetLoadedAssemblies(System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.RuntimeMethodHandle::GetIsCollectible(System.RuntimeMethodHandleInternal)",
+    "System.Runtime.CompilerServices.RuntimeHelpers::CompileMethod(System.RuntimeMethodHandleInternal)",
     "System.RuntimeMethodHandle::GetMethodBody(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.RuntimeMethodHandle::GetMethodInstantiation(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.ObjectHandleOnStack,Interop/BOOL)",
     "System.RuntimeMethodHandle::GetStubIfNeededSlow(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",

@@ -3539,6 +3539,13 @@ RtResultVoid runtime_helpers_run_module_constructor_invoker(metadata::RtManagedM
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_helpers_compile_method_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                    const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    (void)interp::EvalStackOp::get_param<const void*>(params, 0);
+    RET_VOID_OK();
+}
+
 RtResultVoid runtime_helpers_allocate_uninitialized_clone_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                                   const interp::RtStackObject* params, interp::RtStackObject*) noexcept
 {
@@ -6235,6 +6242,11 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    runtime_helpers_run_module_constructor_invoker);
     vm::PInvokes::register_pinvoke("ReflectionInvocation_RunModuleConstructor", nullptr,
                                    runtime_helpers_run_module_constructor_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.CompilerServices.RuntimeHelpers::CompileMethod(System.RuntimeMethodHandleInternal)", nullptr,
+        runtime_helpers_compile_method_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.RuntimeHelpers::CompileMethod", nullptr,
+                                   runtime_helpers_compile_method_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Runtime.CompilerServices.RuntimeHelpers::AllocateUninitializedClone(System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, runtime_helpers_allocate_uninitialized_clone_invoker);
