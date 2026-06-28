@@ -36,6 +36,7 @@
     <Compile Include="CorlibCoreObjectValueTestEntries.cs" />
     <Compile Include="CorlibEnvironmentTestEntries.cs" />
     <Compile Include="CorlibDelegateTestEntries.cs" />
+    <Compile Include="CorlibIOTestEntries.cs" />
     <Compile Include="CorlibRuntimeServicesTestEntries.cs" />
     <Compile Include="CorlibDiagnosticsTestEntries.cs" />
     <Compile Include="CorlibReflectionAssemblyTestEntries.cs" />
@@ -146,6 +147,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Enum.cs" Link="CorlibTests\InternalCall\TC_System_Enum.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Environment.cs" Link="CorlibTests\InternalCall\TC_System_Environment.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_GC.cs" Link="CorlibTests\InternalCall\TC_System_GC.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_IO_MonoIO.cs" Link="CorlibTests\InternalCall\TC_System_IO_MonoIO.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Math.cs" Link="CorlibTests\InternalCall\TC_System_Math.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Object_Icalls.cs" Link="CorlibTests\InternalCall\TC_System_Object_Icalls.cs" />

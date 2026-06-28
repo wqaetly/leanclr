@@ -14,6 +14,7 @@
 #include "metadata/module_def.h"
 #include "platform/bcrypt.h"
 #include "platform/kernel32.h"
+#include "platform/rt_path.h"
 #include "platform/rt_file.h"
 #include "platform/rt_sys.h"
 #include "utils/rt_vector.h"
@@ -2345,6 +2346,51 @@ RtResultVoid kernel32_get_std_handle_invoker(metadata::RtManagedMethodPointer, c
     RET_VOID_OK();
 }
 
+RtResultVoid kernel32_get_current_directory_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                    const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    uint32_t buffer_length = interp::EvalStackOp::get_param<uint32_t>(params, 0);
+    auto buffer = interp::EvalStackOp::get_param<Utf16Char*>(params, 1);
+
+    int32_t error = 0;
+    vm::RtString* current_directory = os::Path::get_current_directory(&error);
+    if (error != 0)
+    {
+        vm::Marshal::set_last_win32_error(error);
+        interp::EvalStackOp::set_return(ret, static_cast<uint32_t>(0));
+        RET_VOID_OK();
+    }
+
+    uint32_t length = static_cast<uint32_t>(vm::String::get_length(current_directory));
+    if (buffer == nullptr || buffer_length <= length)
+    {
+        interp::EvalStackOp::set_return(ret, length + 1);
+        RET_VOID_OK();
+    }
+
+    std::memcpy(buffer, vm::String::get_chars_ptr(current_directory), static_cast<size_t>(length) * sizeof(Utf16Char));
+    buffer[length] = 0;
+    interp::EvalStackOp::set_return(ret, length);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_full_path_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto path = interp::EvalStackOp::get_param<const Utf16Char*>(params, 0);
+    uint32_t buffer_length = interp::EvalStackOp::get_param<uint32_t>(params, 1);
+    auto buffer = interp::EvalStackOp::get_param<Utf16Char*>(params, 2);
+    intptr_t file_part = interp::EvalStackOp::get_param<intptr_t>(params, 3);
+
+    uint32_t result = platform::Kernel32::get_full_path_name(path, buffer_length, buffer, file_part);
+    if (result == 0)
+    {
+        vm::Marshal::set_last_win32_error(0);
+    }
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_write_file_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                          interp::RtStackObject* ret) noexcept
 {
@@ -4379,6 +4425,27 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Kernel32::GetStdHandle", nullptr, kernel32_get_std_handle_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetStdHandle(System.Int32)", nullptr, kernel32_get_std_handle_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetStdHandle", nullptr, kernel32_get_std_handle_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetCurrentDirectory>g____PInvoke|131_0(System.UInt32,System.Char*)", nullptr,
+                                   kernel32_get_current_directory_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetCurrentDirectory>g____PInvoke|131_0", nullptr,
+                                   kernel32_get_current_directory_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetCurrentDirectory>g____PInvoke|131_0(System.UInt32,System.Char*)", nullptr,
+                                   kernel32_get_current_directory_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetCurrentDirectory>g____PInvoke|131_0", nullptr, kernel32_get_current_directory_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetCurrentDirectory>g____PInvoke|131_0(System.UInt32,System.Char*)", nullptr,
+                                   kernel32_get_current_directory_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetCurrentDirectory>g____PInvoke|131_0", nullptr, kernel32_get_current_directory_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<GetFullPathNameW>g____PInvoke|143_0(System.Char*,System.UInt32,System.Char*,System.IntPtr)", nullptr,
+        kernel32_get_full_path_name_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetFullPathNameW>g____PInvoke|143_0", nullptr,
+                                   kernel32_get_full_path_name_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetFullPathNameW>g____PInvoke|143_0(System.Char*,System.UInt32,System.Char*,System.IntPtr)",
+                                   nullptr, kernel32_get_full_path_name_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetFullPathNameW>g____PInvoke|143_0", nullptr, kernel32_get_full_path_name_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetFullPathNameW>g____PInvoke|143_0(System.Char*,System.UInt32,System.Char*,System.IntPtr)",
+                                   nullptr, kernel32_get_full_path_name_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetFullPathNameW>g____PInvoke|143_0", nullptr, kernel32_get_full_path_name_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<WriteFile>g____PInvoke|58_0(System.IntPtr,System.Byte*,System.Int32,System.Int32*,System.IntPtr)",
                                    nullptr, kernel32_write_file_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<WriteFile>g____PInvoke|58_0", nullptr, kernel32_write_file_invoker);

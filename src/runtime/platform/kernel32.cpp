@@ -190,6 +190,23 @@ bool Kernel32::set_console_mode(intptr_t handle, int32_t mode)
 #endif
 }
 
+uint32_t Kernel32::get_full_path_name(const Utf16Char* path, uint32_t buffer_length, Utf16Char* buffer, intptr_t file_part)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return static_cast<uint32_t>(::GetFullPathNameW(
+        reinterpret_cast<LPCWSTR>(path),
+        static_cast<DWORD>(buffer_length),
+        reinterpret_cast<LPWSTR>(buffer),
+        reinterpret_cast<LPWSTR*>(file_part)));
+#else
+    (void)path;
+    (void)buffer_length;
+    (void)buffer;
+    (void)file_part;
+    return 0;
+#endif
+}
+
 #ifdef LEANCLR_PLATFORM_WIN
 bool Kernel32::set_thread_error_mode(uint32_t mode, uint32_t& old_mode)
 {

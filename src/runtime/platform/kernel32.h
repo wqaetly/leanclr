@@ -19,6 +19,7 @@ class Kernel32
     static bool read_console_input(intptr_t handle, void* record, int32_t length, int32_t* events_read);
     static bool get_console_mode(intptr_t handle, int32_t* mode);
     static bool set_console_mode(intptr_t handle, int32_t mode);
+    static uint32_t get_full_path_name(const Utf16Char* path, uint32_t buffer_length, Utf16Char* buffer, intptr_t file_part);
 
 #if LEANCLR_PLATFORM_WIN
     static bool set_thread_error_mode(uint32_t mode, uint32_t& old_mode);
