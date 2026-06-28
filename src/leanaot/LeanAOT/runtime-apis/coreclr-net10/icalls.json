@@ -30,6 +30,11 @@
     "header": "icalls/system_environment.h"
   },
   {
+    "name": "System.Environment::get_CurrentManagedThreadId",
+    "func": "SystemEnvironment::get_current_managed_thread_id",
+    "header": "icalls/system_environment.h"
+  },
+  {
     "name": "System.GC::GetAllocatedBytesForCurrentThread()",
     "func": "SystemGC::get_allocated_bytes_for_current_thread",
     "header": "icalls/system_gc.h"

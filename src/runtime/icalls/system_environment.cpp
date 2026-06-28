@@ -6,6 +6,7 @@
 #include "vm/rt_array.h"
 #include "vm/class.h"
 #include "vm/environment.h"
+#include "vm/rt_thread.h"
 
 #include "platform/rt_time.h"
 
@@ -344,6 +345,26 @@ static RtResultVoid get_page_size_invoker(metadata::RtManagedMethodPointer, cons
     RET_VOID_OK();
 }
 
+RtResult<int32_t> SystemEnvironment::get_current_managed_thread_id() noexcept
+{
+    vm::RtThread* thread = vm::Thread::get_current_thread();
+    if (thread == nullptr || thread->internal_thread == nullptr)
+    {
+        RET_OK(1);
+    }
+
+    RET_OK(thread->internal_thread->managed_id != 0 ? thread->internal_thread->managed_id : 1);
+}
+
+/// @icall: System.Environment::get_CurrentManagedThreadId
+static RtResultVoid get_current_managed_thread_id_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                          const interp::RtStackObject* /*params*/, interp::RtStackObject* ret) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(int32_t, id, SystemEnvironment::get_current_managed_thread_id());
+    EvalStackOp::set_return(ret, id);
+    RET_VOID_OK();
+}
+
 static vm::InternalCallEntry s_internal_call_entries_system_environment[] = {
     {"System.Environment::get_ExitCode()", (vm::InternalCallFunction)SystemEnvironment::get_exit_code, get_exit_code_invoker},
     {"System.Environment::get_ExitCode", (vm::InternalCallFunction)SystemEnvironment::get_exit_code, get_exit_code_invoker},
@@ -399,6 +420,10 @@ static vm::InternalCallEntry s_internal_call_entries_system_environment[] = {
     {"System.Environment::get_ProcessorCount", (vm::InternalCallFunction)SystemEnvironment::get_processor_count, get_processor_count_invoker},
     {"System.Environment::GetPageSize()", (vm::InternalCallFunction)SystemEnvironment::get_page_size, get_page_size_invoker},
     {"System.Environment::GetPageSize", (vm::InternalCallFunction)SystemEnvironment::get_page_size, get_page_size_invoker},
+    {"System.Environment::get_CurrentManagedThreadId()", (vm::InternalCallFunction)SystemEnvironment::get_current_managed_thread_id,
+     get_current_managed_thread_id_invoker},
+    {"System.Environment::get_CurrentManagedThreadId", (vm::InternalCallFunction)SystemEnvironment::get_current_managed_thread_id,
+     get_current_managed_thread_id_invoker},
 };
 
 utils::Span<vm::InternalCallEntry> SystemEnvironment::get_internal_call_entries() noexcept
