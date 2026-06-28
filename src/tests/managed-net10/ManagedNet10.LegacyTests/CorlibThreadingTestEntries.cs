@@ -6,6 +6,12 @@ namespace ManagedNet10.LegacyTests
         {
             RunCorlibInterlocked();
             RunCorlibVolatile();
+            RunCorlibThread();
+        }
+
+        public static void RunCorlibThread()
+        {
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(CorlibTests.InternalCall.TC_System_Threading_Thread));
         }
 
         public static void RunCorlibInterlocked()

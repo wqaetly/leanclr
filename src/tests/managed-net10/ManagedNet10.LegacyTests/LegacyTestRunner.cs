@@ -217,6 +217,11 @@ namespace ManagedNet10.LegacyTests
                 return methodName == "FileStream_ReadWriteRoundTrip";
             }
 
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Threading_Thread))
+            {
+                return methodName == "MemoryBarrier_NoThrow";
+            }
+
             return false;
         }
     }

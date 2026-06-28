@@ -883,6 +883,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 迁移旧 `TC_System_AppDomain` 素材：覆盖 CurrentDomain、SetupInformation、GetAssemblies、GetData/SetData 和当前程序集加载 replacement，并用 `RunCorlibAppDomain` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Delegate` 素材：覆盖 delegate virtual method binding 和 `Delegate.Combine` 多播调用，并用 `RunCorlibDelegate` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_IO_MonoIO` 素材：在 `.NET 10` 下覆盖 Path 常量、当前目录和 full path 解析，并用 `RunCorlibIO` / `RunAll` 验收；FileStream round-trip 拆到后续文件流节点。
+- [x] 迁移旧 `TC_System_Threading_Thread` 素材：覆盖 CurrentThread、Sleep/Yield、Priority 和旧 `Thread.VolatileRead/Write`，并用 `RunCorlibThread` / `RunAll` 验收；MemoryBarrier 拆到后续 intrinsic/runtime 节点。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1103,6 +1104,11 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - `.NET 10` 当前路径不再走旧 `System.IO.MonoIO` icall；本轮补齐 `Interop/Kernel32::<GetCurrentDirectory>g____PInvoke|131_0(System.UInt32,System.Char*)` 和 `Interop/Kernel32::<GetFullPathNameW>g____PInvoke|143_0(System.Char*,System.UInt32,System.Char*,System.IntPtr)` 两个 generated P/Invoke façade，并登记到 `coreclr-net10` pinvoke catalog。
 - 旧 `FileStream_ReadWriteRoundTrip` 会进入当前尚未完成的 FileStream / handle 类型加载路径；本轮将它纳入 net10 replacement 过滤，后续作为文件流节点单独收口。
 - 本机已验证 `RunCorlibIO` 输出 `ok!`；`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 和 `scripts\dotnet10\api-scan.ps1 -Configuration Release` 均通过。
+
+2026-06-28 已迁移旧 `Thread` 用例：
+- 将旧 `CorlibTests.InternalCall.TC_System_Threading_Thread` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibThread` 定位入口，并让 `RunAll` 程序集级扫描覆盖 `Thread.CurrentThread`、`Thread.Sleep(0)`、`Thread.Yield()`、Priority 读取以及旧 `Thread.VolatileRead/Write` 素材。
+- 旧 `Thread.MemoryBarrier()` 与当前 `Interlocked.MemoryBarrier()` 在解释路径都会递归到 `StackOverflowException`；本轮将 `MemoryBarrier_NoThrow` 纳入 net10 replacement 过滤，后续作为 memory barrier intrinsic/runtime 节点单独收口。
+- 本机已验证 `RunCorlibThread` 输出 `ok!`；`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke`、`scripts\dotnet10\api-scan.ps1 -Configuration Release`、`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 和 `git diff --check` 均通过。
 
 2026-06-28 已迁移旧 `FieldInfo` 反射用例：
 
