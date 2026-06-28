@@ -2346,6 +2346,60 @@ RtResultVoid kernel32_get_std_handle_invoker(metadata::RtManagedMethodPointer, c
     RET_VOID_OK();
 }
 
+RtResultVoid kernel32_get_console_mode_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                               interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    int32_t* mode = interp::EvalStackOp::get_param<int32_t*>(params, 1);
+    int32_t result = platform::Kernel32::get_console_mode(handle, mode) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_set_console_mode_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                               interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    int32_t mode = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    int32_t result = platform::Kernel32::set_console_mode(handle, mode) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_console_screen_buffer_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                             const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    void* info = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t result = platform::Kernel32::get_console_screen_buffer_info(handle, info) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_peek_console_input_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                 interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    void* record = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t length = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    int32_t* events_read = interp::EvalStackOp::get_param<int32_t*>(params, 3);
+    int32_t result = platform::Kernel32::peek_console_input(handle, record, length, events_read) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_read_console_input_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                 interp::RtStackObject* ret) noexcept
+{
+    intptr_t handle = interp::EvalStackOp::get_param<intptr_t>(params, 0);
+    void* record = interp::EvalStackOp::get_param<void*>(params, 1);
+    int32_t length = interp::EvalStackOp::get_param<int32_t>(params, 2);
+    int32_t* events_read = interp::EvalStackOp::get_param<int32_t*>(params, 3);
+    int32_t result = platform::Kernel32::read_console_input(handle, record, length, events_read) ? 1 : 0;
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_get_current_directory_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                     const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -4425,6 +4479,54 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Kernel32::GetStdHandle", nullptr, kernel32_get_std_handle_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetStdHandle(System.Int32)", nullptr, kernel32_get_std_handle_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetStdHandle", nullptr, kernel32_get_std_handle_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetConsoleMode>g____PInvoke|29_0(System.IntPtr,System.Int32*)", nullptr,
+                                   kernel32_get_console_mode_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetConsoleMode>g____PInvoke|29_0", nullptr, kernel32_get_console_mode_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetConsoleMode>g____PInvoke|29_0(System.IntPtr,System.Int32*)", nullptr,
+                                   kernel32_get_console_mode_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetConsoleMode>g____PInvoke|29_0", nullptr, kernel32_get_console_mode_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetConsoleMode>g____PInvoke|29_0(System.IntPtr,System.Int32*)", nullptr,
+                                   kernel32_get_console_mode_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetConsoleMode>g____PInvoke|29_0", nullptr, kernel32_get_console_mode_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetConsoleMode>g____PInvoke|31_0(System.IntPtr,System.Int32)", nullptr,
+                                   kernel32_set_console_mode_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetConsoleMode>g____PInvoke|31_0", nullptr, kernel32_set_console_mode_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<SetConsoleMode>g____PInvoke|31_0(System.IntPtr,System.Int32)", nullptr,
+                                   kernel32_set_console_mode_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<SetConsoleMode>g____PInvoke|31_0", nullptr, kernel32_set_console_mode_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<SetConsoleMode>g____PInvoke|31_0(System.IntPtr,System.Int32)", nullptr,
+                                   kernel32_set_console_mode_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<SetConsoleMode>g____PInvoke|31_0", nullptr, kernel32_set_console_mode_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetConsoleScreenBufferInfo>g____PInvoke|26_0(System.IntPtr,Interop/Kernel32/CONSOLE_SCREEN_BUFFER_INFO*)",
+                                   nullptr, kernel32_get_console_screen_buffer_info_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetConsoleScreenBufferInfo>g____PInvoke|26_0", nullptr,
+                                   kernel32_get_console_screen_buffer_info_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetConsoleScreenBufferInfo>g____PInvoke|26_0(System.IntPtr,Interop/Kernel32/CONSOLE_SCREEN_BUFFER_INFO*)",
+                                   nullptr, kernel32_get_console_screen_buffer_info_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetConsoleScreenBufferInfo>g____PInvoke|26_0", nullptr,
+                                   kernel32_get_console_screen_buffer_info_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetConsoleScreenBufferInfo>g____PInvoke|26_0(System.IntPtr,Interop/Kernel32/CONSOLE_SCREEN_BUFFER_INFO*)",
+                                   nullptr, kernel32_get_console_screen_buffer_info_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetConsoleScreenBufferInfo>g____PInvoke|26_0", nullptr,
+                                   kernel32_get_console_screen_buffer_info_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<PeekConsoleInput>g____PInvoke|42_0(System.IntPtr,Interop/INPUT_RECORD*,System.Int32,System.Int32*)",
+                                   nullptr, kernel32_peek_console_input_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<PeekConsoleInput>g____PInvoke|42_0", nullptr, kernel32_peek_console_input_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<PeekConsoleInput>g____PInvoke|42_0(System.IntPtr,Interop/INPUT_RECORD*,System.Int32,System.Int32*)",
+                                   nullptr, kernel32_peek_console_input_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<PeekConsoleInput>g____PInvoke|42_0", nullptr, kernel32_peek_console_input_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<PeekConsoleInput>g____PInvoke|42_0(System.IntPtr,Interop/INPUT_RECORD*,System.Int32,System.Int32*)",
+                                   nullptr, kernel32_peek_console_input_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<PeekConsoleInput>g____PInvoke|42_0", nullptr, kernel32_peek_console_input_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ReadConsoleInput>g____PInvoke|45_0(System.IntPtr,Interop/INPUT_RECORD*,System.Int32,System.Int32*)",
+                                   nullptr, kernel32_read_console_input_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<ReadConsoleInput>g____PInvoke|45_0", nullptr, kernel32_read_console_input_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ReadConsoleInput>g____PInvoke|45_0(System.IntPtr,Interop/INPUT_RECORD*,System.Int32,System.Int32*)",
+                                   nullptr, kernel32_read_console_input_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<ReadConsoleInput>g____PInvoke|45_0", nullptr, kernel32_read_console_input_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ReadConsoleInput>g____PInvoke|45_0(System.IntPtr,Interop/INPUT_RECORD*,System.Int32,System.Int32*)",
+                                   nullptr, kernel32_read_console_input_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<ReadConsoleInput>g____PInvoke|45_0", nullptr, kernel32_read_console_input_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetCurrentDirectory>g____PInvoke|131_0(System.UInt32,System.Char*)", nullptr,
                                    kernel32_get_current_directory_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetCurrentDirectory>g____PInvoke|131_0", nullptr,

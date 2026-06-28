@@ -884,6 +884,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 迁移旧 `TC_System_Delegate` 素材：覆盖 delegate virtual method binding 和 `Delegate.Combine` 多播调用，并用 `RunCorlibDelegate` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_IO_MonoIO` 素材：在 `.NET 10` 下覆盖 Path 常量、当前目录和 full path 解析，并用 `RunCorlibIO` / `RunAll` 验收；FileStream round-trip 拆到后续文件流节点。
 - [x] 迁移旧 `TC_System_Threading_Thread` 素材：覆盖 CurrentThread、Sleep/Yield、Priority 和旧 `Thread.VolatileRead/Write`，并用 `RunCorlibThread` / `RunAll` 验收；MemoryBarrier 拆到后续 intrinsic/runtime 节点。
+- [x] 迁移旧 `TC_System_Console` 重定向 I/O 素材：覆盖 SetOut/SetError、WriteLine overloads 和标准流可用性，并用 `RunCorlibConsole` / `RunAll` 验收；交互终端输入/窗口尺寸拆到后续 Console terminal 节点。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1109,6 +1110,12 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 将旧 `CorlibTests.InternalCall.TC_System_Threading_Thread` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibThread` 定位入口，并让 `RunAll` 程序集级扫描覆盖 `Thread.CurrentThread`、`Thread.Sleep(0)`、`Thread.Yield()`、Priority 读取以及旧 `Thread.VolatileRead/Write` 素材。
 - 旧 `Thread.MemoryBarrier()` 与当前 `Interlocked.MemoryBarrier()` 在解释路径都会递归到 `StackOverflowException`；本轮将 `MemoryBarrier_NoThrow` 纳入 net10 replacement 过滤，后续作为 memory barrier intrinsic/runtime 节点单独收口。
 - 本机已验证 `RunCorlibThread` 输出 `ok!`；`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke`、`scripts\dotnet10\api-scan.ps1 -Configuration Release`、`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 和 `git diff --check` 均通过。
+
+2026-06-28 已迁移旧 `Console` 重定向 I/O 用例：
+- 将旧 `CorlibTests.InternalCall.TC_System_Console` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibConsole` 定位入口，并让 `RunAll` 程序集级扫描覆盖 `Console.SetOut` / `Console.SetError`、`WriteLine` 常见 overload、标准输入/输出/错误流可用性以及标准输出 no-throw smoke。
+- `.NET 10` `System.Console` 当前路径会触发 `Kernel32` generated P/Invoke；本轮补齐 `GetConsoleMode`、`SetConsoleMode`、`GetConsoleScreenBufferInfo`、`PeekConsoleInput` 和 `ReadConsoleInput` façade，并登记到 `coreclr-net10` pinvoke catalog。
+- `Console.KeyAvailable`、`Console.TreatControlCAsInput` 和 `Console.WindowWidth` 在重定向 runner 下会进入当前未补齐的 terminal/Win32 error-message 路径；本轮纳入 net10 replacement 过滤，后续作为 Console terminal 与 `FormatMessage` 节点单独收口。
+- 本机已验证 `RunCorlibConsole` 输出 `ok!`；`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke`、`scripts\dotnet10\api-scan.ps1 -Configuration Release`、`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 和 `git diff --check` 均通过。
 
 2026-06-28 已迁移旧 `FieldInfo` 反射用例：
 

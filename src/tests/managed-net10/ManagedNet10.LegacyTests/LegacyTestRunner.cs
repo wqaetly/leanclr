@@ -222,6 +222,13 @@ namespace ManagedNet10.LegacyTests
                 return methodName == "MemoryBarrier_NoThrow";
             }
 
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Console))
+            {
+                return methodName == "KeyAvailable_ReadWithoutThrow" ||
+                    methodName == "TreatControlCAsInput_ToggleWithoutThrow" ||
+                    methodName == "WindowWidth_ReadWithoutThrow";
+            }
+
             return false;
         }
     }
