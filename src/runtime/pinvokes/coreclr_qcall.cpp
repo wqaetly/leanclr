@@ -493,6 +493,21 @@ RtResult<vm::RtArray*> get_loaded_assemblies() noexcept
     RET_OK(assembly_array);
 }
 
+RtResultVoid assembly_load_context_initialize_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                      interp::RtStackObject* ret) noexcept
+{
+    // LeanCLR currently runs all assemblies in one non-collectible load context.
+    // Return a stable non-null handle so CoreLib's AssemblyLoadContext bookkeeping can proceed.
+    interp::EvalStackOp::set_return(ret, reinterpret_cast<void*>(1));
+    RET_VOID_OK();
+}
+
+RtResultVoid assembly_load_context_prepare_release_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                           interp::RtStackObject*) noexcept
+{
+    RET_VOID_OK();
+}
+
 RtResult<vm::RtString*> get_assembly_full_name(void* qcall_assembly, void* native_handle) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly, vm::Reflection::get_assembly_from_qcall_assembly(qcall_assembly, native_handle));
@@ -6034,6 +6049,19 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Runtime.Loader.AssemblyLoadContext::GetLoadedAssemblies", nullptr,
                                    assembly_get_loaded_assemblies_invoker);
     vm::PInvokes::register_pinvoke("AssemblyNative_GetLoadedAssemblies", nullptr, assembly_get_loaded_assemblies_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.Loader.AssemblyLoadContext::<InitializeAssemblyLoadContext>g____PInvoke|0_0(System.IntPtr,System.Int32,System.Int32)",
+        nullptr, assembly_load_context_initialize_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.Loader.AssemblyLoadContext::<InitializeAssemblyLoadContext>g____PInvoke|0_0", nullptr,
+                                   assembly_load_context_initialize_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.Loader.AssemblyLoadContext::InitializeAssemblyLoadContext(System.IntPtr,System.Boolean,System.Boolean)",
+                                   nullptr, assembly_load_context_initialize_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.Loader.AssemblyLoadContext::InitializeAssemblyLoadContext", nullptr,
+                                   assembly_load_context_initialize_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.Loader.AssemblyLoadContext::PrepareForAssemblyLoadContextRelease(System.IntPtr,System.IntPtr)",
+                                   nullptr, assembly_load_context_prepare_release_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.Loader.AssemblyLoadContext::PrepareForAssemblyLoadContextRelease", nullptr,
+                                   assembly_load_context_prepare_release_invoker);
     vm::PInvokes::register_pinvoke("Array_CreateInstance", nullptr, array_create_instance_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Array::<InternalCreate>g____PInvoke|0_0(System.Runtime.CompilerServices.QCallTypeHandle,System.Int32,System.Int32*,System.Int32*,System.Boolean,System.Runtime.CompilerServices.ObjectHandleOnStack)",
