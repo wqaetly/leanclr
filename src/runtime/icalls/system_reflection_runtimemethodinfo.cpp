@@ -150,7 +150,9 @@ RtResult<bool> SystemReflectionRuntimeMethodInfo::get_is_generic_method_definiti
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, m,
                                             vm::Reflection::get_method_info_from_reflection_object(method));
     const metadata::RtClass* klass = m->parent;
-    RET_OK(vm::Class::is_generic(klass) || m->generic_container != nullptr);
+    RET_OK(vm::Class::is_generic(klass) ||
+           (m->generic_container != nullptr &&
+            (m->generic_method == nullptr || m->generic_method->generic_context.method_inst == nullptr)));
 }
 
 RtResult<vm::RtArray*> SystemReflectionRuntimeMethodInfo::get_generic_arguments(vm::RtReflectionMethod* method) noexcept

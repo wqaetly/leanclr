@@ -870,6 +870,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 迁移旧 `TC_System_Reflection_RuntimeAssembly` 反射素材：补齐 `GetImageRuntimeVersion`、`GetEntryPoint`、`GetManifestResourceNames` 三个 CoreCLR QCall façade，并用 `RunCorlibReflectionRuntimeAssembly` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeConstructorInfo` 反射素材：覆盖 constructor metadata token、constructor invoke 和重载 constructor token 区分，并用 `RunCorlibReflectionRuntimeConstructorInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeFieldInfo` 反射素材：补齐 `RuntimeFieldHandle.SetValue` QCall/PInvoke façade 与 `IsFastPathSupported` internal call，并用 `RunCorlibReflectionRuntimeFieldInfo` / `RunAll` 验收。
+- [x] 迁移旧 `TC_System_Reflection_RuntimeMethodInfo` 反射素材：覆盖 method metadata token、MethodInfo.Invoke、泛型方法构造、GetBaseDefinition 和 MethodBody，并用 `RunCorlibReflectionRuntimeMethodInfo` / `RunAll` 验收。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1082,6 +1083,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 将旧 `CorlibTests.InternalCall.TC_System_Reflection_RuntimeConstructorInfo` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionRuntimeConstructorInfo` 定位入口，并让 `RunAll` 程序集级扫描覆盖 constructor metadata token、无参/有参 constructor invoke、constructor 枚举和重载 token 区分。
 - 为 `.NET 10` `System.RuntimeMethodHandle::InvokeMethod(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Void**,System.Runtime.CompilerServices.ObjectHandleOnStack,Interop/BOOL,System.Runtime.CompilerServices.ObjectHandleOnStack)` 增加精确签名注册，让已实现的 `runtime_method_handle_invoke_method_invoker` 能被 constructor invoke 路径命中。
 - 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionRuntimeConstructorInfo`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
+
+2026-06-28 已迁移旧 `RuntimeMethodInfo` 反射用例：
+
+- 将旧 `CorlibTests.InternalCall.TC_System_Reflection_RuntimeMethodInfo` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionRuntimeMethodInfo` 定位入口，并让 `RunAll` 程序集级扫描覆盖 method name、metadata token、MethodInfo.Invoke、泛型方法形态、GetBaseDefinition 和 MethodBody 等旧 RuntimeMethodInfo 素材。
+- 为 `.NET 10` CoreLib 当前实际调用链补齐 `RuntimeMethodHandle_GetStubIfNeededSlow`、`RuntimeMethodHandle_StripMethodInstantiation` 和 `RuntimeTypeHandle_GetMethodAt` QCall/PInvoke façade，并登记到 `coreclr-net10` pinvoke catalog。
+- 收窄 `RuntimeMethodHandle.IsGenericMethodDefinition` / `RuntimeMethodInfo.IsGenericMethodDefinition` 的 constructed generic method 判定，避免 `MakeGenericMethod` 得到的 inflated method 因保留 definition metadata 而被误判为 generic method definition。
+- 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionRuntimeMethodInfo`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
 
 仍未完成：
 

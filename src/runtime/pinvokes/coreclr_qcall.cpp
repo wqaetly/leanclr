@@ -25,6 +25,7 @@
 #include "vm/delegate.h"
 #include "vm/environment.h"
 #include "vm/field.h"
+#include "vm/generic_method.h"
 #include "vm/generic_class.h"
 #include "vm/gchandle.h"
 #include "vm/marshal.h"
@@ -3177,6 +3178,117 @@ RtResultVoid runtime_method_handle_get_method_instantiation_invoker(metadata::Rt
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_method_handle_get_stub_if_needed_slow_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                   const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto method_arg = interp::EvalStackOp::get_param<const void*>(params, 0);
+    (void)interp::EvalStackOp::get_param<void*>(params, 1);
+    (void)interp::EvalStackOp::get_param<void*>(params, 2);
+    auto method_instantiation_slot = interp::EvalStackOp::get_param<vm::RtArray**>(params, 3);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method,
+                                            vm::Reflection::get_method_info_from_handle_arg(method_arg));
+    if (method_instantiation_slot != nullptr && *method_instantiation_slot != nullptr)
+    {
+        vm::RtArray* method_instantiation = *method_instantiation_slot;
+        uint8_t generic_param_count = static_cast<uint8_t>(vm::Array::get_array_length(method_instantiation));
+        const metadata::RtTypeSig** arg_list =
+            static_cast<const metadata::RtTypeSig**>(alloca(sizeof(metadata::RtTypeSig*) * generic_param_count));
+        for (uint8_t i = 0; i < generic_param_count; ++i)
+        {
+            auto arg_obj = vm::Array::get_array_data_at<vm::RtReflectionType*>(method_instantiation, i);
+            UNWRAP_OR_RET_ERR_ON_FAIL(arg_list[i], vm::Reflection::get_type_sig_from_reflection_type_object(arg_obj));
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtGenericInst*, method_inst,
+                                                metadata::MetadataCache::get_pooled_generic_inst(arg_list, generic_param_count));
+        const metadata::RtGenericInst* class_inst =
+            method->generic_method != nullptr ? method->generic_method->generic_context.class_inst : nullptr;
+        const metadata::RtMethodInfo* base_method = method;
+        if (method->generic_method != nullptr)
+        {
+            UNWRAP_OR_RET_ERR_ON_FAIL(base_method, vm::Method::get_method_by_method_def_gid(method->generic_method->base_method_gid));
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, inflated_method,
+                                                vm::GenericMethod::get_method(base_method, class_inst, method_inst));
+        interp::EvalStackOp::set_return(ret, inflated_method);
+        RET_VOID_OK();
+    }
+
+    interp::EvalStackOp::set_return(ret, method);
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_method_handle_strip_method_instantiation_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                      const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto method_arg = interp::EvalStackOp::get_param<const void*>(params, 0);
+    auto out_method_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 1);
+    if (out_method_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method,
+                                            vm::Reflection::get_method_info_from_handle_arg(method_arg));
+    if (method->generic_method != nullptr && method->generic_method->generic_context.method_inst != nullptr)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, base_method,
+                                                vm::Method::get_method_by_method_def_gid(method->generic_method->base_method_gid));
+        const metadata::RtMethodInfo* stripped_method = base_method;
+        const metadata::RtGenericInst* class_inst = method->generic_method->generic_context.class_inst;
+        if (class_inst != nullptr)
+        {
+            UNWRAP_OR_RET_ERR_ON_FAIL(stripped_method, vm::GenericMethod::get_method(base_method, class_inst, nullptr));
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionMethod*, reflection_method,
+                                                vm::Reflection::get_method_reflection_object(stripped_method, stripped_method->parent));
+        *out_method_slot = reinterpret_cast<vm::RtObject*>(reflection_method);
+    }
+
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_type_handle_get_method_at_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                       const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto method_table = interp::EvalStackOp::get_param<const void*>(params, 0);
+    int32_t slot = interp::EvalStackOp::get_param<int32_t>(params, 1);
+    if (slot < 0)
+    {
+        RET_ERR(RtErr::ArgumentOutOfRange);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_handle_arg(method_table));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_methods(klass));
+    RET_ERR_ON_FAIL(vm::Class::initialize_vtables(klass));
+
+    const metadata::RtMethodInfo* result = nullptr;
+    if (slot < klass->vtable_count)
+    {
+        result = klass->vtable[slot].method_impl;
+    }
+    else
+    {
+        for (uint16_t i = 0; i < klass->method_count; ++i)
+        {
+            const metadata::RtMethodInfo* method = klass->methods[i];
+            if (method != nullptr && method->slot == slot)
+            {
+                result = method;
+                break;
+            }
+        }
+    }
+
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 RtResultVoid runtime_type_handle_instantiate_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                      const interp::RtStackObject* params, interp::RtStackObject*) noexcept
 {
@@ -4806,6 +4918,11 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, runtime_type_handle_internal_alloc_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::InternalAlloc", nullptr, runtime_type_handle_internal_alloc_invoker);
     vm::PInvokes::register_pinvoke(
+        "System.RuntimeTypeHandle::GetMethodAt(System.Runtime.CompilerServices.MethodTable*,System.Int32)", nullptr,
+        runtime_type_handle_get_method_at_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetMethodAt", nullptr, runtime_type_handle_get_method_at_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_GetMethodAt", nullptr, runtime_type_handle_get_method_at_invoker);
+    vm::PInvokes::register_pinvoke(
         "System.Signature::Init(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Void*,System.Int32,System.RuntimeFieldHandleInternal,System.RuntimeMethodHandleInternal)",
         nullptr, signature_init_invoker);
     vm::PInvokes::register_pinvoke("System.Signature::Init", nullptr, signature_init_invoker);
@@ -4820,6 +4937,20 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    runtime_method_handle_get_method_instantiation_invoker);
     vm::PInvokes::register_pinvoke("RuntimeMethodHandle_GetMethodInstantiation", nullptr,
                                    runtime_method_handle_get_method_instantiation_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeMethodHandle::GetStubIfNeededSlow(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, runtime_method_handle_get_stub_if_needed_slow_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeMethodHandle::GetStubIfNeededSlow", nullptr,
+                                   runtime_method_handle_get_stub_if_needed_slow_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeMethodHandle_GetStubIfNeededSlow", nullptr,
+                                   runtime_method_handle_get_stub_if_needed_slow_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeMethodHandle::StripMethodInstantiation(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, runtime_method_handle_strip_method_instantiation_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeMethodHandle::StripMethodInstantiation", nullptr,
+                                   runtime_method_handle_strip_method_instantiation_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeMethodHandle_StripMethodInstantiation", nullptr,
+                                   runtime_method_handle_strip_method_instantiation_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeMethodHandle::IsCAVisibleFromDecoratedType(System.Runtime.CompilerServices.QCallTypeHandle,System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallModule)",
         nullptr, runtime_method_handle_is_ca_visible_from_decorated_type_invoker);

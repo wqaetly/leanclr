@@ -20,10 +20,13 @@
     "System.RuntimeFieldHandle::<SetValue>g____PInvoke|34_0(System.IntPtr,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallTypeHandle,System.Int32*)",
     "System.RuntimeMethodHandle::GetMethodBody(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.RuntimeMethodHandle::GetMethodInstantiation(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.ObjectHandleOnStack,Interop/BOOL)",
+    "System.RuntimeMethodHandle::GetStubIfNeededSlow(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.RuntimeMethodHandle::InvokeMethod(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Void**,System.Runtime.CompilerServices.ObjectHandleOnStack,Interop/BOOL,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.RuntimeMethodHandle::IsCAVisibleFromDecoratedType(System.Runtime.CompilerServices.QCallTypeHandle,System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallModule)",
+    "System.RuntimeMethodHandle::StripMethodInstantiation(System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.RuntimeTypeHandle::FreeGCHandle(System.Runtime.CompilerServices.QCallTypeHandle,System.IntPtr)",
     "System.RuntimeTypeHandle::GetGCHandle(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.InteropServices.GCHandleType)",
+    "System.RuntimeTypeHandle::GetMethodAt(System.Runtime.CompilerServices.MethodTable*,System.Int32)",
     "System.RuntimeTypeHandle::RegisterCollectibleTypeDependency(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallAssembly)"
   ]
 }

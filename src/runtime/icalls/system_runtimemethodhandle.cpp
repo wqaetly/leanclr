@@ -124,7 +124,8 @@ RtResult<bool> SystemRuntimeMethodHandle::is_generic_method_definition(const met
         RET_ERR(RtErr::ArgumentNull);
     }
 
-    RET_OK(method->generic_container != nullptr);
+    RET_OK(method->generic_container != nullptr &&
+           (method->generic_method == nullptr || method->generic_method->generic_context.method_inst == nullptr));
 }
 
 RtResult<int32_t> SystemRuntimeMethodHandle::get_generic_parameter_count(const metadata::RtMethodInfo* method) noexcept
