@@ -195,6 +195,11 @@ namespace ManagedNet10.LegacyTests
                 return methodName == "GetRawConstantValue";
             }
 
+            if (type == typeof(CorlibTests.InternalCall.TC_System_RuntimeTypeHandle))
+            {
+                return methodName.StartsWith("HasInstantiation_", StringComparison.Ordinal);
+            }
+
             return false;
         }
     }
