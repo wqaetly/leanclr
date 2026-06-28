@@ -145,6 +145,33 @@ static RtResult<int32_t> metadata_import_get_property_props(metadata::RtModuleDe
     RET_OK(0);
 }
 
+static RtResult<int32_t> metadata_import_get_event_props(metadata::RtModuleDef* module, int32_t md_token, void** name,
+                                                         int32_t* event_attributes) noexcept
+{
+    if (module == nullptr || name == nullptr || event_attributes == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(md_token));
+    if (token.table_type != metadata::TableType::Event)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    auto row = module->get_cli_image().read_event(token.rid);
+    if (!row)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const char*, event_name, module->get_string(row->name));
+
+    *name = const_cast<char*>(event_name);
+    *event_attributes = static_cast<int32_t>(row->event_flags);
+    RET_OK(0);
+}
+
 static RtResult<int32_t> metadata_import_get_field_def_props(metadata::RtModuleDef* module, int32_t md_token,
                                                              int32_t* field_attributes) noexcept
 {
@@ -1190,6 +1217,19 @@ static RtResultVoid metadata_import_get_property_props_invoker(metadata::RtManag
     RET_VOID_OK();
 }
 
+/// @icall: System.Reflection.MetadataImport::GetEventProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&)
+static RtResultVoid metadata_import_get_event_props_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, module, get_module_handle_param(params, 0));
+    auto md_token = EvalStackOp::get_param<int32_t>(params, 1);
+    auto name = EvalStackOp::get_param<void**>(params, 2);
+    auto event_attributes = EvalStackOp::get_param<int32_t*>(params, 3);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, hr, metadata_import_get_event_props(module, md_token, name, event_attributes));
+    EvalStackOp::set_return(ret, hr);
+    RET_VOID_OK();
+}
+
 /// @icall: System.Reflection.MetadataImport::GetFieldDefProps(System.IntPtr,System.Int32,System.Int32&)
 static RtResultVoid metadata_import_get_field_def_props_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                                 const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -1929,6 +1969,8 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeModule::get_net10_inte
          metadata_import_get_namespace_invoker},
         {"System.Reflection.MetadataImport::GetPropertyProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&,System.Reflection.ConstArray&)", nullptr,
          metadata_import_get_property_props_invoker},
+        {"System.Reflection.MetadataImport::GetEventProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&)", nullptr,
+         metadata_import_get_event_props_invoker},
         {"System.Reflection.MetadataImport::GetFieldDefProps(System.IntPtr,System.Int32,System.Int32&)", nullptr,
          metadata_import_get_field_def_props_invoker},
         {"System.Reflection.MetadataImport::GetParamDefProps(System.IntPtr,System.Int32,System.Int32&,System.Int32&)", nullptr,
@@ -1973,6 +2015,9 @@ utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeModule::get_internal_c
          metadata_import_get_namespace_invoker},
         {"System.Reflection.MetadataImport::GetPropertyProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&,System.Reflection.ConstArray&)", nullptr,
          metadata_import_get_property_props_invoker},
+        {"System.Reflection.MetadataImport::GetEventProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&)", nullptr,
+         metadata_import_get_event_props_invoker},
+        {"System.Reflection.MetadataImport::GetEventProps", nullptr, metadata_import_get_event_props_invoker},
         {"System.Reflection.MetadataImport::GetFieldDefProps(System.IntPtr,System.Int32,System.Int32&)", nullptr,
          metadata_import_get_field_def_props_invoker},
         {"System.Reflection.MetadataImport::GetFieldDefProps", nullptr, metadata_import_get_field_def_props_invoker},

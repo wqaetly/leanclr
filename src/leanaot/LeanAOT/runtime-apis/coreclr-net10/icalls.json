@@ -370,6 +370,11 @@
     "header": "icalls/system_reflection_runtimemodule.h"
   },
   {
+    "name": "System.Reflection.MetadataImport::GetEventProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&)",
+    "func": "metadata_import_get_event_props",
+    "header": "icalls/system_reflection_runtimemodule.h"
+  },
+  {
     "name": "System.Reflection.MetadataImport::GetScopeProps(System.IntPtr,System.Guid&)",
     "func": "metadata_import_get_scope_props",
     "header": "icalls/system_reflection_runtimemodule.h"

@@ -873,6 +873,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - [x] 迁移旧 `TC_System_Reflection_RuntimeMethodInfo` 反射素材：覆盖 method metadata token、MethodInfo.Invoke、泛型方法构造、GetBaseDefinition 和 MethodBody，并用 `RunCorlibReflectionRuntimeMethodInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimeParameterInfo` 反射素材：覆盖参数 metadata token、参数类型/位置、默认值、构造函数参数、数组伪构造函数参数、泛型方法参数和返回参数，并用 `RunCorlibReflectionRuntimeParameterInfo` / `RunAll` 验收。
 - [x] 迁移旧 `TC_System_Reflection_RuntimePropertyInfo` 反射素材：覆盖 property metadata token、PropertyType、CanRead/CanWrite、getter/setter、custom modifiers、GetValue/SetValue、泛型类型属性和索引参数，并用 `RunCorlibReflectionRuntimePropertyInfo` / `RunAll` 验收。
+- [x] 迁移旧 `TC_System_Reflection_EventInfo` 反射素材：覆盖 event lookup 和 RuntimeEventInfo 名称读取，并用 `RunCorlibReflectionEventInfo` / `RunAll` 验收。
 - [x] 修复 `ValueType` 的 `MethodTable*` contract：`MethodTable_CanCompareBitsOrUseFastGetHashCode` 在边界处解析 net10 MethodTable façade，并用 `RunCorlibValueTypeEqualsStructValueTypes` / `RunCorlibValueTypeGetHashCodeStructIsStable` 验收。
 - [x] 完成 delegate multicast allocation contract：`RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，`RunRuntimeDelegateDynamicInvoke` 通过。
 - [x] 清理 `TC_Delegate_DynamicInvoke.cs` 中的 `[delegate-dyn]` 临时定位输出；当前搜索无残留。
@@ -1106,6 +1107,12 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 将旧 `CorlibTests.InternalCall.TC_System_Reflection_RuntimePropertyInfo` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionRuntimePropertyInfo` 定位入口，并让 `RunAll` 程序集级扫描覆盖 property metadata token、Name、PropertyType、CanRead/CanWrite、GetGetMethod/GetSetMethod、GetTypeModifiers、Attributes、DeclaringType、GetValue/SetValue、read-only/write-only property、auto property、泛型类型属性和索引参数等旧 RuntimePropertyInfo 素材。
 - 本轮未新增 runtime façade；现有 `.NET 10` `RuntimePropertyInfo`、`RuntimeType.GetProperties`、`MetadataImport.GetPropertyProps`、property getter/setter invoke 和 `Signature` 路径已足够支撑该旧用例切片。
 - 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionRuntimePropertyInfo`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
+
+2026-06-28 已迁移旧 `EventInfo` 反射用例：
+
+- 将旧 `CorlibTests.InternalCall.TC_System_Reflection_EventInfo` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibReflectionEventInfo` 定位入口，并让 `RunAll` 程序集级扫描覆盖 `Type.GetEvent` 和 `RuntimeEventInfo.Name` 等旧 EventInfo 素材。
+- 为 `.NET 10` CoreLib 当前实际调用链补齐 `System.Reflection.MetadataImport::GetEventProps(System.IntPtr,System.Int32,System.Void*&,System.Int32&)` internal call façade，从 Event metadata row 返回 UTF-8 名称指针和 event attributes，并登记到 `coreclr-net10` runtime API catalog。
+- 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionEventInfo`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
 
 仍未完成：
 
