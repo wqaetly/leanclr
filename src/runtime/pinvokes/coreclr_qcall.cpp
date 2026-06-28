@@ -2366,6 +2366,21 @@ RtResultVoid kernel32_set_console_mode_invoker(metadata::RtManagedMethodPointer,
     RET_VOID_OK();
 }
 
+RtResultVoid kernel32_format_message_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                             interp::RtStackObject* ret) noexcept
+{
+    int32_t flags = interp::EvalStackOp::get_param<int32_t>(params, 0);
+    intptr_t source = interp::EvalStackOp::get_param<intptr_t>(params, 1);
+    uint32_t message_id = interp::EvalStackOp::get_param<uint32_t>(params, 2);
+    int32_t language_id = interp::EvalStackOp::get_param<int32_t>(params, 3);
+    void* buffer = interp::EvalStackOp::get_param<void*>(params, 4);
+    int32_t buffer_chars = interp::EvalStackOp::get_param<int32_t>(params, 5);
+    intptr_t arguments = interp::EvalStackOp::get_param<intptr_t>(params, 6);
+    int32_t result = platform::Kernel32::format_message(flags, source, message_id, language_id, buffer, buffer_chars, arguments);
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 RtResultVoid kernel32_get_console_screen_buffer_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                              const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -4758,6 +4773,18 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke(".Kernel32::<SetConsoleMode>g____PInvoke|31_0(System.IntPtr,System.Int32)", nullptr,
                                    kernel32_set_console_mode_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::<SetConsoleMode>g____PInvoke|31_0", nullptr, kernel32_set_console_mode_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Interop/Kernel32::<FormatMessage>g____PInvoke|305_0(System.Int32,System.IntPtr,System.UInt32,System.Int32,System.Void*,System.Int32,System.IntPtr)",
+        nullptr, kernel32_format_message_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<FormatMessage>g____PInvoke|305_0", nullptr, kernel32_format_message_invoker);
+    vm::PInvokes::register_pinvoke(
+        "Kernel32::<FormatMessage>g____PInvoke|305_0(System.Int32,System.IntPtr,System.UInt32,System.Int32,System.Void*,System.Int32,System.IntPtr)",
+        nullptr, kernel32_format_message_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<FormatMessage>g____PInvoke|305_0", nullptr, kernel32_format_message_invoker);
+    vm::PInvokes::register_pinvoke(
+        ".Kernel32::<FormatMessage>g____PInvoke|305_0(System.Int32,System.IntPtr,System.UInt32,System.Int32,System.Void*,System.Int32,System.IntPtr)",
+        nullptr, kernel32_format_message_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<FormatMessage>g____PInvoke|305_0", nullptr, kernel32_format_message_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetConsoleScreenBufferInfo>g____PInvoke|26_0(System.IntPtr,Interop/Kernel32/CONSOLE_SCREEN_BUFFER_INFO*)",
                                    nullptr, kernel32_get_console_screen_buffer_info_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetConsoleScreenBufferInfo>g____PInvoke|26_0", nullptr,

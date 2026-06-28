@@ -190,6 +190,25 @@ bool Kernel32::set_console_mode(intptr_t handle, int32_t mode)
 #endif
 }
 
+int32_t Kernel32::format_message(int32_t flags, intptr_t source, uint32_t message_id, int32_t language_id, void* buffer, int32_t buffer_chars,
+                                 intptr_t arguments)
+{
+#ifdef LEANCLR_PLATFORM_WIN
+    return static_cast<int32_t>(::FormatMessageW(static_cast<DWORD>(flags), reinterpret_cast<LPCVOID>(source), static_cast<DWORD>(message_id),
+                                                 static_cast<DWORD>(language_id), reinterpret_cast<LPWSTR>(buffer), static_cast<DWORD>(buffer_chars),
+                                                 reinterpret_cast<va_list*>(arguments)));
+#else
+    (void)flags;
+    (void)source;
+    (void)message_id;
+    (void)language_id;
+    (void)buffer;
+    (void)buffer_chars;
+    (void)arguments;
+    return 0;
+#endif
+}
+
 uint32_t Kernel32::get_full_path_name(const Utf16Char* path, uint32_t buffer_length, Utf16Char* buffer, intptr_t file_part)
 {
 #ifdef LEANCLR_PLATFORM_WIN
@@ -493,25 +512,6 @@ bool Kernel32::find_next_file(intptr_t find_handle, void* find_file_data)
         return false;
     return ::FindNextFileW(reinterpret_cast<HANDLE>(find_handle), static_cast<LPWIN32_FIND_DATAW>(find_file_data)) != 0;
 }
-
-// int32_t Kernel32::format_message(int32_t flags, intptr_t source, uint32_t message_id, int32_t language_id, Utf16Char* buffer, int32_t buffer_chars,
-//                                  intptr_t* arguments, int32_t argument_count)
-// {
-//     if (buffer == nullptr || buffer_chars <= 0)
-//         return 0;
-//     void* args_ptr = nullptr;
-//     leanclr::utils::Vector<DWORD_PTR> arg_storage;
-//     if (argument_count > 0 && arguments != nullptr)
-//     {
-//         arg_storage.resize(static_cast<size_t>(argument_count));
-//         for (int32_t i = 0; i < argument_count; ++i)
-//             arg_storage[static_cast<size_t>(i)] = static_cast<DWORD_PTR>(arguments[i]);
-//         args_ptr = static_cast<void*>(arg_storage.begin());
-//     }
-//     return static_cast<int32_t>(::FormatMessageW(static_cast<DWORD>(flags), reinterpret_cast<LPCVOID>(source), static_cast<DWORD>(message_id),
-//                                                  static_cast<DWORD>(language_id), reinterpret_cast<LPWSTR>(buffer), static_cast<DWORD>(buffer_chars),
-//                                                  reinterpret_cast<va_list*>(args_ptr)));
-// }
 
 bool Kernel32::get_file_attributes_ex_private(const Utf16Char* name, uint32_t file_info_level, void* file_info)
 {

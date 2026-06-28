@@ -214,9 +214,10 @@ namespace ManagedNet10.LegacyTests
 
             if (type == typeof(CorlibTests.InternalCall.TC_System_Console))
             {
+                // The linked legacy source still expects Mono's null-console no-throw behavior.
+                // RunAssembly uses CorlibConsoleNet10Semantics for the .NET 10 redirected-input behavior.
                 return methodName == "KeyAvailable_ReadWithoutThrow" ||
-                    methodName == "TreatControlCAsInput_ToggleWithoutThrow" ||
-                    methodName == "WindowWidth_ReadWithoutThrow";
+                    methodName == "TreatControlCAsInput_ToggleWithoutThrow";
             }
 
             return false;

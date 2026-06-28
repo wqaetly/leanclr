@@ -19,6 +19,8 @@ class Kernel32
     static bool read_console_input(intptr_t handle, void* record, int32_t length, int32_t* events_read);
     static bool get_console_mode(intptr_t handle, int32_t* mode);
     static bool set_console_mode(intptr_t handle, int32_t mode);
+    static int32_t format_message(int32_t flags, intptr_t source, uint32_t message_id, int32_t language_id, void* buffer, int32_t buffer_chars,
+                                  intptr_t arguments);
     static uint32_t get_full_path_name(const Utf16Char* path, uint32_t buffer_length, Utf16Char* buffer, intptr_t file_part);
 
 #if LEANCLR_PLATFORM_WIN
@@ -69,8 +71,6 @@ class Kernel32
     static bool delete_file_private(vm::RtString* path);
     static bool delete_file_private(const Utf16Char* path);
     static bool find_next_file(intptr_t find_handle, void* find_file_data);
-    // static int32_t format_message(int32_t flags, intptr_t source, uint32_t message_id, int32_t language_id, Utf16Char* buffer, int32_t buffer_chars,
-    //                               intptr_t* arguments, int32_t argument_count);
     static bool get_file_attributes_ex_private(const Utf16Char* name, uint32_t file_info_level, void* file_info);
     static bool get_file_information_by_handle(intptr_t h_file, void* file_information);
     static bool get_file_information_by_handle_ex(intptr_t h_file, int32_t file_information_class, void* file_information, uint32_t buffer_size);
