@@ -7,6 +7,7 @@ namespace ManagedNet10.LegacyTests
             RunCorlibInterlocked();
             RunCorlibVolatile();
             RunCorlibThread();
+            RunCorlibOSSpecificSynchronizationContext();
         }
 
         public static void RunCorlibThread()
@@ -22,6 +23,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunCorlibVolatile()
         {
             LegacyTestRunner.RunType(typeof(CorlibTests.InternalCall.TC_System_Threading_Volatile));
+        }
+
+        public static void RunCorlibOSSpecificSynchronizationContext()
+        {
+            LegacyTestRunner.RunType(typeof(CorlibTests.InternalCall.TC_System_Threading_OSSpecificSynchronizationContext));
         }
     }
 }

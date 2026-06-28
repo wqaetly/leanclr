@@ -152,6 +152,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_IO_MonoIO.cs" Link="CorlibTests\InternalCall\TC_System_IO_MonoIO.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Math.cs" Link="CorlibTests\InternalCall\TC_System_Math.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Monitor.cs" />
+    <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_OSSpecificSynchronizationContext.cs" Link="CorlibTests\InternalCall\TC_System_Threading_OSSpecificSynchronizationContext.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Threading_Thread.cs" Link="CorlibTests\InternalCall\TC_System_Threading_Thread.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Object_Icalls.cs" Link="CorlibTests\InternalCall\TC_System_Object_Icalls.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_Reflection_Assembly.cs" Link="CorlibTests\InternalCall\TC_System_Reflection_Assembly.cs" />
