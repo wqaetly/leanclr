@@ -19,6 +19,7 @@ namespace ManagedNet10.LegacyTests
                 typeof(Tests.CSharp.TC_Nullable),
                 typeof(Tests.CSharp.TC_InterfaceDefaultMethod),
                 typeof(Tests.CSharp.TC_Marshal),
+                typeof(Tests.CSharp.TC_AOTTypeImplInterpInterface),
                 typeof(Tests.CSharp.TC_ArrayGenericInterface));
         }
 
@@ -245,6 +246,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunRuntimeMarshal()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Marshal));
+        }
+
+        public static void RunRuntimeAotTypeImplInterpInterface()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_AOTTypeImplInterpInterface));
         }
 
         public static void RunRuntimeArrayGenericInterface()

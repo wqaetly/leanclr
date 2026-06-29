@@ -71,6 +71,7 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTEnums.cs" Link="Fixtures\AOTEnums.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTValueTypes.cs" Link="Fixtures\AOTValueTypes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\ArmHFAStructs.cs" Link="Fixtures\ArmHFAStructs.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\BaseImplNone.cs" Link="Fixtures\BaseImplNone.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\CallDefs.cs" Link="Fixtures\CallDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\CustomAttributes.cs" Link="Fixtures\CustomAttributes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\InnerTypes.cs" Link="Fixtures\InnerTypes.cs" />
@@ -219,6 +220,7 @@
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Assembly.cs" Link="Runtime\TC_Assembly.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_ArrayGenericInterface.cs" Link="Runtime\TC_ArrayGenericInterface.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_AOTTypeImplInterpInterface.cs" Link="Runtime\TC_AOTTypeImplInterpInterface.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_CustomAttribute.cs" Link="Runtime\TC_CustomAttribute.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_DynamicInvoke.cs" Link="Runtime\TC_Delegate_DynamicInvoke.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_OpenClose.cs" Link="Runtime\TC_Delegate_OpenClose.cs" />

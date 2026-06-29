@@ -1312,6 +1312,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本轮未新增 runtime façade；现有数组创建、字段地址、cctor、分支栈平衡、diagnostics stopwatch 和普通托管调用路径已足够支撑该旧用例切片。真正 reverse P/Invoke / native callback 仍不由该 marker-only 用例证明。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunAotMisc`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
 
+2026-06-29 迁移旧 `TC_AOTTypeImplInterpInterface` 用例：
+
+- 将旧 `Tests.CSharp.TC_AOTTypeImplInterpInterface` 和依赖 fixture `Tests.Fixtures.BaseImplNone` 链接进 `ManagedNet10.LegacyTests`，新增 `RunRuntimeAotTypeImplInterpInterface` 定位入口，并纳入 `RunRuntimeLanguageFeatures` 分组。
+- 该旧用例覆盖派生类声明接口、接口方法实现由基类 virtual method 提供的 dispatch 路径，避免 interface slot 解析只看当前类型直接声明方法。
+- 本轮未新增 runtime façade；现有 inherited interface contract 与 base virtual method dispatch 解析已足够支撑该旧用例切片。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunRuntimeAotTypeImplInterpInterface`、`ManagedNet10.LegacyTests.Program::RunRuntimeLanguageFeatures`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
