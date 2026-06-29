@@ -35,6 +35,26 @@
     "header": "icalls/system_environment.h"
   },
   {
+    "name": "System.Exception::IsImmutableAgileException(System.Exception)",
+    "func": "SystemException::is_immutable_agile_exception",
+    "header": "icalls/system_exception.h"
+  },
+  {
+    "name": "System.Exception::PrepareForForeignExceptionRaise()",
+    "func": "SystemException::prepare_for_foreign_exception_raise",
+    "header": "icalls/system_exception.h"
+  },
+  {
+    "name": "System.Exception::GetFrozenStackTrace(System.Exception)",
+    "func": "SystemException::get_frozen_stack_trace",
+    "header": "icalls/system_exception.h"
+  },
+  {
+    "name": "System.Exception::GetExceptionCount()",
+    "func": "SystemException::get_exception_count",
+    "header": "icalls/system_exception.h"
+  },
+  {
     "name": "System.GC::GetAllocatedBytesForCurrentThread()",
     "func": "SystemGC::get_allocated_bytes_for_current_thread",
     "header": "icalls/system_gc.h"

@@ -434,7 +434,7 @@ RtResult<vm::RtArray*> SystemRuntimeType::get_custom_attributes(vm::RtReflection
     }
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
-    return vm::CustomAttribute::get_customattributes_on_target_token(klass->image, klass->token, attr_klass);
+    return vm::CustomAttribute::get_customattributes_on_class_with_pseudo(klass, attr_klass);
 }
 
 RtResult<vm::RtReflectionRuntimeType*> SystemRuntimeType::get_parent_type(vm::RtReflectionRuntimeType* runtime_type) noexcept

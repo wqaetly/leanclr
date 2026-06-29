@@ -15,11 +15,11 @@ LeanCLR 对接 .NET 10 不是从零重新实现一套 CLR，也不是把元数�
 因此工作重点是：
 
 - 保留独立的 `coreclr-net10` / `minimal-net10` profile 边界，不污染现有 `mono45` / Unity profile。
-- 基于 .NET 10 `System.Private.CoreLib` / CoreCLR VM 源码抽取 contract map，先定义 RuntimeType、RuntimeHandle、Assembly、Module、CustomAttribute、Span/Unsafe、Monitor/Task 等 net10 façade；执行基准见 [`docs/net10-runtime-contract.md`](net10-runtime-contract.md)。
+- 基于 .NET 10 `System.Private.CoreLib` / CoreCLR VM 源码抽取 contract map，先定义 RuntimeType、RuntimeHandle、Assembly、Module、CustomAttribute、Span/Unsafe、单线程 Monitor/Task continuation 等 net10 façade；执行基准见 [`docs/net10-runtime-contract.md`](net10-runtime-contract.md)。
 - 重写 `coreclr-net10` 活跃路径的 model/façade，外部满足 CoreLib 期待，内部映射到 LeanCLR 自己的 `RtClass` / `RtMethodInfo` / `RtFieldInfo` / metadata cache / interpreter。
 - 只支持项目纯逻辑 DLL 实际使用到的核心类型、基础 IL、泛型、异常、委托、少量反射、必要 Span/Unsafe 和 host bridge API。
 - 不再以完整 `Microsoft.NETCore.App` 或剩余 extern diff 归零作为近期目标。
-- 对白名单外的 BCL、反射、线程、IO、网络、动态代码生成等能力，优先给出清晰诊断，而不是隐式尝试兼容。
+- 对白名单外的 BCL、反射、ThreadPool/Timer、IO、网络、动态代码生成等能力，优先给出清晰诊断，而不是隐式尝试兼容。
 - 通过 `leanrun`、`ManagedNet10.Smoke`、legacy 测试子集和真实纯逻辑 DLL smoke 验证能力边界；测试后置为验收，不再驱动架构形状。
 
 当前仓库中已有相关基础：
@@ -55,7 +55,7 @@ flowchart TD
 
     M --> N["ICALL / QCall / FCall 风格入口"]
     M --> O["Intrinsic：Span、Unsafe、RuntimeHelpers、Interlocked"]
-    M --> P["P/Invoke / Interop：Console、File、Thread、OS PAL"]
+    M --> P["P/Invoke / Interop：Console、File、OS PAL"]
     M --> Q["Reflection / RuntimeType / RuntimeHandle"]
 
     N --> R["映射到 LeanCLR C++ runtime"]
@@ -85,7 +85,7 @@ flowchart TD
 | Reflection | 不从零重写，但要校准 | 复用现有反射框架，补齐 `RuntimeType`、`RuntimeMethodInfo`、`RuntimeFieldInfo`、Attribute、Handle 与 CoreLib 的契约 |
 | ICALL / Intrinsic / PInvoke | 需要 profile 化重建契约 | 不直接复用 Mono 的表；为 `coreclr-net10` 建独立 catalog，并按 BCL 实际调用逐步映射 |
 | BCL | 不建议重写整套 | 直接使用 .NET 10 runtime pack 的托管程序集；LeanCLR 只实现这些程序集依赖的 native runtime 入口 |
-| AOT | 后续阶段推进 | 先让解释执行证明 runtime contract 正确，再扩大 AOT codegen 和 native runner 覆盖 |
+| AOT | 后续阶段推进 | 先让解释执行证明 runtime contract 正确，再扩大 AOT 生成和 native runner 覆盖 |
 
 ## 从加载 DLL 到执行完成的程序流向
 
@@ -136,7 +136,7 @@ flowchart TD
     R --> S["宿主处理退出码、日志、异常和资源释放"]
 ```
 
-在 `.NET 10` 场景里，最容易出问题的不是普通 IL，而是用户 DLL 间接触发的基础库/runtime 边界。例如 `Object.GetType()`、`RuntimeType.Name`、`Span<T>` 构造、`Unsafe.AsPointer<T>`、`Thread.CurrentThread`、`Monitor`、`Task.Yield()`、Attribute 读取、反射字段访问等。当前只应按真实纯逻辑 DLL 的需求补齐这些路径。
+在 `.NET 10` 场景里，最容易出问题的不是普通 IL，而是用户 DLL 间接触发的基础库/runtime 边界。例如 `Object.GetType()`、`RuntimeType.Name`、`Span<T>` 构造、`Unsafe.AsPointer<T>`、`Monitor`、`Task.Yield()`、Attribute 读取、反射字段访问等。当前只应按真实纯逻辑 DLL 的需求补齐这些路径。
 
 ## Runtime API contract 的落地循环
 
@@ -224,7 +224,7 @@ flowchart TD
 | Logging / Diagnostics | 打印日志、错误、托管异常栈、性能计数 |
 | Time / Input | delta time、帧号、按键、鼠标、触摸、手柄输入 |
 | Event / Signal | 订阅、取消订阅、派发事件、连接 Godot signal |
-| Scheduler | 主线程投递、延迟调用、协程/Task continuation 转发 |
+| Scheduler | 主线程投递、延迟调用、协程/Task continuation 转发；不提供后台线程调度 |
 
 推荐调用形态：
 
@@ -372,8 +372,8 @@ flowchart TD
 - 测试资产不缩水：原作者已有 managed / Mono 测试可以分阶段迁移，但最终要全量跑通，不能以精选通过替代合格线。
 - 白名单优先于兼容幻想：不支持的 BCL/API 应尽早诊断，而不是在运行中随机失败。
 - 引擎桥接使用 opaque handle：托管层不能依赖 Unity/Godot 内部对象布局。
-- 所有跨边界调用要可诊断：缺 API、签名不匹配、线程错误、对象已销毁都应给出清晰错误。
-- 主线程规则要前置设计：引擎对象访问、事件派发、Task continuation 都需要明确调度策略。
+- 所有跨边界调用要可诊断：缺 API、签名不匹配、越界调度、对象已销毁都应给出清晰错误。
+- 主线程规则要前置设计：引擎对象访问、事件派发、Task continuation 都需要明确走宿主主循环或 LeanCLR frame pump，不扩展为多线程 runtime。
 
 ## 一句话理解
 

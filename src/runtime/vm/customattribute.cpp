@@ -1158,6 +1158,117 @@ RtResult<RtArray*> CustomAttribute::get_customattributes_on_target_token(metadat
     return ca_arr;
 }
 
+static bool has_struct_layout_pseudo_attribute(const metadata::RtClass* klass)
+{
+    uint32_t layout_flags = klass->flags & (static_cast<uint32_t>(metadata::RtTypeAttribute::SequentialLayout) |
+                                            static_cast<uint32_t>(metadata::RtTypeAttribute::ExplicitLayout));
+    uint32_t string_format = klass->flags & static_cast<uint32_t>(metadata::RtTypeAttribute::StringFormatMask);
+    return layout_flags != 0 || string_format != 0 || klass->image->get_class_layout_data(klass->token).has_value();
+}
+
+static RtResult<RtObject*> create_struct_layout_pseudo_attribute(const metadata::RtClass* klass)
+{
+    metadata::RtModuleDef* corlib = Class::get_corlib_types().cls_object->image;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, attr_klass,
+                                            corlib->get_class_by_name("System.Runtime.InteropServices.StructLayoutAttribute", false, true));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, layout_kind_klass,
+                                            corlib->get_class_by_name("System.Runtime.InteropServices.LayoutKind", false, true));
+
+    const metadata::RtTypeSig* ctor_params[] = {layout_kind_klass->by_val};
+    const metadata::RtMethodInfo* ctor =
+        Method::find_matched_method_in_class_by_name_and_signature(attr_klass, STR_CTOR, ctor_params, 1);
+    if (ctor == nullptr)
+    {
+        RET_ERR(RtErr::MissingMethod);
+    }
+
+    int32_t layout_kind = 3; // LayoutKind.Auto
+    if ((klass->flags & static_cast<uint32_t>(metadata::RtTypeAttribute::SequentialLayout)) != 0)
+    {
+        layout_kind = 0; // LayoutKind.Sequential
+    }
+    else if ((klass->flags & static_cast<uint32_t>(metadata::RtTypeAttribute::ExplicitLayout)) != 0)
+    {
+        layout_kind = 2; // LayoutKind.Explicit
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, attr_obj,
+                                            LEANCLR_NEWOBJ_INTERNAL(attr_klass, "CustomAttribute::create_struct_layout_pseudo_attribute"));
+    const void* ctor_args[] = {&layout_kind};
+    RET_ERR_ON_FAIL(Runtime::invoke_with_run_cctor(ctor, attr_obj, ctor_args));
+
+    int32_t pack = 0;
+    int32_t size = 0;
+    auto layout_data = klass->image->get_class_layout_data(klass->token);
+    if (layout_data.has_value())
+    {
+        pack = static_cast<int32_t>(layout_data->packing);
+        size = static_cast<int32_t>(layout_data->size);
+    }
+
+    int32_t char_set = 2; // CharSet.Ansi
+    uint32_t string_format = klass->flags & static_cast<uint32_t>(metadata::RtTypeAttribute::StringFormatMask);
+    if (string_format == static_cast<uint32_t>(metadata::RtTypeAttribute::UnicodeClass))
+    {
+        char_set = 3; // CharSet.Unicode
+    }
+    else if (string_format == static_cast<uint32_t>(metadata::RtTypeAttribute::AutoClass))
+    {
+        char_set = 4; // CharSet.Auto
+    }
+
+    const metadata::RtFieldInfo* pack_field = Class::get_field_for_name(attr_klass, "Pack", true);
+    const metadata::RtFieldInfo* size_field = Class::get_field_for_name(attr_klass, "Size", true);
+    const metadata::RtFieldInfo* char_set_field = Class::get_field_for_name(attr_klass, "CharSet", true);
+    if (pack_field == nullptr || size_field == nullptr || char_set_field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+    RET_ERR_ON_FAIL(Field::set_instance_value(pack_field, attr_obj, &pack));
+    RET_ERR_ON_FAIL(Field::set_instance_value(size_field, attr_obj, &size));
+    RET_ERR_ON_FAIL(Field::set_instance_value(char_set_field, attr_obj, &char_set));
+    RET_OK(attr_obj);
+}
+
+static RtResult<RtArray*> append_custom_attribute(RtArray* normal_attrs, RtObject* pseudo_attr)
+{
+    const CorLibTypes& types = Class::get_corlib_types();
+    int32_t normal_count = normal_attrs != nullptr ? Array::get_array_length(normal_attrs) : 0;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtArray*, result,
+                                            LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(types.cls_attribute, normal_count + 1,
+                                                                                       "CustomAttribute::append_custom_attribute"));
+    for (int32_t i = 0; i < normal_count; ++i)
+    {
+        Array::set_array_data_at<RtObject*>(result, i, Array::get_array_data_at<RtObject*>(normal_attrs, i));
+    }
+    Array::set_array_data_at<RtObject*>(result, normal_count, pseudo_attr);
+    RET_OK(result);
+}
+
+RtResult<RtArray*> CustomAttribute::get_customattributes_on_class_with_pseudo(const metadata::RtClass* klass,
+                                                                              const metadata::RtClass* attr_klass)
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtArray*, normal_attrs,
+                                            get_customattributes_on_target_token(klass->image, klass->token, attr_klass));
+    if (attr_klass == nullptr || !has_struct_layout_pseudo_attribute(klass))
+    {
+        RET_OK(normal_attrs);
+    }
+
+    metadata::RtModuleDef* corlib = Class::get_corlib_types().cls_object->image;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, struct_layout_klass,
+                                            corlib->get_class_by_name("System.Runtime.InteropServices.StructLayoutAttribute", false, true));
+    RET_ERR_ON_FAIL(Class::initialize_super_types(const_cast<metadata::RtClass*>(struct_layout_klass)));
+    RET_ERR_ON_FAIL(Class::initialize_super_types(const_cast<metadata::RtClass*>(attr_klass)));
+    if (!Class::has_class_parent_fast(struct_layout_klass, attr_klass))
+    {
+        RET_OK(normal_attrs);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, pseudo_attr, create_struct_layout_pseudo_attribute(klass));
+    return append_custom_attribute(normal_attrs, pseudo_attr);
+}
+
 RtResult<RtArray*> CustomAttribute::get_customattributes_on_target_object(RtObject* obj, const metadata::RtClass* attr_klass)
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(CustomAttributeProvider, provider, get_token_of_customattribute_provider(obj));

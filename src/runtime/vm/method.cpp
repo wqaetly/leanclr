@@ -869,6 +869,16 @@ RtResult<RtReflectionMethodBody*> Method::create_reflection_method_body(const Rt
                                             LEANCLR_NEWOBJ_INTERNAL(corlib_types.cls_reflection_methodbody, "Method::create_reflection_method_body"));
     RtReflectionMethodBody* method_body_obj = static_cast<RtReflectionMethodBody*>(method_body_obj_base);
 
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        RtArray*, code_arr,
+        LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(corlib_types.cls_byte, static_cast<int32_t>(raw_method_body.code_size),
+                                                   "Method::create_reflection_method_body"));
+    if (raw_method_body.code_size > 0)
+    {
+        std::memcpy(Array::get_array_data_start_as<uint8_t>(code_arr), raw_method_body.code, raw_method_body.code_size);
+    }
+    method_body_obj->codes = code_arr;
+
     // Setup generic context
     metadata::RtGenericContainerContext generic_container_context{method->parent->generic_container, method->generic_container};
 

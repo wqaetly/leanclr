@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已覆盖托管 wrapper contract、engine binding minimal adapter、value marshal / property-call 最小交互面和 host diagnostics / failure policy。P4.1 已完成第一阶段完成审计和全量 gate sweep，第一阶段关闭为受控 `net10.0` 纯逻辑 runtime contract 与 mock host bridge 基线。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程同步 / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已覆盖托管 wrapper contract、engine binding minimal adapter、value marshal / property-call 最小交互面和 host diagnostics / failure policy。P4.1 已完成第一阶段完成审计和全量 gate sweep，第一阶段关闭为受控 `net10.0` 纯逻辑 runtime contract 与 mock host bridge 基线。
 
 已验证切片：
 
@@ -34,16 +34,16 @@
 | P0.6 RunAll 重新分层 | delegate 切片通过后重新跑 `ManagedNet10.LegacyTests.Program::RunAll`，把后续失败归类为 contract、façade、VM 通用语义或白名单外 API | `ManagedNet10.LegacyTests.Program::RunAll` 通过 | 保留为 P0 回归基线，不作为设计来源 |
 | P1.1 CustomAttributeData metadata-only | `RuntimeCustomAttributeData` 最小路径可从 assembly / module / type / field / method / parameter / property / event target 的 metadata blob 解出 constructor arguments、property named argument 和 field named argument，不需要实例化 attribute；同时覆盖 enum、Type、int[]、Type[]、object、object[]、named enum/type/array/object 等 Odin/NKG 常见 blob 形状 | `ManagedNet10.Smoke.Program::TestCustomAttributeDataOnly` 纳入默认 smoke；`interp-smoke.ps1 -Configuration Release` 通过 | 继续接 NKG/Odin 轻量 attribute 枚举作为真实 workload gate |
 | P1.2 NKG/Odin light workload | `ManagedNet10.NkgSmoke` 使用真实 NKGGameFramework、OdinSerializer 与 UniTask `net10.0` 输出目录验证轻量反射、attribute 枚举和白名单 API 边界；默认 sampler/Hosting 完整面仍在第一阶段外 | `scripts/dotnet10/api-scan.ps1` 扫描 NKG core/Odin/UniTask：unsupported `0`；`scripts/dotnet10/nkg-smoke.ps1` 通过 | 保留为真实 workload gate；后续失败按 contract、façade、VM 通用语义或白名单外 API 归类 |
-| P1.3 Thread / Monitor / WaitHandle bounded semantics | 单线程 profile 下补齐 `CurrentManagedThreadId`、Monitor fast path / wait PInvoke、ThreadPool sizing / queue dispatch、ManualResetEvent / WaitAny 最小路径；复杂并行调度仍不承诺 | `ManagedNet10.LegacyTests.Program::RunCorlibThreading` 通过；`ManagedNet10.LegacyTests.Program::RunCorlibMonitor` 通过 | 保留为 threading regression gate；后续 Task/dispatcher 只接可控 continuation |
+| P1.3 Single-thread sync façade | 单线程 profile 下补齐 `CurrentManagedThreadId`、Monitor fast path / wait PInvoke、ManualResetEvent / WaitAny 最小路径；不扩展多线程调度、ThreadPool worker 或 OS thread affinity | `ManagedNet10.LegacyTests.Program::RunCorlibThreading` 通过；`ManagedNet10.LegacyTests.Program::RunCorlibMonitor` 通过 | 保留为 single-thread sync regression gate；Task/dispatcher 只接可控 continuation |
 | P1.4 System.IO / Kernel32 platform façade | .NET 10 `FileStream` / `File` / `Path` 触发的 Kernel32 generated PInvoke 统一落到 LeanCLR cross-platform `platform::Kernel32` / `os::File` / `os::Path`，非 Windows 走 POSIX fallback 并写回 Win32-style last error | `ManagedNet10.LegacyTests.Program::RunCorlibIO` 通过 | 保留为 file I/O regression gate；完整 watcher、ACL、reparse point、overlapped I/O 后置 |
-| P1.5 RuntimeHelpers / Span / RVA | `RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor`、stack check、`CompileMethod` / `PrepareMethod`、RVA `InitializeArray` / `CreateSpan`、inline array span helper 和 bitwise/reference checks 统一映射到 LeanCLR class/module/interpreter metadata；method preparation 在解释 profile 中是 no-op façade | `ManagedNet10.LegacyTests.Program::RunCorlibRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestSpan`、`ManagedNet10.LegacyTests.Program::RunNet10SpanBinaryPrimitives` 通过 | 保留为 RuntimeHelpers/Span regression gate；byref-like escape、任意 function pointer 和完整 JIT preparation 后置 |
-| P1.6 AssemblyLoadContext / Reflection.Emit limited façade | `AssemblyLoadContext` 初始化、已加载程序集枚举、release bookkeeping、`RuntimeAssemblyBuilder.CreateDynamicAssembly` 和 `ModuleHandle.GetDynamicMethod` 只承诺 LeanCLR metadata / interpreter 能消费的受限动态程序集与 light lambda 路径；collectible ALC、LoaderAllocator、unload 和任意动态 IL/JIT codegen 后置 | `ManagedNet10.LegacyTests.Program::RunCorlibLightLambda` 通过 | 保留为 Reflection.Emit / light lambda regression gate；后续动态方法失败先区分 metadata façade 缺口和完整 JIT codegen 非目标 |
+| P1.5 RuntimeHelpers / Span / RVA | `RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor`、stack check、`CompileMethod` / `PrepareMethod`、RVA `InitializeArray` / `CreateSpan`、inline array span helper 和 bitwise/reference checks 统一映射到 LeanCLR class/module/interpreter metadata；method preparation 在解释 profile 中是 no-op façade | `ManagedNet10.LegacyTests.Program::RunCorlibRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestSpan`、`ManagedNet10.LegacyTests.Program::RunNet10SpanBinaryPrimitives` 通过 | 保留为 RuntimeHelpers/Span regression gate；byref-like escape、任意 function pointer 和动态 native codegen 不属于目标 |
+| P1.6 AssemblyLoadContext / Reflection.Emit limited façade | `AssemblyLoadContext` 初始化、已加载程序集枚举、release bookkeeping、`RuntimeAssemblyBuilder.CreateDynamicAssembly` 和 `ModuleHandle.GetDynamicMethod` 只承诺 LeanCLR metadata / interpreter 能消费的受限动态程序集与 light lambda 路径；collectible ALC、LoaderAllocator、unload 和任意动态 IL native codegen 不属于目标 | `ManagedNet10.LegacyTests.Program::RunCorlibLightLambda` 通过 | 保留为 Reflection.Emit / light lambda regression gate；后续动态方法失败先区分 metadata façade 缺口和动态 codegen 非目标 |
 | P1.7 Handle / reflection consolidation | type / method / field / module / assembly handle 入口统一经 `vm::Reflection` 边界解码；`MethodTable*` 走 net10 façade registry；QCall object/slot 参数先做 GC allocated-object guard，再映射到 LeanCLR metadata；unsupported handle shape 输出明确错误，不靠宽松指针猜测前进 | `RunLegacyDiscoverySmoke`、`RunCorlibReflectionRuntimeModule`、`RunRuntimeDelegateDynamicInvoke`、`RunCorlibValueTypeEqualsStructValueTypes`、`RunCorlibValueTypeGetHashCodeStructIsStable`、`RunCorlibRuntimeHelpers`、`RunNet10SpanBinaryPrimitives`、`api-scan.ps1`、`nkg-smoke.ps1` 通过 | 保留为 reflection/handle regression gate；新增 CoreLib handle 入口必须复用同一 helper 或显式说明例外 |
 | P1.8 GC collection / finalizer cleanup | `.NET 10` `GC._Collect(int,int,byte)` 桥接到 `vm::GC::collect(generation)`，`GC.CollectionCount(int)` 走两参数 `_CollectionCount` façade；真实 mark-sweep 后触发的 CoreLib cleanup 入口 `Thread.InternalFinalize()` 和 `RuntimeMethodHandle.Destroy(RuntimeMethodHandleInternal)` 已纳入 net10 façade | `ManagedNet10.LegacyTests.Program::RunGcCollection` 整类旧 `TC_GC_Collection` 通过；`RunAll`、默认 `interp-smoke.ps1`、`api-scan.ps1`、`nkg-smoke.ps1` 和签名 gate 通过 | 保留为 GC collection regression gate；分代、blocking/compacting 模式和完整 CoreCLR GC 模型不属于当前 profile |
 | P1.9 GC roots / handles | 旧 GC roots / handles 用例直接验证静态根、实例字段链、继承字段链、strong/weak/pinned handle、同对象多 weak handle、强 handle 传递标记，以及 static GC bitmap bit 0 边界，复用 LeanCLR 当前显式 GCHandle 保活模型 | `ManagedNet10.LegacyTests.Program::RunGcRootsAndHandles` 整类旧 `TC_GC_Roots` / `TC_GC_Handles` 通过；`ManagedNet10.LegacyTests.Program::RunGcStaticBitmapBitZero` 通过；`RunAll` 和默认 `interp-smoke.ps1` 通过 | 保留为 GC root scanning 与 handle sweep regression gate；托管局部变量自动栈根仍不作为当前 LeanCLR profile 承诺 |
 | P1.10 GC object graph scan | 旧 graph scan 用例验证链、断链、环、自引用、菱形共享叶子、宽图、深链 suffix 和重复 collect 的 mark-sweep 可达性语义 | `ManagedNet10.LegacyTests.Program::RunGcScanGraph` 整类旧 `TC_GC_Graph` 通过；`RunAll` 和默认 `interp-smoke.ps1` 通过 | 保留为对象图扫描 regression gate；后续数组、value type 和 instance field scan 分节点继续迁移 |
 | P1.11 GC sweep | 旧 sweep 用例验证 small object / big byte array 的回收与保活、small/big 混合批量 sweep，以及静态数组根清除后的对象回收 | `ManagedNet10.LegacyTests.Program::RunGcSweep` 整类旧 `TC_GC_Sweep` 通过；`RunAll` 和默认 `interp-smoke.ps1` 通过 | 保留为 mark-sweep reclaim regression gate；后续更复杂 scan 类型分节点继续迁移 |
-| P1.12 GC finalizer | 旧 finalizer 用例验证不可达 finalizable 对象会执行 finalizer、`SuppressFinalize` 阻止执行、`WaitForPendingFinalizers` drain pending 队列、`ReRegisterForFinalize` 可让 resurrected 对象再次 finalization，以及普通 object 不影响自定义计数器；`.NET 10` public `GC.SuppressFinalize(object)` / `GC.ReRegisterForFinalize(object)` 直接落到 LeanCLR finalizer registry，private `SuppressFinalizeInternal` 与 QCall `_WaitForPendingFinalizers` / `ReRegisterForFinalize(ObjectHandleOnStack)` 也登记到 net10 façade | `ManagedNet10.LegacyTests.Program::RunGcFinalizer` 整类旧 `TC_GC_Finalizer` 通过；`RunAll`、默认 `interp-smoke.ps1`、`api-scan.ps1`、`nkg-smoke.ps1` 和签名 gate 通过 | 保留为 finalizer regression gate；完整 CoreCLR finalizer thread、CriticalFinalizerObject、SafeHandle release ordering 和多线程 finalization 后置 |
+| P1.12 GC finalizer | 旧 finalizer 用例验证不可达 finalizable 对象会执行 finalizer、`SuppressFinalize` 阻止执行、`WaitForPendingFinalizers` drain pending 队列、`ReRegisterForFinalize` 可让 resurrected 对象再次 finalization，以及普通 object 不影响自定义计数器；`.NET 10` public `GC.SuppressFinalize(object)` / `GC.ReRegisterForFinalize(object)` 直接落到 LeanCLR finalizer registry，private `SuppressFinalizeInternal` 与 QCall `_WaitForPendingFinalizers` / `ReRegisterForFinalize(ObjectHandleOnStack)` 也登记到 net10 façade | `ManagedNet10.LegacyTests.Program::RunGcFinalizer` 整类旧 `TC_GC_Finalizer` 通过；`RunAll`、默认 `interp-smoke.ps1`、`api-scan.ps1`、`nkg-smoke.ps1` 和签名 gate 通过 | 保留为 finalizer regression gate；完整 CoreCLR finalizer worker、CriticalFinalizerObject 和 SafeHandle release ordering 不属于当前 profile |
 | P1.13 GC array scan | 旧 array scan 用例验证 reference SZArray slot、slot clear、空 reference array、primitive array 不误标记、struct array 嵌套引用、宽 reference array、jagged object array、multidimensional object array，以及 big byte array pinned/unrooted reclaim 语义 | `ManagedNet10.LegacyTests.Program::RunGcScanArrays` 整类旧 `TC_GC_Arrays` 通过；`RunAll` 和默认 `interp-smoke.ps1` 通过 | 保留为 array scanning regression gate；non-sealed element、instance field 和 value type scan 继续分节点迁移 |
 | P1.14 GC non-sealed array element scan | 旧 non-sealed array element 用例验证静态元素类型为开放 base class 或 interface 时，GC 仍按运行时实例对象扫描 derived/implementor 的引用字段；同时覆盖 multidimensional base array 和 primitive-only sealed struct array 不误标记 | `ManagedNet10.LegacyTests.Program::RunGcScanArrayNonSealedElement` 整类旧 `TC_GC_ArrayNonSealedElement` 通过；`RunAll` 和默认 `interp-smoke.ps1` 通过 | 保留为 array slot runtime-object scanning regression gate；instance field 和 value type scan 继续分节点迁移 |
 | P1.15 GC instance field scan | 旧 instance field scan 用例验证直接 reference field、双字段 container 保活、container 不可达后 child 回收、string field 保活与 clear、继承 base reference field、derived reference field、嵌套 struct reference field、object 上的 array field、primitive-only object、替换 reference field 后旧 child 回收，以及 null reference field 不误标记无关对象 | `ManagedNet10.LegacyTests.Program::RunGcScanInstanceFields` 整类旧 `TC_GC_InstanceFields` 通过；`RunAll` 和默认 `interp-smoke.ps1` 通过 | 保留为 object instance field scanning regression gate；value type scan 继续分节点迁移 |
@@ -57,25 +57,26 @@
 | P1.23 Legacy placeholder inventory closure | 旧 `TC_dynamic` 的测试体在原素材中已全部注释，旧 `TC_Syste_Span` 是带 `[IgnoreTest]` 的 blocked placeholder；net10 legacy 项目按原 runner 语义纳入这两个库存项，但不把它们解释为 dynamic binder 或完整 `System.Span<T>` runtime 支持 | `ManagedNet10.LegacyTests.Program::RunRuntimeDynamicPlaceholder`、`RunCorlibIntrinsicSpanPlaceholder`、`RunRuntimeLanguageFeatures`、`RunCorlibArrayBufferIntrinsics`、`RunAll` 和默认 `interp-smoke.ps1` 通过；旧 managed `[UnitTest]` 扫描仅剩已由 net10 本地替代覆盖的 `TC_sub` | 保留为旧测试资产清点记录；后续若要承诺 dynamic binder 或完整 Span，需要新增真实行为 contract 和非占位测试 |
 | P2.1 Host Bridge ABI skeleton | 新增 `LeanClrHostBridgeFunctions` C ABI、ABI version、capability flags、状态码、错误字符串和最小 managed entry callback；mock host 只验证初始化、函数表校验和托管静态入口回调，不加载真实 Unity/Godot 或完整 runtime hosting API | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario AbiSkeleton` 通过 | 保留为 host bridge ABI regression gate；后续 P2.2-P2.4 在同一脚本上扩展 scenario |
 | P2.2 Opaque handle registry | 在 host function table 中定义宿主对象 handle 创建、retain/release、判活和销毁通知；mock host 维护 opaque handle table，托管侧只接收 `LeanClrHostHandle`，不暴露真实宿主对象指针 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario HandleRegistry` 通过 | 保留为 handle lifecycle regression gate；后续 dispatcher/event callback 必须复用同一 handle 失效诊断语义 |
-| P2.3 Main-thread dispatcher | 在 host function table 中定义主线程投递、next-frame pump、同步调用和 reentry guard；mock host 只承诺 FIFO 队列、受控 pump、callback 结果回传和托管异常诊断，不扩展完整 ThreadPool | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Dispatcher` 通过 | 保留为 dispatcher regression gate；event/callback bridge 必须通过同一主线程队列回到托管调用边界 |
+| P2.3 Main-thread dispatcher | 在 host function table 中定义主线程投递、next-frame pump、同步调用和 reentry guard；mock host 只承诺 FIFO 队列、受控 pump、callback 结果回传和托管异常诊断，不扩展后台 worker 调度 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Dispatcher` 通过 | 保留为 dispatcher regression gate；event/callback bridge 必须通过同一主线程队列回到托管调用边界 |
 | P2.4 Event / callback bridge | 在 host function table 中定义 event subscription token、取消订阅和宿主事件触发；mock host 触发事件时先投递到主线程 dispatcher，再由 pump 进入托管回调边界，取消订阅后触发为 no-op | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EventCallback` 通过 | 保留为 event/callback regression gate；真实 UnityEvent / Godot Signal 和复杂 Variant marshal 后置 |
 | P3.1 Managed host wrapper contract | 新增 `ManagedNet10.Smoke.HostBridgeWrapperSmoke`，定义托管侧 `HostObject` / `HostEventSubscription` / `HostDispatcher` 最小 wrapper contract；wrapper 只保存 opaque handle / subscription token，通过 mock bridge 把 host status 转成 `ObjectDisposedException` 或 `HostBridgeException` | `scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.HostBridgeWrapperSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0`；P2 host bridge 四场景仍通过 | 保留为 managed wrapper regression gate；后续真实 Unity/Godot 接入必须先落到同一 wrapper contract，再连接具体引擎对象模型 |
 | P3.2 Engine binding minimal adapter | 新增 native `EngineAdapter` mock 场景和 `ManagedNet10.Smoke.EngineBindingSmoke`，把引擎节点创建、事件订阅、事件触发、主线程 pump 和宿主销毁诊断串到 P2/P3.1 contract；托管 `EngineNode` 只持有 `HostObject`，不接触真实引擎指针 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EngineAdapter` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.EngineBindingSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 engine binding adapter regression gate；后续属性/方法调用必须继续经过 opaque handle、dispatcher 和明确 value marshal |
 | P3.3 Value marshal / property-call adapter | 在 host bridge ABI 中新增 `LeanClrHostValue` / `LeanClrHostVector3`、value marshal capability，以及 property get/set / command invoke 入口；native `ValueMarshal` 场景和 managed `ValueMarshalSmoke` 覆盖 bool/int/float/string/vector3、属性 round trip、`MoveBy` / `Damage` command、错误类型诊断和销毁后访问 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario ValueMarshal` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.ValueMarshalSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 value marshal regression gate；复杂 Variant、数组 view、UnityEngine.Object / Godot Object 语义后置 |
 | P3.4 Host diagnostics / failure policy | 在 host bridge ABI 中新增 log level enum、diagnostics capability 和 `report_managed_exception` 回调；native `Diagnostics` 场景和 managed `DiagnosticsSmoke` 覆盖 info/warning/error 日志、托管异常类型/消息/栈字符串回传、不完整诊断拒绝，以及 host failure 到 `HostBridgeException` 的转换 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Diagnostics` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.DiagnosticsSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 diagnostics regression gate；完整 debugger、符号解析和宿主异常对象跨 ABI 后置 |
-| P4.1 First-stage completion audit | 对照第一阶段完成标准复核 P0-P3 已验证切片，补齐 consolidated verification log，并确认 contract evidence、catalog evidence、runtime evidence 都有当前证据 | `check_runtime_api_signatures.py --profile coreclr-net10` 通过；`api-scan.ps1 -Configuration Release` 两组扫描 unsupported `0`；`nkg-smoke.ps1 -Configuration Release` 通过；`ManagedNet10.LegacyTests.Program::RunAll` 通过；P2/P3 host bridge 七个 scenario 与 P3 managed wrapper 四个入口全通过 | 第一阶段关闭为 minimal `net10.0` 纯逻辑 DLL + mock host bridge 基线；真实 Unity/Godot SDK 绑定、完整 sampler/Hosting、完整 ThreadPool/JIT/ALC/debugger 仍是后置边界 |
+| P4.1 First-stage completion audit | 对照第一阶段完成标准复核 P0-P3 已验证切片，补齐 consolidated verification log，并确认 contract evidence、catalog evidence、runtime evidence 都有当前证据 | `check_runtime_api_signatures.py --profile coreclr-net10` 通过；`api-scan.ps1 -Configuration Release` 两组扫描 unsupported `0`；`nkg-smoke.ps1 -Configuration Release` 通过；`ManagedNet10.LegacyTests.Program::RunAll` 通过；P2/P3 host bridge 七个 scenario 与 P3 managed wrapper 四个入口全通过 | 第一阶段关闭为 minimal `net10.0` 纯逻辑 DLL + mock host bridge 基线；真实 Unity/Godot SDK 绑定、完整 sampler/Hosting、ALC/debugger 仍是后置边界；动态 native codegen 和多线程 runtime 不进入计划 |
 
 第一阶段完成审计结果：
 
-- contract evidence：P0-P1 将 CoreLib 入口收敛到 type / handle / reflection / delegate / RuntimeHelpers / Span / IO / threading / ALC / Reflection.Emit 的 LeanCLR façade 映射；P2-P3 将 engine integration 限定在 opaque handle、dispatcher、event、value marshal、diagnostics 的 host bridge contract。
+- contract evidence：P0-P1 将 CoreLib 入口收敛到 type / handle / reflection / delegate / RuntimeHelpers / Span / IO / single-thread sync / ALC / Reflection.Emit 的 LeanCLR façade 映射；P2-P3 将 engine integration 限定在 opaque handle、dispatcher、event、value marshal、diagnostics 的 host bridge contract。
 - catalog evidence：`coreclr-net10` active profile 由 runtime pack extern gate 校验，`icalls.json`、`intrinsics.json`、`pinvokes.json` 当前全部匹配 extern 签名，Mono-era active entry 继续由 profile gate 隔离。
 - runtime evidence：legacy `RunAll`、smoke 子入口、NKG/Odin 轻量 workload、host bridge native scenario 和 managed wrapper scenario 均有独立命令可复验。
-- 第一阶段边界：当前目标是受控纯逻辑 `net10.0` DLL 与 mock host bridge，不承诺完整 `Microsoft.NETCore.App`、真实 Unity/Godot SDK binding、完整 sampler/Hosting、完整 CoreCLR ThreadPool/JIT/ALC/debugger 或复杂 Variant / engine object 语义。
+- 第一阶段边界：当前目标是受控纯逻辑 `net10.0` DLL 与 mock host bridge，不承诺完整 `Microsoft.NETCore.App`、真实 Unity/Godot SDK binding、完整 sampler/Hosting、完整 CoreCLR ALC/debugger、复杂 Variant / engine object 语义、动态 native codegen 或多线程 runtime。
 
 ## 非目标
 
 - 不重写 LeanCLR 的 metadata loader、类型系统、对象模型、解释器、GC、异常、委托和泛型底座。
-- 不复制 CoreCLR 的 MethodTable、loader、GC、ThreadPool、PAL 和完整 VM 实现。
+- 不复制 CoreCLR 的 MethodTable、loader、GC、PAL 和完整 VM 实现。
+- 不实现动态 native codegen、多线程 runtime 或 ThreadPool worker 调度模型。
 - 不承诺第一阶段完整承载 `Microsoft.NETCore.App`。
 - 不再把 extern diff 归零作为近期目标；extern diff 只作为定位工具。
 - 不删除 `mono45` / Unity 旧资产；先隔离 profile，等 `coreclr-net10` 跑绿后再清理。
@@ -214,7 +215,7 @@
 
 - ALC handle 是 LeanCLR 自有稳定 token，不暴露 CoreCLR LoaderAllocator / AssemblyLoadContextNative 结构。
 - 已加载程序集枚举复用 LeanCLR appdomain / module registry，不从 CoreCLR loader graph 推导。
-- 动态 assembly 只映射到 metadata façade 和可解释方法入口；不构建完整 Reflection.Emit module builder、ILGenerator、JIT code buffer 或 collectible allocator。
+- 动态 assembly 只映射到 metadata façade 和可解释方法入口；不构建完整 Reflection.Emit module builder、ILGenerator、native code buffer 或 collectible allocator。
 - `GetDynamicMethod` 优先从 resolver 托管对象读取可识别 method 信息，失败时输出具体 unsupported diagnostics，而不是宽松吞掉动态 codegen 缺口。
 
 验收入口：
@@ -249,7 +250,7 @@
 - `RuntimeHelpers` 的类型初始化、array data、object identity、generic helper 有明确映射。
 - `Unsafe` / `Span<T>` 的 byref、stackalloc、RVA initializer 和 ref reinterpret 路径可解释执行。
 - `SufficientExecutionStack` / `TryEnsureSufficientExecutionStack` 在解释 profile 下提供可前进的栈检查结果。
-- `RuntimeHelpers.CompileMethod(RuntimeMethodHandleInternal)` / `PrepareMethod(RuntimeMethodHandleInternal, IntPtr*, int)` 可被 CoreLib / reflection 路径调用；解释 profile 中它只确认入口可接受，不触发 JIT。
+- `RuntimeHelpers.CompileMethod(RuntimeMethodHandleInternal)` / `PrepareMethod(RuntimeMethodHandleInternal, IntPtr*, int)` 可被 CoreLib / reflection 路径调用；解释 profile 中它只确认入口可接受，不触发 native code generation。
 
 内部映射：
 
@@ -288,21 +289,20 @@
 - delegate invoke。
 - simple event / callback。
 
-### 8. Thread / Monitor / Task
+### 8. Single-thread Sync / Monitor / Task
 
 外部形状：
 
-- 单线程 profile 下，`Thread.CurrentThread`、`Environment.CurrentManagedThreadId`、`Monitor.Enter/Exit/TryEnter/IsEntered/Wait/Pulse` 和基础 `Task` continuation 有最小语义。
-- `ManualResetEvent` / `WaitHandle.WaitOne` / `WaitHandle.WaitAny` 支持由 runtime 创建的事件 handle 和受控 timeout。
-- `ThreadPool.GetMinThreads/GetMaxThreads/GetAvailableThreads/SetMinThreads/SetMaxThreads` 返回逻辑容量；`QueueUserWorkItem` 可触发 callback，但不承诺真实并行 worker。
-- blocking wait、Timer、complex async scheduler、跨线程取消和真实 OS thread affinity 必须明确分级。
+- 单线程 profile 下，`Thread.CurrentThread`、`Environment.CurrentManagedThreadId`、`Monitor.Enter/Exit/TryEnter/IsEntered/Wait/Pulse` 和基础 `Task` continuation 有最小兼容语义。
+- `ManualResetEvent` / `WaitHandle.WaitOne` / `WaitHandle.WaitAny` 只支持 runtime 自建事件 handle 和受控 timeout。
+- `ThreadPool`、Timer、后台 worker、跨线程取消和真实 OS thread affinity 不进入支持计划；触发时应给出明确 `NotSupported` 或白名单诊断。
+- `Task` continuation 只映射到 LeanCLR frame pump 或宿主主线程 dispatcher，不扩展为并行 scheduler。
 
 内部映射：
 
 - 第一阶段以单线程 frame scheduler / host dispatcher 为边界。
 - `Monitor.Wait` / CoreLib generated PInvoke path 映射到 `vm::Monitor::monitor_wait`，只保证当前单线程 runtime 可控场景。
 - `WaitHandle` generated PInvoke path 映射到 runtime 自建 `platform::EventHandle`，不接任意宿主 OS handle。
-- `ThreadPool` sizing 是逻辑状态，queue dispatch 走 LeanCLR 调用边界，不扩展为完整 work-stealing pool。
 - async continuation 优先映射到 LeanCLR frame pump 或宿主主线程 dispatcher。
 
 验收入口：
@@ -310,7 +310,6 @@
 - `lock` / `Monitor.Enter` / `Monitor.Exit`。
 - `Monitor.TryEnter` / `Monitor.IsEntered` / `Monitor.Wait` / `Pulse`。
 - `ManualResetEvent.WaitOne(0)` 和 `WaitHandle.WaitAny(..., 0)`。
-- `ThreadPool.QueueUserWorkItem`、`GetAvailableThreads`、`GetMaxThreads`。
 - `Task.Yield()` 的可控 continuation。
 - `System.Threading.Monitor::<Wait>g____PInvoke|24_0`、`System.Threading.WaitHandle::<WaitOneCore>g____PInvoke|0_0`、`System.Threading.WaitHandle::<WaitMultipleIgnoringSyncContext>g____PInvoke|2_0`。
 
@@ -338,7 +337,7 @@ ABI 分组：
 | Runtime | 初始化、关闭、设置搜索路径、加载 assembly、调用静态入口 | 不承诺完整 CoreCLR hosting API |
 | Object / Handle | 创建、查询、判活、retain/release、销毁通知 | handle 不暴露真实引擎指针和布局 |
 | Logging / Diagnostics | log、warning、error、托管异常栈回传 | 不要求宿主实现完整 debugger |
-| Scheduler | 主线程投递、下一帧执行、同步调用保护 | 阻塞 wait 和跨线程直接访问默认不支持 |
+| Scheduler | 主线程投递、下一帧执行、同步调用保护 | 阻塞 wait 和后台线程调度默认不支持 |
 | Event / Callback | 注册托管 delegate、取消注册、触发回调 | 订阅必须有可释放 token 或 handle |
 | Value Marshal | bool/int/float/string、opaque handle、小 struct、数组 view | 复杂 Variant / UnityEngine.Object 语义后置 |
 
@@ -348,7 +347,7 @@ P2 mock host 节点拆解：
 | --- | --- | --- | --- |
 | P2.1 ABI skeleton | 一个 C ABI header、mock host 初始化流程、runtime 侧注册入口 | 版本 / capability 校验、初始化失败错误字符串、托管静态入口调用成功；`host-bridge-smoke.ps1 -Scenario AbiSkeleton` 已通过 | 不复制 CoreCLR hosting API；不加载真实 Unity/Godot |
 | P2.2 Opaque handle registry | 宿主侧 handle table、retain/release、destroy notification、托管 wrapper handle 字段 | 创建后查询、retain/release 平衡、宿主销毁后访问返回 ObjectDisposed / MissingReference 风格诊断；`host-bridge-smoke.ps1 -Scenario HandleRegistry` 已通过 | 不暴露真实引擎指针；不承诺跨进程 handle |
-| P2.3 Main-thread dispatcher | mock 主线程队列、next-frame pump、同步 reentry guard、结果回传结构 | FIFO 投递、下一帧执行、托管异常转错误状态、阻塞 wait 明确拒绝；`host-bridge-smoke.ps1 -Scenario Dispatcher` 已通过 | 不实现完整 ThreadPool / work stealing；不允许跨线程直接访问引擎对象 |
+| P2.3 Main-thread dispatcher | mock 主线程队列、next-frame pump、同步 reentry guard、结果回传结构 | FIFO 投递、下一帧执行、托管异常转错误状态、阻塞 wait 明确拒绝；`host-bridge-smoke.ps1 -Scenario Dispatcher` 已通过 | 不实现后台 worker 调度；不允许从非宿主主循环直接访问引擎对象 |
 | P2.4 Event / callback bridge | delegate subscription token、触发入口、取消注册入口、异常返回字段 | 注册后触发托管 delegate、托管异常回传、取消后不再触发、重复取消幂等；`host-bridge-smoke.ps1 -Scenario EventCallback` 已通过 | 不实现 UnityEvent / Godot Signal 完整语义；复杂 Variant marshal 后置 |
 
 P2 验收命令使用独立脚本，避免混入 BCL smoke：
@@ -440,7 +439,7 @@ P3 托管 wrapper 验收命令：
 6. 重写 custom attribute 最小路径，覆盖 smoke 与 NKG/Odin 会触发的读取模式。当前 metadata-only smoke 与 NKG/Odin 轻量 workload 已通过，后续只按真实失败补齐新 blob 形状或实例化路径。
 7. 固化 Span / Unsafe / RuntimeHelpers contract，确保解释路径和 AOT 路径使用同一份语义说明。当前解释 profile 已覆盖 RuntimeHelpers cctor、栈检查、CompileMethod / PrepareMethod no-op façade、RVA `InitializeArray` / `CreateSpan` 与 inline array helper。
 8. 固化 AssemblyLoadContext / Reflection.Emit 受限 façade，支撑 light lambda / dynamic assembly metadata 路径，同时明确 collectible ALC、unload 与完整动态 codegen 后置。
-9. 分级支持 exception / delegate / Thread / Monitor / Task；第一阶段单线程可控，复杂 ThreadPool 后置。
+9. 固化 exception / delegate / single-thread sync / Monitor / Task continuation 的受控 façade；后台线程和 worker 调度不进入计划。
 10. 固化 System.IO / platform PInvoke 最小 contract，让真实 workload 可做临时文件、路径解析和基础资源读取。
 11. 建立 host bridge mock，证明 Unity/Godot 接入不需要扩大 BCL 支持面。
 

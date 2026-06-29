@@ -18,7 +18,7 @@
 2. 将 `System.Private.CoreLib` / `Microsoft.NETCore.App` 的完整或大子集承载后置，仅在真实纯逻辑 DLL 触发具体依赖时按需补齐。
 3. 不再以剩余 extern diff 数量下降作为主线目标；`ExportExtern` / `dotnet/runtime` 源码只作为排障和定位工具。
 4. 新增 API 白名单和 `AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描，让不支持的 BCL 依赖在构建或加载阶段明确失败。
-5. 将后续主线转向真实纯逻辑 DLL smoke、Unity/Godot host bridge ABI、opaque handle registry 和主线程 dispatcher。
+5. 将后续主线转向真实纯逻辑 DLL smoke、Unity/Godot host bridge ABI、opaque handle registry 和主线程 dispatcher；动态 native codegen 与多线程 runtime 不进入计划。
 6. 原作者 managed / Mono 测试资产采用“分阶段迁移、最终全量跑通”的策略；P0/P1/P2/P3 只用于排障排序，不用于缩减最终合格线。
 
 2026-06-27 LCLR 作者建议评估：直接删除旧 `icalls` / `pinvokes` / `intrinsics` 对 `.NET 10` 适配有帮助，因为它能减少旧 Mono profile 语义对当前实现和 AI 辅助分析的干扰。但本仓库当前仍需要保留分派骨架、符号解析、错误诊断和部分已验证的运行时桥接，因此本阶段先把旧 Mono-only internal call 从 `System.Private.CoreLib` 查询路径中隔离出来：`.NET 10` 主路径命中 `Mono.*`、`System.IO.Mono*`、`System.Mono*`、`System.Reflection.Mono*`、`System.Runtime.Remoting*` 这类入口时直接视为未实现，让缺口 fail-fast，而不是继续调用可能带有 Mono 布局假设的旧实现。后续物理删除应按 profile catalog 分批推进，确保每批清理后都有 smoke 结果支撑。
@@ -530,13 +530,13 @@ C++ icall 覆盖集中在：
 
 ### 6. 线程和同步语义需要明确支持边界
 
-README 声明 Standard 仍是单线程，多线程规划中。与此同时 runtime 已有大量 `System.Threading.*` icall stub 和测试覆盖。对于 .NET 10 BCL，线程、ThreadPool、Timer、Monitor、WaitHandle、async 相关路径更容易被间接触发。
+README 已明确 Standard 与 Core 均为单线程 runtime，不规划多线程支持。与此同时 runtime 已有大量 `System.Threading.*` icall stub 和测试覆盖。对于 .NET 10 BCL，ThreadPool、Timer、Monitor、WaitHandle、async 相关路径仍可能被间接触发。
 
 建议：
 
-- 文档层明确 `.NET 10 profile` 是否支持多线程。
-- 对不支持的 threading API 建立可诊断失败策略，而不是静默 stub。
-- 将单线程可运行的 BCL 子集与多线程 API 支持分开验收。
+- 文档层明确 `.NET 10 profile` 只支持单线程 runtime。
+- 对 ThreadPool、Timer、后台线程等 API 建立可诊断失败策略，而不是静默 stub。
+- 将单线程可运行的 BCL 兼容子集与不支持的多线程 API 明确分开验收。
 
 ## 已确认的架构结论与改造边界
 
@@ -616,9 +616,9 @@ Unity/Godot host
 
 1. **冻结当前补丁式推进**：记录当前能过/不能过的 smoke、legacy 子入口和真实 workload；只处理阻塞 contract 重建的 P0，暂停继续按旧 Mono 用例逐点补丁。
 2. **抽取 .NET 10 contract map**：基于 `.NET 10` 源码和 runtime pack 导出清单，整理 `RuntimeType`、`RuntimeTypeHandle`、`RuntimeMethodHandle`、`RuntimeFieldHandle`、`RuntimeAssembly`、`RuntimeModule`、`CustomAttribute`、`RuntimeHelpers`、`Unsafe/Span`、`Thread/Monitor/Task` 的最小 contract、入口签名、私有字段/handle 访问形状和 NotSupported 边界。
-3. **重写 net10 model / façade**：定义 LeanCLR 自己的 `net10` façade 层，外部满足 CoreLib 期待，内部映射到 `RtClass`、`RtMethodInfo`、`RtFieldInfo`、metadata cache、interpreter 和现有 runtime 服务；不要照搬 CoreCLR 的完整 MethodTable / loader / GC / ThreadPool 实现。
+3. **重写 net10 model / façade**：定义 LeanCLR 自己的 `net10` façade 层，外部满足 CoreLib 期待，内部映射到 `RtClass`、`RtMethodInfo`、`RtFieldInfo`、metadata cache、interpreter 和现有 runtime 服务；不要照搬 CoreCLR 的完整 MethodTable / loader / GC 实现。
 4. **隔离旧 Mono-era 适配**：将 `Mono.*`、`System.IO.Mono*`、`System.Runtime.Remoting*`、旧 `mscorlib` 布局假设和无签名宽松匹配从 `coreclr-net10` 活跃路径移走；旧实现可暂留 `mono45` profile 或对照分支。
-5. **按领域替换桥接层**：优先顺序为 type/reflection handles -> assembly/module/custom attribute -> Span/Unsafe/RuntimeHelpers -> exception/delegate -> threading/Monitor/async -> host bridge。每个领域完成后再接对应 smoke。
+5. **按领域替换桥接层**：优先顺序为 type/reflection handles -> assembly/module/custom attribute -> Span/Unsafe/RuntimeHelpers -> exception/delegate -> single-thread sync/Monitor/async continuation -> host bridge。每个领域完成后再接对应 smoke。
 6. **测试后置为验收门禁**：contract/model 重写完成一个领域后，再跑 `ManagedNet10.Smoke` 定位入口、`ManagedNet10.LegacyTests` 对应子集、最终 `RunAll` 和真实纯逻辑 DLL smoke。测试只验证 contract 是否成立，不再驱动架构形状。
 
 阶段性完成标准也随之调整：第一阶段不是“所有已迁移旧用例立即跑绿”，而是先产出可审查、可版本化的 [`net10-runtime-contract`](net10-runtime-contract.md) 文档和 façade 骨架，并保证白名单内入口失败时有明确诊断。随后每个领域以测试验收收口。
@@ -652,7 +652,7 @@ Unity/Godot host
 3. **原作者测试资产全量迁移**：把已有 managed / Mono 测试按能力分层迁移到 `.NET 10` 验证路径；分层只决定顺序，最终门槛是全量跑通。
 4. **NKGGameFramework 真实 workload 与 Unity/Godot bridge**：用 `C:\study\wqaetly\new\NKGGameFramework` 的核心逻辑库验证真实项目可运行性，同时启动 host bridge ABI、opaque handle registry 和主线程 dispatcher 设计。
 
-因此当前计划不再是“先让最小 .NET 10 corlib + CoreCLR metadata 扩展 + BCL runtime API 全面跑通”，也不再是“继续按旧测试失败点逐个补丁”。新的主线是：先重建 `.NET 10` contract/model，让 LeanCLR 稳定运行受控纯逻辑 `net10.0` DLL，并对越界 API 做清晰诊断；随后用测试资产和真实 workload 验收。最终合格线仍应提升为：原作者测试资产全量通过、NKGGameFramework 核心 workload 通过、API 白名单无越界。AOT、完整 BCL、完整 resolver、generic math、ThreadPool、Hosting/Web Debug 和历史资产清理都按真实 workload 与全量测试缺口排序。
+因此当前计划不再是“先让最小 .NET 10 corlib + CoreCLR metadata 扩展 + BCL runtime API 全面跑通”，也不再是“继续按旧测试失败点逐个补丁”。新的主线是：先重建 `.NET 10` contract/model，让 LeanCLR 稳定运行受控纯逻辑 `net10.0` DLL，并对越界 API 做清晰诊断；随后用测试资产和真实 workload 验收。最终合格线仍应提升为：原作者测试资产全量通过、NKGGameFramework 核心 workload 通过、API 白名单无越界。AOT、完整 BCL、完整 resolver、generic math、Hosting/Web Debug 和历史资产清理都按真实 workload 与全量测试缺口排序；动态 native codegen 与多线程 runtime 不进入排序。
 
 ### 阶段 0：定义支持范围
 
@@ -660,7 +660,7 @@ Unity/Godot host
 
 - 支持目标明确为 `LeanCLR minimal net10 profile`：运行项目自己的纯逻辑 `net10.0` DLL。
 - 明确不承诺完整 `System.Private.CoreLib` / `Microsoft.NETCore.App` / CoreCLR BCL 兼容。
-- 是否支持单线程-only；完整 ThreadPool 和复杂 async continuation 后置。
+- 明确 single-thread-only；ThreadPool worker 和复杂 async scheduler 不进入计划。
 - 当前阶段明确只支持解释执行；AOT 作为后续阶段，不进入第一阶段验收口。
 - 支持平台优先级：Windows x64、Linux x64、wasm、移动端。
 - 明确 `coreclr` 分支是引擎无关 runtime 主线，Unity/Godot 通过宿主插件和 bridge 接入。
@@ -703,7 +703,7 @@ Unity/Godot host
 
 - 新增 SDK 风格 `net10.0` smoke tests。
 - 覆盖真实纯逻辑 DLL 会用到的基础类型、泛型、异常、反射、数组、delegate、string、span 和必要 unsafe 路径。
-- 迁移原作者 managed / Mono 测试资产：先迁移核心 IL、对象模型、泛型、委托、异常、反射边界等高频能力，再继续补齐 threading、P/Invoke、深层 reflection、I/O 等后续能力；最终不以“精选通过”为完成标准。
+- 迁移原作者 managed / Mono 测试资产：先迁移核心 IL、对象模型、泛型、委托、异常、反射边界等高频能力，再继续补齐 single-thread sync、P/Invoke、深层 reflection、I/O 等后续能力；最终不以“精选通过”为完成标准。
 - 接入 `C:\study\wqaetly\new\NKGGameFramework` 作为第一批真实框架 workload，先跑核心逻辑，再扩展到 async、轻量反射、序列化和引擎 bridge。
 - 复用 `src/tools/leanrun`，解释执行 smoke 脚本应能加载 `net10.0` 用户程序集和 minimal profile 所需程序集。
 - AOT smoke 只作为已有历史验证和后续阶段目标，不作为第一阶段门禁。
@@ -714,7 +714,7 @@ Unity/Godot host
 
 - 按真实纯逻辑 DLL 和 minimal smoke 优先补齐 runtime API。
 - 优先模块：string、array、object、runtime handles、少量 reflection、exception、delegate、span/unsafe、math。
-- marshal、interop、threading、environment 等仅在真实 DLL 或 Unity/Godot bridge 需要时补齐。
+- marshal、interop、single-thread sync、environment 等仅在真实 DLL 或 Unity/Godot bridge 需要时补齐。
 - 对暂不支持 API 输出明确 NotSupported/NotImplemented 诊断。
 - 每个新增 icall/intrinsic 都必须由真实 smoke 或白名单内 API 证明需求来源，不为 AOT 或完整 BCL 预补大而全入口。
 
@@ -978,11 +978,11 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 
 2026-06-26 已打通 .NET 10 解释执行完整 smoke：
 
-- 已拉取 `dotnet/runtime` 参考源码到 gitignored `artifacts/dotnet10-runtime-src`，当前用于快速对照 `System.Private.CoreLib`、QCall/PInvoke、InternalCall 和 async/ThreadPool 调用链；后续仍需补一个可复跑的 sparse checkout 脚本。
+- 已拉取 `dotnet/runtime` 参考源码到 gitignored `artifacts/dotnet10-runtime-src`，当前用于快速对照 `System.Private.CoreLib`、QCall/PInvoke、InternalCall 和 async 调用链；后续仍需补一个可复跑的 sparse checkout 脚本。
 - 在 `src/tools/leanrun` 增强异常诊断：Release 下缺失 internal call、intrinsic、P/Invoke、runtime/generic invoker 会打印具体方法名；托管 `StackTrace` 获取失败时回退输出 native trace。
 - 增加 .NET 10 QCall/PInvoke 基础入口：`Thread.GetCurrentThread`、`Debugger.IsManagedDebuggerAttached`、`RuntimeTypeHandle.GetGCHandle` / `FreeGCHandle`、`Exception.GetFrozenStackTrace`。
 - 增加 `Unsafe.AsPointer<T>` intrinsic，支撑 `ObjectHandleOnStack.Create<T>` 写回对象 handle。
-- 增加 `YieldAwaiter.get_IsCompleted` intrinsic：当前解释执行 smoke 按单线程同步 continuation 处理 `Task.Yield`，先作为第一阶段绿色基线；真正 ThreadPool continuation 语义仍属于后续工作。
+- 增加 `YieldAwaiter.get_IsCompleted` intrinsic：当前解释执行 smoke 按单线程同步 continuation 处理 `Task.Yield`，先作为第一阶段绿色基线；ThreadPool continuation 语义不进入计划。
 - 补齐 .NET 10 `Monitor` fast-path internal calls：`TryEnter_FastPath`、`TryEnter_FastPath_WithTimeout`、`Exit_FastPath`、`IsEnteredNative`，复用现有单线程 monitor 计数 stub。
 - 补充 `ManagedNet10.Smoke` 子入口，覆盖 `Thread.CurrentThread`、`Task.FromResult`、`AsyncTaskMethodBuilder`、async no-await/completed-await/yield 等定位切片。
 - 本机已验证 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release -BuildOnly` 通过。
@@ -994,7 +994,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 确认真实目标是导出并运行项目自己的纯逻辑 `net10.0` DLL，不再追求大而全的 `Microsoft.NETCore.App` / 完整 BCL 承载。
 - 已完成的 `coreclr-net10` profile、`System.Private.CoreLib` 识别、解释执行 runner 和 53 个 smoke 子入口保留为 minimal profile 基线。
 - 后续主线改为 API 白名单、`AssemblyRef` / `TypeRef` / `MemberRef` 静态扫描、真实纯逻辑 DLL smoke，以及 Unity/Godot host bridge ABI。
-- 剩余 extern diff、完整 CoreCLR assembly resolver、generic math/static abstract、完整 ThreadPool、AOT native run 和历史资产清理全部后置，只有真实 workload 触发时才继续推进。
+- 剩余 extern diff、完整 CoreCLR assembly resolver、generic math/static abstract、AOT native run 和历史资产清理全部后置，只有真实 workload 触发时才继续推进；动态 native codegen 与多线程 runtime 不推进。
 
 2026-06-27 测试验收口径再次校准：
 
@@ -1206,7 +1206,7 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 
 - `ManagedNet10.LegacyTests` 当前已不仅覆盖反射切片，也已把旧 `Type` / `RuntimeType` / `RuntimeTypeHandle`、`Object` / `ValueType` / `DateTime`、`Math` / `GC` / `RuntimeHelpers` / `GCHandle` / `Monitor`、`TypedReference`、`ThreadPool` 和 `WaitHandle` 等 Corlib 用例纳入程序集级 `RunAll` 扫描。对应定位入口保留在 `CorlibTypeSystemTestEntries`、`CorlibRuntimeTypeTestEntries`、`CorlibRuntimeTypeHandleTestEntries`、`CorlibCoreObjectValueTestEntries`、`CorlibRuntimeServicesTestEntries`、`CorlibTypedReferenceTestEntries` 和 `CorlibThreadingTestEntries`。
 - 这些切片覆盖的运行时能力包括 `Type.GetTypeFromHandle`、数组/ByRef/Pointer 类型构造、嵌套类型枚举、generic instantiation 查询、对象哈希和 `MemberwiseClone`、值类型 `Equals` / `GetHashCode`、`RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor`、GCHandle normal/pinned/weak 基础路径、Monitor enter/exit/try/wait/pulse、TypedReference make/to-object，以及 `ThreadPool.QueueUserWorkItem` 和 `ManualResetEvent` / `WaitAny` 的最小同步语义。
-- 这仍是 minimal net10 profile 的受控验证面：当前 `ThreadPool` / `WaitHandle` 只证明旧用例与少量 net10 语义探针通过，不代表完整 CoreCLR ThreadPool、I/O completion port、timer、cancellation wait 或跨线程调度模型已经完成。
+- 这仍是 minimal net10 profile 的受控验证面：当前 `ThreadPool` / `WaitHandle` 只证明旧用例与少量 net10 语义探针通过，不代表 CoreCLR ThreadPool、I/O completion port、timer、cancellation wait 或跨线程调度模型会进入支持计划。
 - 本机本轮复验 `ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke`、`scripts\dotnet10\api-scan.ps1 -Configuration Release` 和 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 均通过；API scan 中 managed smoke/NKG smoke 与 NKG core/Odin/UniTask 仍为 `unsupported: 0`，runtime API catalog 报告 `All entries matched extern signatures.`。
 
 2026-06-29 已把 NKGGameFramework 默认 gate 从 surface 推进到 SampleGame/ECS 行为：
@@ -1340,4 +1340,4 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 原作者 managed / Mono 测试资产中的活动 `[UnitTest]` 已纳入 `ManagedNet10.LegacyTests` 或由 net10 本地替代覆盖；当前 `ManagedNet10.LegacyTests.Program::RunAll` 证明 LeanCLR 自有 legacy managed 集合绿色。后续若新增旧素材目录、AOT native runner 或非 managed gate，需要另行纳入对应清点。
 - NKGGameFramework 真实纯逻辑 gate 已从 surface 扩展到 SampleGame 的核心 gameplay / ECS 两帧行为执行；仍需要继续推进 UniTask 行为执行、Odin 序列化/反序列化往返和更完整的 gameplay / ECS 样例覆盖。Hosting、Unity、Godot 仍不属于第一阶段边界。
 - mock host bridge 已完成 ABI skeleton、opaque handle registry、主线程 dispatcher、event/callback、value marshal 和 diagnostics 基线；真实 Unity/Godot SDK bridge 仍未接入，继续作为后置边界。
-- 完整 Microsoft.NETCore.App、generic math/static abstract、完整 ThreadPool、完整 resolver、AOT native run 均已后置，暂不作为当前未完成主线。
+- 完整 Microsoft.NETCore.App、generic math/static abstract、完整 resolver、AOT native run 均已后置，暂不作为当前未完成主线；动态 native codegen 和多线程 runtime 明确不作为后续目标。

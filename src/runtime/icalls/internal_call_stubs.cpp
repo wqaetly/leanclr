@@ -182,6 +182,7 @@ void InternalCallStubs::get_internal_call_entries(utils::Vector<vm::InternalCall
     Append(entries, SystemThreadingMonitor::get_internal_call_entries());
     Append(entries, SystemThreadingVolatile::get_internal_call_entries());
     Append(entries, SystemDelegate::get_internal_call_entries());
+    Append(entries, SystemException::get_net10_internal_call_entries());
     Append(entries, SystemReflectionRuntimeModule::get_net10_internal_call_entries());
     Append(entries, SystemGC::get_internal_call_entries());
     Append(entries, SystemDateTime::get_internal_call_entries());

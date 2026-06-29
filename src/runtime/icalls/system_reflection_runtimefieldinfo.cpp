@@ -268,6 +268,12 @@ static vm::InternalCallEntry s_internal_call_entries_system_reflection_runtimefi
 
 static vm::InternalCallEntry s_net10_internal_call_entries_system_reflection_runtimefieldinfo[] = {
     {"System.Reflection.RtFieldInfo::Equals(System.Object)", nullptr, rt_field_info_equals_invoker},
+    {"System.Reflection.FieldInfo::GetRawConstantValue()", (vm::InternalCallFunction)&SystemReflectionRuntimeFieldInfo::get_raw_const_value,
+     get_raw_const_value_invoker},
+    {"System.Reflection.RtFieldInfo::GetRawConstantValue()", (vm::InternalCallFunction)&SystemReflectionRuntimeFieldInfo::get_raw_const_value,
+     get_raw_const_value_invoker},
+    {"System.Reflection.RtFieldInfo::GetRawConstantValue", (vm::InternalCallFunction)&SystemReflectionRuntimeFieldInfo::get_raw_const_value,
+     get_raw_const_value_invoker},
 };
 
 utils::Span<vm::InternalCallEntry> SystemReflectionRuntimeFieldInfo::get_net10_internal_call_entries() noexcept

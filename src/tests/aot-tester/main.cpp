@@ -118,6 +118,24 @@ static void print_error_and_exit(const std::string& err_message, RtErr err)
     }
     std::cerr << sb.get_const_chars() << std::endl << std::endl;
 
+    for (vm::RtException* inner = ex->inner_exception; inner != nullptr; inner = inner->inner_exception)
+    {
+        sb.clear();
+        sb.append_cstr("---> ");
+        metadata::MetadataName::append_klass_full_name_without_generic_params(sb, inner->klass, metadata::TypeNameFormat::IL).is_ok();
+        sb.append_cstr(": ");
+        if (inner->message)
+        {
+            sb.append_utf16_str(&inner->message->first_char, inner->message->length);
+        }
+        sb.sure_null_terminator_but_not_append();
+        std::cerr << sb.get_const_chars() << std::endl;
+    }
+    if (ex->inner_exception != nullptr)
+    {
+        std::cerr << std::endl;
+    }
+
     sb.clear();
     vm::RtString* stack_trace_str = reinterpret_cast<vm::RtString*>(ret.unwrap());
     sb.append_utf16_str(&stack_trace_str->first_char, stack_trace_str->length);

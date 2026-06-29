@@ -2258,11 +2258,6 @@ RtResult<metadata::RtEventInfo*> Reflection::get_event_info_from_reflection_obje
         RET_OK(found->second.event_info);
     }
 
-    if (event_obj->event != nullptr)
-    {
-        RET_OK(event_obj->event);
-    }
-
     const metadata::RtFieldInfo* token_field = Class::get_field_for_name(normalized_obj->klass, "m_token", true);
     const metadata::RtFieldInfo* declaring_type_field = Class::get_field_for_name(normalized_obj->klass, "m_declaringType", true);
     if (token_field != nullptr && declaring_type_field != nullptr)
@@ -2272,6 +2267,11 @@ RtResult<metadata::RtEventInfo*> Reflection::get_event_info_from_reflection_obje
         RET_ERR_ON_FAIL(Field::get_instance_value(token_field, event_obj, &event_token));
         RET_ERR_ON_FAIL(Field::get_instance_value(declaring_type_field, event_obj, &declaring_type));
         return get_event_info_from_runtime_type(declaring_type, event_token);
+    }
+
+    if (event_obj->event != nullptr)
+    {
+        RET_OK(event_obj->event);
     }
 
     RET_ERR(RtErr::Argument);
@@ -2343,15 +2343,6 @@ RtResult<const metadata::RtClass*> Reflection::get_reflection_event_klass(RtRefl
         RET_OK(found->second.klass);
     }
 
-    if (event_obj->ref_type != nullptr)
-    {
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, reflected_type_sig,
-                                                get_type_sig_from_reflection_type_object(event_obj->ref_type));
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, reflected_klass,
-                                                Class::get_class_from_typesig(reflected_type_sig));
-        RET_OK(reflected_klass);
-    }
-
     const metadata::RtFieldInfo* declaring_type_field = Class::get_field_for_name(normalized_obj->klass, "m_declaringType", true);
     if (declaring_type_field != nullptr)
     {
@@ -2364,6 +2355,15 @@ RtResult<const metadata::RtClass*> Reflection::get_reflection_event_klass(RtRefl
             DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, Class::get_class_from_typesig(declaring_type_sig));
             RET_OK(klass);
         }
+    }
+
+    if (event_obj->ref_type != nullptr)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, reflected_type_sig,
+                                                get_type_sig_from_reflection_type_object(event_obj->ref_type));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, reflected_klass,
+                                                Class::get_class_from_typesig(reflected_type_sig));
+        RET_OK(reflected_klass);
     }
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtEventInfo*, event_info, get_event_info_from_reflection_object(event_obj));

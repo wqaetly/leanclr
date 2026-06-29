@@ -31,6 +31,14 @@ void Exception::set_current_exception(RtException* ex)
     s_ref_exception = ex;
 }
 
+void Exception::clear_current_exception_if_matches(RtException* ex)
+{
+    if (s_ref_exception == ex)
+    {
+        s_ref_exception = nullptr;
+    }
+}
+
 RtException* Exception::get_and_clear_current_exception()
 {
     RtException* ex = s_ref_exception;

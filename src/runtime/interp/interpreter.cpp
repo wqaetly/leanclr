@@ -189,6 +189,7 @@ void pop_throw_flow(vm::RtException* ex, InterpFrame* frame)
     assert(data.ex == ex);
     assert(data.frame == frame);
     s_exception_flows.pop_back();
+    vm::Exception::clear_current_exception_if_matches(ex);
 }
 
 void pop_leave_flow(InterpFrame* frame)
@@ -276,7 +277,8 @@ void setup_filter_checker(const RtInterpExceptionClause* clause)
 void setup_filter_handler(const RtInterpMethodInfo* imi, InterpFrame* frame, const void* handler_start_ip)
 {
     assert(!s_exception_flows.empty());
-    ExceptionFlow& flow = s_exception_flows.back();
+    ExceptionFlow flow = s_exception_flows.back();
+    s_exception_flows.pop_back();
     assert(flow.throw_flow);
     auto& data = flow.throw_data;
     assert(!data.handled);
@@ -290,7 +292,7 @@ void setup_filter_handler(const RtInterpMethodInfo* imi, InterpFrame* frame, con
     new_data.frame = data.frame;
     new_data.ip = data.ip;
     new_data.next_search_clause_idx = data.next_search_clause_idx;
-    new_data.cur_clause = nullptr;
+    new_data.cur_clause = data.cur_clause;
     new_data.handled = true;
     pop_outscope_flows(imi, frame, handler_start_ip);
     s_exception_flows.push_back(new_flow);

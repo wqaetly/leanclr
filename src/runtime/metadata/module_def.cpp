@@ -2061,17 +2061,25 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
     }
 
     RtClass* baseClass;
+    RtClass* memberLookupClass;
+    RtGenericContext memberParentGenericContext{};
+    const RtGenericContext* memberParentGenericContextPtr = nullptr;
     RtElementType eleType = memberLookupTypeSig->ele_type;
     switch (eleType)
     {
     case RtElementType::GenericInst:
     {
         UNWRAP_OR_RET_ERR_ON_FAIL(baseClass, vm::Class::get_class_by_type_def_gid(memberLookupTypeSig->data.generic_class->base_type_def_gid));
+        UNWRAP_OR_RET_ERR_ON_FAIL(memberLookupClass, vm::Class::get_class_from_typesig(memberLookupTypeSig));
+        memberParentGenericContext.class_inst = memberLookupTypeSig->data.generic_class->class_inst;
+        memberParentGenericContext.method_inst = nullptr;
+        memberParentGenericContextPtr = &memberParentGenericContext;
         break;
     }
     default:
     {
         UNWRAP_OR_RET_ERR_ON_FAIL(baseClass, vm::Class::get_class_from_typesig(memberLookupTypeSig));
+        memberLookupClass = baseClass;
         break;
     }
     }
@@ -2080,12 +2088,11 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
 
     if (sigType == RtSigType::Field)
     {
-        // Find field in baseClass by name
-        RET_ERR_ON_FAIL(vm::Class::initialize_fields(baseClass));
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const RtTypeSig*, fieldTypeSig, read_typesig(reader, declaring_gcc, nullptr));
-        for (uint32_t i = 0; i < baseClass->field_count; ++i)
+        RET_ERR_ON_FAIL(vm::Class::initialize_fields(memberLookupClass));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const RtTypeSig*, fieldTypeSig, read_typesig(reader, declaring_gcc, memberParentGenericContextPtr));
+        for (uint32_t i = 0; i < memberLookupClass->field_count; ++i)
         {
-            const RtFieldInfo* field = baseClass->fields + i;
+            const RtFieldInfo* field = memberLookupClass->fields + i;
             if (std::strcmp(field->name, name) != 0)
             {
                 continue;
@@ -2094,27 +2101,18 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
             {
                 continue;
             }
-            if (eleType == RtElementType::GenericInst)
-            {
-                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtClass*, fieldDeclClass, vm::Class::get_class_from_typesig(memberLookupTypeSig));
-                RET_ERR_ON_FAIL(vm::Class::initialize_fields(fieldDeclClass));
-                RET_OK(RtRuntimeHandle{fieldDeclClass->fields + i});
-            }
-            else
-            {
-                RET_OK(RtRuntimeHandle{field});
-            }
+            RET_OK(RtRuntimeHandle{field});
         }
         RET_ERR(RtErr::MissingField);
     }
     else if (sigType < RtSigType::Field)
     {
-        // Find method in baseClass by name
-        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtMethodSig, methodSig, read_method_sig_skip_prologue(byteType, reader, declaring_gcc, nullptr));
-        RET_ERR_ON_FAIL(vm::Class::initialize_methods(baseClass));
-        for (uint32_t i = 0; i < baseClass->method_count; ++i)
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtMethodSig, methodSig,
+                                                read_method_sig_skip_prologue(byteType, reader, declaring_gcc, memberParentGenericContextPtr));
+        RET_ERR_ON_FAIL(vm::Class::initialize_methods(memberLookupClass));
+        for (uint32_t i = 0; i < memberLookupClass->method_count; ++i)
         {
-            const RtMethodInfo* method = baseClass->methods[i];
+            const RtMethodInfo* method = memberLookupClass->methods[i];
             if (std::strcmp(method->name, name) != 0)
             {
                 continue;
@@ -2136,16 +2134,7 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
             {
                 continue;
             }
-            if (eleType == RtElementType::GenericInst)
-            {
-                DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtClass*, methodDeclClass, vm::Class::get_class_from_typesig(memberLookupTypeSig));
-                RET_ERR_ON_FAIL(vm::Class::initialize_methods(methodDeclClass));
-                RET_OK(RtRuntimeHandle{methodDeclClass->methods[i]});
-            }
-            else
-            {
-                RET_OK(RtRuntimeHandle{method});
-            }
+            RET_OK(RtRuntimeHandle{method});
         }
         RET_ERR(RtErr::MissingMethod);
     }

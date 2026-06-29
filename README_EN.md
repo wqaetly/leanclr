@@ -19,7 +19,7 @@ LeanCLR is designed to fill this gap: maintain high ECMA-335 compatibility while
 
 ## Key Features
 
-- **Strong cross-platform support** — AOT + Interpreter hybrid execution model with no JIT, implemented in standard C++11 and free of platform-specific dependencies.
+- **Strong cross-platform support** — AOT + Interpreter hybrid execution model, implemented in standard C++11 and free of platform-specific dependencies.
 - **Easy integration** — Integration complexity is close to Lua; easy to embed into apps, games, embedded devices, IVI/automotive platforms, and more.
 - **High ECMA-335 compatibility** — Near-complete support for ECMA-335 and major CoreCLR extensions, including generics, exceptions, reflection, and delegates.
 - **Compact and efficient** — Small binary size, low memory usage, and high runtime efficiency; single-thread core build is under **600 KB** on x64/WebAssembly and can be reduced to around **300 KB** after trimming.
@@ -76,7 +76,6 @@ LeanCLR already supports Unity and is actively integrating Godot and CoreCLR BCL
 | **P/Invoke** | ✅ Complete | Supports manual registration and LeanAOT-generated P/Invoke wrappers |
 | **Garbage Collection** | ✅ Complete | Precise Mark-Sweep full GC |
 | **AOT Compiler** | ✅ Complete | IL → C++ transpilation supported |
-| **Multi-threading** | 📋 Planned | Threads and synchronization primitives (Standard edition) |
 
 ### Stability
 
@@ -88,7 +87,7 @@ The current Standard edition is highly stable:
 
 ## Editions
 
-LeanCLR provides **Standard** and **Core** editions: **Core is trimmed from Standard**. Both are implemented (single-threaded); full multi-threading for Standard remains on the roadmap. See [Core & Standard](https://doc.leanclr.com/docs/intro/editions).
+LeanCLR provides **Standard** and **Core** editions: **Core is trimmed from Standard**. Both are single-threaded runtimes; multi-threaded runtime support is not planned. See [Core & Standard](https://doc.leanclr.com/docs/intro/editions).
 
 ### Core Edition
 
@@ -109,7 +108,7 @@ Standard is split by BCL source:
 | Feature | Standard | Core |
 | - | - | - |
 | ECMA-335 | Standard implementation, high compatibility | Standard ECMA-335 specification |
-| Thread model | Single-threaded (multi-threading planned) | Single-threaded |
+| Thread model | Single-threaded | Single-threaded |
 | Cross-platform | Windows, Linux, macOS, Android, iOS, HarmonyOS, WebAssembly, etc. | All platforms; pure C++11 with no platform-specific dependencies |
 | BCL | mono / unity / coreclr branches; platform icalls partially implemented | mono-4.5 BCL; only a subset of platform-related calls implemented |
 | GC | Precise Mark-Sweep full GC | Precise Mark-Sweep full GC |
