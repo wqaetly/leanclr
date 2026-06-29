@@ -179,6 +179,7 @@ internal static class Program
         TestSpan();
         TestRuntimeHelpers();
         TestThreadingSubset();
+        HostBridgeWrapperSmoke.Run();
         await TestAsync();
     }
 
