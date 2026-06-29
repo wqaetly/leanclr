@@ -2,6 +2,7 @@ using GcTests.Collection;
 using GcTests.Handles;
 using GcTests.Roots;
 using GcTests.Scan;
+using GcTests.Sweep;
 
 namespace ManagedNet10.LegacyTests
 {
@@ -37,6 +38,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunGcScanGraph()
         {
             LegacyTestRunner.RunType(typeof(TC_GC_Graph));
+        }
+
+        public static void RunGcSweep()
+        {
+            LegacyTestRunner.RunType(typeof(TC_GC_Sweep));
         }
     }
 }

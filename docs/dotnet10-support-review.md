@@ -1242,6 +1242,12 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 该旧用例覆盖链式对象图、断链尾部回收、无根双节点环、自引用对象、菱形共享叶子、宽图、深链 suffix 回收和稳定图重复 collect 的 mark-sweep 可达性语义。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcScanGraph`、`ManagedNet10.LegacyTests.Program::RunAll` 和默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 均通过。
 
+2026-06-29 迁移旧 `TC_GC_Sweep` 用例：
+
+- 将旧 `GcTests.Sweep.TC_GC_Sweep` 链接进 `ManagedNet10.LegacyTests`，新增 `RunGcSweep` 定位入口。
+- 该旧用例覆盖未 rooting 的 small object 批量回收、array rooted small object 保活、big byte array 回收与强 handle 保活、small/big 混合批量 sweep，以及静态数组根清除后的对象回收。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcSweep`、`ManagedNet10.LegacyTests.Program::RunAll` 和默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
