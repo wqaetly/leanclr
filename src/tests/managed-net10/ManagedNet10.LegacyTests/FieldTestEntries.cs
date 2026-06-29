@@ -9,6 +9,7 @@ namespace ManagedNet10.LegacyTests
             RunFieldLoadStatic();
             RunFieldStoreInstance();
             RunFieldStoreStatic();
+            RunFieldThreadStatic();
             RunFieldStaticConstructor();
         }
 
@@ -45,6 +46,13 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunTypes(
                 typeof(Tests.Instruments.Fields.TC_stsfld_aot),
                 typeof(Tests.Instruments.Fields.TC_stsfld_interp));
+        }
+
+        public static void RunFieldThreadStatic()
+        {
+            LegacyTestRunner.RunTypes(
+                typeof(Tests.Instruments.Fields.TC_ldsfld_interp_threadstatic),
+                typeof(Tests.Instruments.Fields.TC_stsfld_interp_threadstatic));
         }
 
         public static void RunFieldStaticConstructor()

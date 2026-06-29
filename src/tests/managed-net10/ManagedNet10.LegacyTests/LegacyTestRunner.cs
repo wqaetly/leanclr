@@ -121,7 +121,16 @@ namespace ManagedNet10.LegacyTests
 
                 try
                 {
-                    method.Invoke(instance, null);
+                    TestCaseBase testCase = instance as TestCaseBase;
+                    testCase?.SetUp();
+                    try
+                    {
+                        method.Invoke(instance, null);
+                    }
+                    finally
+                    {
+                        testCase?.TearDown();
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -150,7 +159,16 @@ namespace ManagedNet10.LegacyTests
             }
 
             object instance = method.IsStatic ? null : Activator.CreateInstance(type);
-            method.Invoke(instance, null);
+            TestCaseBase testCase = instance as TestCaseBase;
+            testCase?.SetUp();
+            try
+            {
+                method.Invoke(instance, null);
+            }
+            finally
+            {
+                testCase?.TearDown();
+            }
         }
 
         private static bool IsNet10ReplacedLegacyTest(Type type, string methodName)

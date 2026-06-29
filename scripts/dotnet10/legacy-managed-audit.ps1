@@ -83,8 +83,6 @@ $allowedKindsByPath = @{
     "SharedTests\Fixtures\FullGenericClass.cs" = @("PublicStatic")
     "SharedTests\Fixtures\FunctionPointers.cs" = @("PublicStatic")
     "SharedTests\Fixtures\Test.cs" = @("PublicStatic")
-    "SharedTests\Fixtures\TypeThreadStaticFields.cs" = @("PublicStatic")
-    "SharedTests\Fixtures\TypeThreadStaticFields2.cs" = @("PublicStatic")
     "SharedTests\Fixtures\VirtualGenericMethod.cs" = @("PublicStatic")
 }
 

@@ -93,6 +93,8 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeFields.cs" Link="Fixtures\TypeFields.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields.cs" Link="Fixtures\TypeStaticFields.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields2.cs" Link="Fixtures\TypeStaticFields2.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\TypeThreadStaticFields.cs" Link="Fixtures\TypeThreadStaticFields.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\TypeThreadStaticFields2.cs" Link="Fixtures\TypeThreadStaticFields2.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\VectorTypes.cs" Link="Fixtures\VectorTypes.cs" />
     <Compile Include="AotTestEntries.cs" />
     <Compile Include="..\..\managed\AotTests\TC_Call_AotInterp.cs" Link="AotTests\TC_Call_AotInterp.cs" />
