@@ -15,6 +15,7 @@ class SystemThreadingThread
     // Thread management
     static RtResultVoid get_current_thread_icall(vm::RtThread** thread) noexcept;
     static RtResultVoid reset_abort_native(vm::RtThread* this_thread) noexcept;
+    static RtResultVoid internal_finalize() noexcept;
     static RtResultVoid suspend_internal(vm::RtThread* this_thread) noexcept;
     static RtResultVoid resume_internal(vm::RtThread* this_thread) noexcept;
     static RtResultVoid interrupt_internal(vm::RtThread* this_thread) noexcept;

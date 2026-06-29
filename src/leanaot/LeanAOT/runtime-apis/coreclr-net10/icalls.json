@@ -600,6 +600,11 @@
     "header": "icalls/system_threading_interlocked.h"
   },
   {
+    "name": "System.Threading.Thread::InternalFinalize()",
+    "func": "SystemThreadingThread::internal_finalize",
+    "header": "icalls/system_threading_thread.h"
+  },
+  {
     "name": "System.Threading.Thread::SleepInternal(System.Int32)",
     "func": "SystemThreadingThread::sleep_internal",
     "header": "icalls/system_threading_thread.h"

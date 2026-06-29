@@ -194,6 +194,7 @@
     <Compile Include="..\..\managed\CoreTests\Regression\GenericStruct\*.cs" LinkBase="Regression\GenericStruct" />
     <Compile Include="..\..\managed\GcTests\Fixtures\GcGraphTypes.cs" Link="GcTests\Fixtures\GcGraphTypes.cs" />
     <Compile Include="..\..\managed\GcTests\Fixtures\GcTestCaseBase.cs" Link="GcTests\Fixtures\GcTestCaseBase.cs" />
+    <Compile Include="..\..\managed\GcTests\Collection\TC_GC_Collection.cs" Link="GcTests\Collection\TC_GC_Collection.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Assembly.cs" Link="Runtime\TC_Assembly.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_ArrayGenericInterface.cs" Link="Runtime\TC_ArrayGenericInterface.cs" />

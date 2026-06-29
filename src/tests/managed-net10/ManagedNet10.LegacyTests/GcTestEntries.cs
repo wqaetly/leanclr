@@ -1,5 +1,5 @@
-using System;
 using System.Runtime.InteropServices;
+using GcTests.Collection;
 using GcTests.Fixtures;
 
 namespace ManagedNet10.LegacyTests
@@ -13,7 +13,7 @@ namespace ManagedNet10.LegacyTests
 
         public static void RunGcCollection()
         {
-            LegacyTestRunner.RunType(typeof(GcNet10CollectionTests));
+            LegacyTestRunner.RunType(typeof(TC_GC_Collection));
         }
 
         public static void RunGcRoots()
@@ -145,26 +145,6 @@ namespace ManagedNet10.LegacyTests
                 FreeHandle(ref weak);
                 FreeHandle(ref strong);
             }
-        }
-    }
-
-    internal sealed class GcNet10CollectionTests : GcTestCaseBase
-    {
-        [UnitTest]
-        [GcUnitTest]
-        public void CollectionCount_generation_zero_is_available()
-        {
-            Assert.True(GC.CollectionCount(0) >= 0);
-        }
-
-        [UnitTest]
-        [GcUnitTest]
-        public void Collect_is_non_throwing_and_keeps_collection_count_queryable()
-        {
-            int before = GC.CollectionCount(0);
-            GC.Collect();
-            int after = GC.CollectionCount(0);
-            Assert.True(after >= before);
         }
     }
 }

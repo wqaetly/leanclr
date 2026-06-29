@@ -29,6 +29,7 @@
 #include "vm/delegate.h"
 #include "vm/environment.h"
 #include "vm/field.h"
+#include "vm/gc.h"
 #include "vm/generic_method.h"
 #include "vm/generic_class.h"
 #include "vm/gchandle.h"
@@ -3511,9 +3512,8 @@ RtResultVoid environment_get_processor_count_invoker(metadata::RtManagedMethodPo
 RtResultVoid gc_collect_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                 interp::RtStackObject*) noexcept
 {
-    (void)params;
-    // LeanCLR's current managed execution path cannot safely force a collection.
-    // Match the .NET 10 contract shape while keeping this smoke-only call non-throwing.
+    int32_t generation = interp::EvalStackOp::get_param<int32_t>(params, 0);
+    vm::GC::collect(generation);
     RET_VOID_OK();
 }
 
@@ -4219,6 +4219,12 @@ RtResultVoid runtime_method_handle_strip_method_instantiation_invoker(metadata::
         *out_method_slot = reinterpret_cast<vm::RtObject*>(reflection_method);
     }
 
+    RET_VOID_OK();
+}
+
+RtResultVoid runtime_method_handle_destroy_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                   interp::RtStackObject*) noexcept
+{
     RET_VOID_OK();
 }
 
@@ -6703,6 +6709,9 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    runtime_method_handle_strip_method_instantiation_invoker);
     vm::PInvokes::register_pinvoke("RuntimeMethodHandle_StripMethodInstantiation", nullptr,
                                    runtime_method_handle_strip_method_instantiation_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeMethodHandle::Destroy(System.RuntimeMethodHandleInternal)", nullptr,
+                                   runtime_method_handle_destroy_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeMethodHandle::Destroy", nullptr, runtime_method_handle_destroy_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeMethodHandle::IsCAVisibleFromDecoratedType(System.Runtime.CompilerServices.QCallTypeHandle,System.RuntimeMethodHandleInternal,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallModule)",
         nullptr, runtime_method_handle_is_ca_visible_from_decorated_type_invoker);
