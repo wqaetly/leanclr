@@ -7,17 +7,7 @@ param(
     [string]$AssemblyName = "ManagedNet10.Smoke",
     [string]$SourceFile,
     [string[]]$Entries = @(),
-    [string[]]$ExcludeEntries = @(
-        "TestBasics",
-        "TestCustomAttributeDataOnly",
-        "TestFieldRawConstantValueOnly",
-        "TestGenericsDelegatesAndExceptions",
-        "TestReflection",
-        "TestReflectionInvokeMethodOnly",
-        "TestResolveUserStringOnly",
-        "TestSpan",
-        "TestStructLayoutAttributeOnly"
-    ),
+    [string[]]$ExcludeEntries = @(),
     [string[]]$AdditionalAssemblyDir = @(),
     [switch]$ListOnly
 )
