@@ -3737,6 +3737,21 @@ RtResultVoid method_table_can_compare_bits_or_use_fast_get_hash_code_invoker(met
     RET_VOID_OK();
 }
 
+RtResultVoid marshal_size_of_helper_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                            interp::RtStackObject* ret) noexcept
+{
+    auto qcall_type_handle = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    (void)interp::EvalStackOp::get_param<int32_t>(params, 2);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_qcall_type_handle(qcall_type_handle, native_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_fields(klass));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(vm::Class::get_instance_size_without_object_header(klass)));
+    RET_VOID_OK();
+}
+
 RtResultVoid bcrypt_gen_random_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                        interp::RtStackObject* ret) noexcept
 {
@@ -6343,6 +6358,11 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, method_table_can_compare_bits_or_use_fast_get_hash_code_invoker);
     vm::PInvokes::register_pinvoke("System.ValueType::<CanCompareBitsOrUseFastGetHashCodeHelper>g____PInvoke|2_0", nullptr,
                                    method_table_can_compare_bits_or_use_fast_get_hash_code_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.InteropServices.Marshal::<SizeOfHelper>g____PInvoke|3_0(System.Runtime.CompilerServices.QCallTypeHandle,System.Int32)",
+        nullptr, marshal_size_of_helper_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.Marshal::<SizeOfHelper>g____PInvoke|3_0", nullptr,
+                                   marshal_size_of_helper_invoker);
     vm::PInvokes::register_pinvoke(
         "System.MdUtf8String::<EqualsCaseInsensitive>g____PInvoke|0_0(System.Void*,System.Void*,System.Int32)", nullptr,
         md_utf8_string_equals_case_insensitive_invoker);

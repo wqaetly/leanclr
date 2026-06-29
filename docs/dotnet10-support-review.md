@@ -1291,6 +1291,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本轮未新增 runtime façade；现有 interface dispatch / inherited interface slot 解析已足够支撑该旧用例切片。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunRuntimeInterfaceDefaultMethod`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
 
+2026-06-29 迁移旧 `TC_Marshal` 用例：
+
+- 将旧 `Tests.CSharp.TC_Marshal` 链接进 `ManagedNet10.LegacyTests`，新增 `RunRuntimeMarshal` 定位入口，并纳入 `RunRuntimeLanguageFeatures` 分组。
+- 该旧用例覆盖 `Marshal.SizeOf` 对 value type reference field、explicit layout、pack=1/2/4/8、explicit size、sequential pack 和 fixed buffer 的布局尺寸计算。
+- 为 `.NET 10` CoreLib 当前实际调用链补齐 `System.Runtime.InteropServices.Marshal::<SizeOfHelper>g____PInvoke|3_0(System.Runtime.CompilerServices.QCallTypeHandle,System.Int32)` P/Invoke façade，并登记到 `coreclr-net10` catalog；实现按 LeanCLR 现有 `QCallTypeHandle` 双槽传参规则解析到 `RtClass`，复用 `Class::initialize_fields` 和 `Class::get_instance_size_without_object_header` 返回布局尺寸。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunRuntimeMarshal`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release`、`scripts\dotnet10\api-scan.ps1 -Configuration Release`、默认 `scripts\dotnet10\nkg-smoke.ps1 -Configuration Release`、`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。

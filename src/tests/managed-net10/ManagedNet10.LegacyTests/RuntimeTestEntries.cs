@@ -18,6 +18,7 @@ namespace ManagedNet10.LegacyTests
                 typeof(Tests.CSharp.TC_event),
                 typeof(Tests.CSharp.TC_Nullable),
                 typeof(Tests.CSharp.TC_InterfaceDefaultMethod),
+                typeof(Tests.CSharp.TC_Marshal),
                 typeof(Tests.CSharp.TC_ArrayGenericInterface));
         }
 
@@ -239,6 +240,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunRuntimeInterfaceDefaultMethod()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_InterfaceDefaultMethod));
+        }
+
+        public static void RunRuntimeMarshal()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Marshal));
         }
 
         public static void RunRuntimeArrayGenericInterface()

@@ -10,6 +10,7 @@
     "System.Runtime.InteropServices.NativeLibrary::<LoadByName>g____PInvoke|2_0(System.UInt16*,System.Runtime.CompilerServices.QCallAssembly,System.Int32,System.UInt32,System.Int32)",
     "System.Runtime.InteropServices.NativeLibrary::<GetSymbol>g____PInvoke|4_0(System.IntPtr,System.UInt16*,System.Int32)",
     "System.Runtime.InteropServices.NativeLibrary::FreeLib(System.IntPtr)",
+    "System.Runtime.InteropServices.Marshal::<SizeOfHelper>g____PInvoke|3_0(System.Runtime.CompilerServices.QCallTypeHandle,System.Int32)",
     "Interop/Ole32::CoCreateGuid(System.Guid*)",
     "System.GC::AllocateNewArray(System.IntPtr,System.Int32,System.GC/GC_ALLOC_FLAGS,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.GC::_WaitForPendingFinalizers()",
