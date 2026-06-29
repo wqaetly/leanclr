@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义，以及 AssemblyLoadContext / Reflection.Emit 受限 façade。下一步转向更宽的 handle/reflection consolidation、宿主桥接 ABI 与单线程调度边界。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。下一步转向宿主桥接 ABI 与单线程调度边界。
 
 已验证切片：
 
@@ -38,12 +38,12 @@
 | P1.4 System.IO / Kernel32 platform façade | .NET 10 `FileStream` / `File` / `Path` 触发的 Kernel32 generated PInvoke 统一落到 LeanCLR cross-platform `platform::Kernel32` / `os::File` / `os::Path`，非 Windows 走 POSIX fallback 并写回 Win32-style last error | `ManagedNet10.LegacyTests.Program::RunCorlibIO` 通过 | 保留为 file I/O regression gate；完整 watcher、ACL、reparse point、overlapped I/O 后置 |
 | P1.5 RuntimeHelpers / Span / RVA | `RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor`、stack check、`CompileMethod` / `PrepareMethod`、RVA `InitializeArray` / `CreateSpan`、inline array span helper 和 bitwise/reference checks 统一映射到 LeanCLR class/module/interpreter metadata；method preparation 在解释 profile 中是 no-op façade | `ManagedNet10.LegacyTests.Program::RunCorlibRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestSpan`、`ManagedNet10.LegacyTests.Program::RunNet10SpanBinaryPrimitives` 通过 | 保留为 RuntimeHelpers/Span regression gate；byref-like escape、任意 function pointer 和完整 JIT preparation 后置 |
 | P1.6 AssemblyLoadContext / Reflection.Emit limited façade | `AssemblyLoadContext` 初始化、已加载程序集枚举、release bookkeeping、`RuntimeAssemblyBuilder.CreateDynamicAssembly` 和 `ModuleHandle.GetDynamicMethod` 只承诺 LeanCLR metadata / interpreter 能消费的受限动态程序集与 light lambda 路径；collectible ALC、LoaderAllocator、unload 和任意动态 IL/JIT codegen 后置 | `ManagedNet10.LegacyTests.Program::RunCorlibLightLambda` 通过 | 保留为 Reflection.Emit / light lambda regression gate；后续动态方法失败先区分 metadata façade 缺口和完整 JIT codegen 非目标 |
+| P1.7 Handle / reflection consolidation | type / method / field / module / assembly handle 入口统一经 `vm::Reflection` 边界解码；`MethodTable*` 走 net10 façade registry；QCall object/slot 参数先做 GC allocated-object guard，再映射到 LeanCLR metadata；unsupported handle shape 输出明确错误，不靠宽松指针猜测前进 | `RunLegacyDiscoverySmoke`、`RunCorlibReflectionRuntimeModule`、`RunRuntimeDelegateDynamicInvoke`、`RunCorlibValueTypeEqualsStructValueTypes`、`RunCorlibValueTypeGetHashCodeStructIsStable`、`RunCorlibRuntimeHelpers`、`RunNet10SpanBinaryPrimitives`、`api-scan.ps1`、`nkg-smoke.ps1` 通过 | 保留为 reflection/handle regression gate；新增 CoreLib handle 入口必须复用同一 helper 或显式说明例外 |
 
 下一批次：
 
 | 批次 | 目标 | 输出 | 验收 |
 | --- | --- | --- | --- |
-| P1 Handle / reflection consolidation | 收敛 method / field / type / module handle 的 decode helper、GC allocated-object guard 和 NotSupported 诊断 | 统一的 net10 handle boundary | Reflection、Span/RVA、ValueType、delegate、NKG/Odin 轻量 workload 全部保持绿色 |
 | P2 Host Bridge ABI / scheduler boundary | 定义 Unity/Godot 共用 opaque handle、host function table、主线程 dispatcher、异常返回协议和单线程 continuation 边界 | native mock host + managed entry contract | mock host 调用、opaque handle 生命周期、主线程投递与结果回传 |
 
 ## 非目标
@@ -119,12 +119,40 @@
 - field handle 映射到 `metadata::RtFieldInfo*`。
 - function pointer 只在 LeanCLR 已有 AOT/native bridge 能表达时支持；解释路径默认不伪造不可调用指针。
 - field get/set 复用现有 field offset、static data、boxed value type 和 GC write barrier 规则。
+- direct metadata pointer、栈槽、boxed handle、runtime reflection object 和 stub object 必须先进入同一 decode helper，再交给具体业务入口。
+- `MethodTable*` 参数必须先解析为 net10 MethodTable façade registry 中的类型身份，不允许在 native 边界直接当作 `RtClass*` 使用。
 
 验收入口：
 
 - 反射枚举字段/方法。
 - private field 基础读写。
 - RVA initializer / static readonly data。
+
+### 3.1 Net10 handle boundary consolidation
+
+外部形状：
+
+- CoreLib 传入的 `RuntimeTypeHandle`、`RuntimeMethodHandleInternal`、`RuntimeFieldHandleInternal`、`QCallTypeHandle`、`QCallModule`、`QCallAssembly` 和 `MethodTable*` 都有集中解析路径。
+- QCall 参数可以是 direct managed object、object handle slot 或 native handle；slot/object 形状必须先通过 GC allocated-object guard 和 runtime reflection class 校验。
+- unsupported handle 形状返回 `ArgumentNull`、`BadImageFormat`、`Argument` 或明确 `NotSupported`，不静默退回 Mono-era 宽松签名或 raw pointer 猜测。
+
+内部映射：
+
+- `RuntimeTypeHandle` / `MethodTable*` 经 `get_net10_method_table`、`get_type_sig_from_net10_method_table`、`get_class_from_net10_method_table` 和 `get_type_sig_from_qcall_type_handle` 落到 `RtTypeSig` / `RtClass`。
+- `RuntimeMethodHandleInternal` 经 `get_method_info_from_handle_arg` 解析 reflection method/constructor object、runtime method info stub、direct metadata pointer 或栈槽。
+- `RuntimeFieldHandleInternal` 经 `get_field_info_from_handle_arg` 解析 reflection field object、boxed runtime field handle、direct metadata pointer、栈槽或 runtime field info stub。
+- `QCallModule` / `QCallAssembly` 经 `get_module_from_qcall_module` / `get_assembly_from_qcall_assembly` 映射到 LeanCLR module / assembly registry。
+
+验收入口：
+
+- `ManagedNet10.LegacyTests.Program::RunLegacyDiscoverySmoke`。
+- `ManagedNet10.LegacyTests.Program::RunCorlibReflectionRuntimeModule`。
+- `ManagedNet10.LegacyTests.Program::RunRuntimeDelegateDynamicInvoke`。
+- `ManagedNet10.LegacyTests.Program::RunCorlibValueTypeEqualsStructValueTypes`。
+- `ManagedNet10.LegacyTests.Program::RunCorlibValueTypeGetHashCodeStructIsStable`。
+- `ManagedNet10.LegacyTests.Program::RunCorlibRuntimeHelpers`。
+- `ManagedNet10.LegacyTests.Program::RunNet10SpanBinaryPrimitives`。
+- `scripts/dotnet10/api-scan.ps1` 与 `scripts/dotnet10/nkg-smoke.ps1`。
 
 ### 4. RuntimeAssembly / RuntimeModule
 
@@ -326,16 +354,16 @@ ABI 分组：
 | --- | --- | --- | --- |
 | `System.Object.GetType` | 基础 CoreLib / smoke | boxed object -> `RtClass` -> `RuntimeType` façade | 已有路径，需纳入正式 façade |
 | `System.Type::op_Inequality` / `bool` return slot | reflection discovery | interpreter return slot -> `0/1` full-width stack value | 已修复，`RunLegacyDiscoverySmoke` 通过 |
-| `System.RuntimeTypeHandle::GetBaseType` | reflection / type query | `RtClass::base_type` 或等价查询 | 重写并验收 |
-| `System.RuntimeTypeHandle::is_subclass_of` | reflection / type query | `vm::Class` assignability | 重写并验收 |
+| `System.RuntimeTypeHandle::GetBaseType` | reflection / type query | `RtClass::base_type` 或等价查询 | 已桥接，`RunLegacyDiscoverySmoke` 通过 |
+| `System.RuntimeTypeHandle::is_subclass_of` | reflection / type query | `vm::Class` assignability | 已桥接，`RunLegacyDiscoverySmoke` 通过 |
 | `System.Reflection.RuntimeAssembly::GetFullName` | legacy `RunAll` blocker / .NET 10 QCall | assembly metadata -> managed string via `StringHandleOnStack` | QCall façade 已实现，smoke 通过 |
-| `System.Reflection.RuntimeModule::InternalGetTypes` | reflection smoke | `RtModuleDef` type table -> `RuntimeType[]` | P0/P1 |
+| `System.Reflection.RuntimeModule::InternalGetTypes` | reflection smoke | `RtModuleDef` type table -> `RuntimeType[]` | 已桥接，`RunCorlibReflectionRuntimeModule` 通过 |
 | `System.Reflection.CustomAttributeData` minimal path | attribute smoke / Odin | metadata blob decoder -> attribute data façade | 已覆盖核心 target 与常见 blob-shape metadata-only smoke；NKG/Odin 轻量 workload gate 通过 |
 | `System.RuntimeFieldHandle::GetApproxDeclaringMethodTable` | `RuntimeModule.ResolveField` / field reflection | `RtFieldInfo` -> declaring `RtClass` -> net10 MethodTable façade | 已修复，`RunCorlibReflectionRuntimeModule` 通过 |
 | `System.ValueType::<CanCompareBitsOrUseFastGetHashCodeHelper>g____PInvoke|2_0` | `ValueType.Equals` / `GetHashCode` | `MethodTable*` façade -> `RtClass` | 已修复，ValueType 子入口通过 |
-| `System.Delegate::GetInvokeMethod` / `GetMulticastInvoke` | delegate reflection / multicast | `MethodTable*` façade -> delegate `RtClass` -> invoke method | 部分完成，仍需修复 multicast allocation |
+| `System.Delegate::GetInvokeMethod` / `GetMulticastInvoke` | delegate reflection / multicast | `MethodTable*` façade -> delegate `RtClass` -> invoke method | 已修复，`RunRuntimeDelegateDynamicInvoke` 通过 |
 | `System.RuntimeTypeHandle::InternalAllocNoChecks_FastPath(System.Runtime.CompilerServices.MethodTable*)` | `MulticastDelegate.NewMulticastDelegate` | `MethodTable*` façade -> `RtClass` -> object allocation | 已修复，`RunRuntimeDelegateDynamicInvoke` 通过 |
-| `System.RuntimeFieldHandle::<GetRVAFieldInfo>g____PInvoke|24_0` | Span/RVA initializer | `RtFieldInfo` RVA data | 已有修复需归档到 contract |
+| `System.RuntimeFieldHandle::<GetRVAFieldInfo>g____PInvoke|24_0` | Span/RVA initializer | `RtFieldInfo` RVA data | 已桥接，`RunNet10SpanBinaryPrimitives` 通过 |
 | `System.Runtime.CompilerServices.RuntimeHelpers::CompileMethod` / `PrepareMethod` | reflection / dynamic method preparation | accepted no-op preparation façade in interpreter profile | 已桥接，`TestRuntimeHelpers` 通过 |
 | `RuntimeHelpers.InitializeArray` / `CreateSpan` / inline array helpers | Span/RVA / inline array lowering | `RtFieldInfo` RVA blob + interpreter stack/object buffer view | 已桥接，`TestSpan` 与 `RunNet10SpanBinaryPrimitives` 通过 |
 | `System.Runtime.Loader.AssemblyLoadContext::GetLoadedAssemblies` / `InitializeAssemblyLoadContext` / `PrepareForAssemblyLoadContextRelease` | CoreLib ALC bookkeeping / `AppDomain.GetAssemblies` | stable LeanCLR ALC token + loaded assembly façade registry | 已桥接，`RunCorlibLightLambda` 通过 |
@@ -350,7 +378,7 @@ ABI 分组：
 1. 建立 `net10_runtime_contract` 代码分区或等价边界，禁止 `coreclr-net10` 隐式落回 Mono-era 名称/签名。
 2. 先完成 `RuntimeType` / `MethodTable*` façade 边界，确保所有 CoreLib 传入的 `System.Runtime.CompilerServices.MethodTable*` 都先解析为 net10 façade，再映射到 LeanCLR `RtClass`。
 3. 保持 delegate allocation / multicast 路径绿色：`RunRuntimeDelegateDynamicInvoke` 作为 `MethodTable*` façade 回归 gate。
-4. 重写并收敛 type / method / field / module handle decode helper，把 direct pointer、stack slot、boxed handle、stub object 和 managed reflection object 都纳入同一边界校验。
+4. 重写并收敛 type / method / field / module handle decode helper，把 direct pointer、stack slot、boxed handle、stub object 和 managed reflection object 都纳入同一边界校验。当前解释 profile 已归档为 P1.7 handle/reflection consolidation。
 5. 重写 assembly / module façade，优先解锁 `RuntimeAssembly.GetFullName`、`Assembly.GetTypes()`、`RuntimeModule.GetTypes` 和 token resolve 白名单。
 6. 重写 custom attribute 最小路径，覆盖 smoke 与 NKG/Odin 会触发的读取模式。当前 metadata-only smoke 与 NKG/Odin 轻量 workload 已通过，后续只按真实失败补齐新 blob 形状或实例化路径。
 7. 固化 Span / Unsafe / RuntimeHelpers contract，确保解释路径和 AOT 路径使用同一份语义说明。当前解释 profile 已覆盖 RuntimeHelpers cctor、栈检查、CompileMethod / PrepareMethod no-op façade、RVA `InitializeArray` / `CreateSpan` 与 inline array helper。
