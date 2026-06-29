@@ -118,6 +118,7 @@ namespace ManagedNet10.LegacyTests
             RunConvertOverflowU2();
             RunConvertOverflowU4();
             RunConvertOverflowU8();
+            RunConvertOverflowIl();
         }
 
         public static void RunConvertOverflowI1()
@@ -158,6 +159,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunConvertOverflowU8()
         {
             LegacyTestRunner.RunType(typeof(Tests.Instruments.Converts.TC_conv_ovf_u8));
+        }
+
+        public static void RunConvertOverflowIl()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.Instructions.Converts.TC_conv_ovf_il));
         }
     }
 

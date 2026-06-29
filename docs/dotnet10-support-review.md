@@ -1319,6 +1319,14 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本轮未新增 runtime façade；现有 inherited interface contract 与 base virtual method dispatch 解析已足够支撑该旧用例切片。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunRuntimeAotTypeImplInterpInterface`、`ManagedNet10.LegacyTests.Program::RunRuntimeLanguageFeatures`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
 
+2026-06-29 迁移旧 `TC_conv_ovf` IL wrapper 用例：
+
+- 将旧 `ILTests.Wrappers.TC_conv_ovf` 链接进 `ManagedNet10.LegacyTests`，新增 `RunConvertOverflowIl` 定位入口，并纳入 `RunConvertOverflow` 分组。
+- `ManagedNet10.LegacyTests` 构建新增 ILAsm package/target，生成同名 `ILTests.Native.dll` 后作为 wrapper 编译引用和运行时同目录依赖；net10 专用 `conv.ovf.net10.il` 仅把旧 IL native assembly 的 corlib reference 从 Mono-era `mscorlib` 调整为 `System.Runtime` reference contract，实际 `conv.ovf.i1` / `conv.ovf.u1.un` opcode 和公开 `TestConvOvf` API 保持一致。
+- 该旧用例覆盖 signed int32 到 int8 的上下界和正/负溢出，以及 unsigned interpretation 下 int32 到 uint8 的零、最大值、上溢和负输入溢出。
+- 本轮未新增 runtime façade；现有 IL interpreter 的 checked conversion opcode 与异常路径已足够支撑该旧用例切片。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunConvertOverflowIl`、`ManagedNet10.LegacyTests.Program::RunConvertOverflow`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。

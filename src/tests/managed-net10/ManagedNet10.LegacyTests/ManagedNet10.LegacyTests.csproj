@@ -9,6 +9,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <NoWarn>$(NoWarn);SYSLIB0011</NoWarn>
     <Copyright>Copyright 2026</Copyright>
+    <IlNativeAssemblyName>ILTests.Native</IlNativeAssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -133,6 +134,7 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt.cs" Link="Instructions\Compare\TC_Clt.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Compare\TC_Clt_un.cs" Link="Instructions\Compare\TC_Clt_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Converts\*.cs" LinkBase="Instructions\Converts" />
+    <Compile Include="..\..\managed\ILTests\Wrappers\TC_conv_ovf.cs" Link="ILTests\Wrappers\TC_conv_ovf.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Exceptions\*.cs" LinkBase="Instructions\Exceptions" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Fields\*.cs" LinkBase="Instructions\Fields" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInherenGenericAotValue.cs" Link="Instructions\Funcs\ForInherenGenericAotValue.cs" />
@@ -236,5 +238,32 @@
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_using.cs" Link="Runtime\TC_using.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_InnerType.cs" Link="Runtime\Misc\TC_InnerType.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <IlFile Include="ILTests\Instructions\*.il" />
+    <PackageReference Include="ILAsm" Version="9.4.0" GeneratePathProperty="true" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="EnsureLegacyILAsmRestored" BeforeTargets="BuildLegacyIlAssembly">
+    <Error Condition="'$(PkgILAsm)' == '' Or !Exists('$(PkgILAsm)\build\net\ILAsm.targets')"
+           Text="ILAsm NuGet package is missing. Run 'dotnet restore' on managed-net10.sln." />
+  </Target>
+
+  <Target Name="BuildLegacyIlAssembly" BeforeTargets="ResolveAssemblyReferences">
+    <PropertyGroup>
+      <IlNativeOutput>$(OutputPath)$(IlNativeAssemblyName).dll</IlNativeOutput>
+      <_IlAsmExe Condition="'$(Platform)' == 'x86'">$(PkgILAsm)\bin\Win.x86\ilasm.exe</_IlAsmExe>
+      <_IlAsmExe Condition="'$(_IlAsmExe)' == ''">$(PkgILAsm)\bin\Win.x64\ilasm.exe</_IlAsmExe>
+      <_IlSources>@(IlFile->'&quot;$(MSBuildProjectDirectory)\%(Identity)&quot;', ' ')</_IlSources>
+    </PropertyGroup>
+    <MakeDir Directories="$(OutputPath)" />
+    <Exec Command="&quot;$(_IlAsmExe)&quot; /dll /output:&quot;$(IlNativeOutput)&quot; /quiet $(_IlSources)" />
+    <ItemGroup>
+      <Reference Include="$(IlNativeAssemblyName)">
+        <HintPath>$(IlNativeOutput)</HintPath>
+        <Private>false</Private>
+      </Reference>
+    </ItemGroup>
+  </Target>
 
 </Project>
