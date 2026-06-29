@@ -45,6 +45,11 @@
     "header": "icalls/system_gc.h"
   },
   {
+    "name": "System.GC::SuppressFinalizeInternal(System.Object)",
+    "func": "SystemGC::suppress_finalize",
+    "header": "icalls/system_gc.h"
+  },
+  {
     "name": "System.GC::GetMaxGeneration()",
     "func": "SystemGC::get_max_generation",
     "header": "icalls/system_gc.h"

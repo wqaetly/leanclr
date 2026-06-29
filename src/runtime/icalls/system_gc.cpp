@@ -224,11 +224,15 @@ static RtResultVoid wait_for_pending_finalizers_invoker(metadata::RtManagedMetho
 
 RtResultVoid SystemGC::suppress_finalize(vm::RtObject* obj) noexcept
 {
+    if (obj == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
     vm::GC::suppress_finalize(obj);
     RET_VOID_OK();
 }
 
-/// @icall: System.GC::_SuppressFinalize(System.Object)
+/// @icall: System.GC::SuppressFinalizeInternal(System.Object)
 static RtResultVoid suppress_finalize_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                               const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -242,6 +246,10 @@ static RtResultVoid suppress_finalize_invoker(metadata::RtManagedMethodPointer m
 
 RtResultVoid SystemGC::reregister_for_finalize(vm::RtObject* obj) noexcept
 {
+    if (obj == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
     vm::GC::reregister_for_finalize(obj);
     RET_VOID_OK();
 }
@@ -332,7 +340,10 @@ utils::Span<vm::InternalCallEntry> SystemGC::get_internal_call_entries() noexcep
          get_allocated_bytes_for_current_thread_invoker},
         {"System.GC::GetGeneration(System.Object)", (vm::InternalCallFunction)&SystemGC::get_generation, get_generation_invoker},
         {"System.GC::WaitForPendingFinalizers()", (vm::InternalCallFunction)&SystemGC::wait_for_pending_finalizers, wait_for_pending_finalizers_invoker},
+        {"System.GC::SuppressFinalize(System.Object)", (vm::InternalCallFunction)&SystemGC::suppress_finalize, suppress_finalize_invoker},
+        {"System.GC::SuppressFinalizeInternal(System.Object)", (vm::InternalCallFunction)&SystemGC::suppress_finalize, suppress_finalize_invoker},
         {"System.GC::_SuppressFinalize(System.Object)", (vm::InternalCallFunction)&SystemGC::suppress_finalize, suppress_finalize_invoker},
+        {"System.GC::ReRegisterForFinalize(System.Object)", (vm::InternalCallFunction)&SystemGC::reregister_for_finalize, reregister_for_finalize_invoker},
         {"System.GC::_ReRegisterForFinalize(System.Object)", (vm::InternalCallFunction)&SystemGC::reregister_for_finalize, reregister_for_finalize_invoker},
         {"System.GC::GetTotalMemory(System.Boolean)", (vm::InternalCallFunction)&SystemGC::get_total_memory, get_total_memory_invoker},
         {"System.GC::GetMemoryInfo(System.GCMemoryInfoData,System.Int32)", (vm::InternalCallFunction)&SystemGC::get_memory_info, get_memory_info_invoker},

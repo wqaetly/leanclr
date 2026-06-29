@@ -12,6 +12,8 @@
     "System.Runtime.InteropServices.NativeLibrary::FreeLib(System.IntPtr)",
     "Interop/Ole32::CoCreateGuid(System.Guid*)",
     "System.GC::AllocateNewArray(System.IntPtr,System.Int32,System.GC/GC_ALLOC_FLAGS,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.GC::_WaitForPendingFinalizers()",
+    "System.GC::ReRegisterForFinalize(System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "Interop/Kernel32::<CloseHandle>g____PInvoke|277_0(System.IntPtr)",
     "Interop/Kernel32::<CreateFilePrivate_IntPtr>g____PInvoke|84_0(System.UInt16*,System.Int32,System.IO.FileShare,Interop/Kernel32/SECURITY_ATTRIBUTES*,System.IO.FileMode,System.Int32,System.IntPtr)",
     "Interop/Kernel32::<CreateFilePrivate>g____PInvoke|63_0(System.UInt16*,System.Int32,System.IO.FileShare,Interop/Kernel32/SECURITY_ATTRIBUTES*,System.IO.FileMode,System.Int32,System.IntPtr)",

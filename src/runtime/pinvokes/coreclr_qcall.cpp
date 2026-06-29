@@ -3697,6 +3697,21 @@ RtResultVoid gc_allocate_new_array_invoker(metadata::RtManagedMethodPointer, con
     RET_VOID_OK();
 }
 
+RtResultVoid gc_wait_for_pending_finalizers_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                    const interp::RtStackObject*, interp::RtStackObject*) noexcept
+{
+    vm::GC::wait_for_pending_finalizers();
+    RET_VOID_OK();
+}
+
+RtResultVoid gc_reregister_for_finalize_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto obj_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    vm::GC::reregister_for_finalize(obj_slot != nullptr ? *obj_slot : nullptr);
+    RET_VOID_OK();
+}
+
 RtResultVoid enum_get_values_and_names_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                                interp::RtStackObject*) noexcept
 {
@@ -6228,6 +6243,11 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    gc_collect_invoker);
     vm::PInvokes::register_pinvoke("System.GC::<_Collect>g____PInvoke|8_0", nullptr, gc_collect_invoker);
     vm::PInvokes::register_pinvoke("System.GC::_Collect", nullptr, gc_collect_invoker);
+    vm::PInvokes::register_pinvoke("System.GC::_WaitForPendingFinalizers()", nullptr, gc_wait_for_pending_finalizers_invoker);
+    vm::PInvokes::register_pinvoke("System.GC::_WaitForPendingFinalizers", nullptr, gc_wait_for_pending_finalizers_invoker);
+    vm::PInvokes::register_pinvoke("System.GC::ReRegisterForFinalize(System.Runtime.CompilerServices.ObjectHandleOnStack)", nullptr,
+                                   gc_reregister_for_finalize_invoker);
+    vm::PInvokes::register_pinvoke("System.GC::ReRegisterForFinalize", nullptr, gc_reregister_for_finalize_invoker);
     vm::PInvokes::register_pinvoke("System.String::Intern(System.Runtime.CompilerServices.StringHandleOnStack)", nullptr,
                                    string_intern_invoker);
     vm::PInvokes::register_pinvoke("System.String::Intern", nullptr, string_intern_invoker);

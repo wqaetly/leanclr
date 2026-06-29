@@ -116,6 +116,14 @@ void GcFinalizer::suppress_finalize(vm::RtObject* obj)
     if (it != s_registry.end() && it->second == FinalizerRegState::Active)
     {
         it->second = FinalizerRegState::Suppressed;
+        for (auto pending = s_freachable.begin(); pending != s_freachable.end(); ++pending)
+        {
+            if (*pending == obj)
+            {
+                s_freachable.erase(pending);
+                break;
+            }
+        }
     }
 }
 

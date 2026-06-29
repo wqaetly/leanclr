@@ -1248,6 +1248,14 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 该旧用例覆盖未 rooting 的 small object 批量回收、array rooted small object 保活、big byte array 回收与强 handle 保活、small/big 混合批量 sweep，以及静态数组根清除后的对象回收。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcSweep`、`ManagedNet10.LegacyTests.Program::RunAll` 和默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 均通过。
 
+2026-06-29 迁移旧 `TC_GC_Finalizer` 用例：
+
+- 将旧 `GcTests.Finalizer.TC_GC_Finalizer` 链接进 `ManagedNet10.LegacyTests`，新增 `RunGcFinalizer` 定位入口。
+- 该旧用例覆盖 finalizable 对象不可达后执行 finalizer、`GC.SuppressFinalize` 抑制 finalizer、`GC.WaitForPendingFinalizers` drain pending 队列、`GC.ReRegisterForFinalize` 让 resurrected 对象再次执行 finalizer，以及普通 `object` 不影响自定义 finalizer 计数器。
+- 为 `.NET 10` CoreLib 当前实际调用链补齐 `System.GC::SuppressFinalizeInternal(System.Object)` internal call、`System.GC::_WaitForPendingFinalizers()` QCall 和 `System.GC::ReRegisterForFinalize(ObjectHandleOnStack)` QCall；同时把 public `GC.SuppressFinalize(object)` / `GC.ReRegisterForFinalize(object)` 作为 LeanCLR net10 runtime façade 直接映射到 VM finalizer registry，避免依赖 CoreCLR MethodTable flag layout。
+- `GcFinalizer::suppress_finalize` 现在会同步移除已进入 f-reachable pending 队列的对象，保证 suppress 发生在 promotion 后但 finalizer 执行前时也不会继续调用 finalizer。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcFinalizer`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release`、`scripts\dotnet10\api-scan.ps1 -Configuration Release`、默认 `scripts\dotnet10\nkg-smoke.ps1 -Configuration Release`、`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。

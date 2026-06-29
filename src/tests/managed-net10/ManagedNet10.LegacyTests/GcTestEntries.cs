@@ -1,4 +1,5 @@
 using GcTests.Collection;
+using GcTests.Finalizer;
 using GcTests.Handles;
 using GcTests.Roots;
 using GcTests.Scan;
@@ -43,6 +44,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunGcSweep()
         {
             LegacyTestRunner.RunType(typeof(TC_GC_Sweep));
+        }
+
+        public static void RunGcFinalizer()
+        {
+            LegacyTestRunner.RunType(typeof(TC_GC_Finalizer));
         }
     }
 }
