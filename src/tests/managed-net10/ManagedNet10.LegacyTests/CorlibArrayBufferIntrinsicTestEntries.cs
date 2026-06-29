@@ -8,6 +8,7 @@ namespace ManagedNet10.LegacyTests
             RunCorlibBuffer();
             RunCorlibIntrinsicObject();
             RunCorlibIntrinsicString();
+            RunCorlibIntrinsicSpanPlaceholder();
         }
 
         public static void RunCorlibArray()
@@ -118,6 +119,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunCorlibIntrinsicStringGetStringDataOffset()
         {
             LegacyTestRunner.RunMethod(typeof(Tests.Intrinsic.TC_String), "GetStringDataOffset");
+        }
+
+        public static void RunCorlibIntrinsicSpanPlaceholder()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.Intrinsic.TC_Syste_Span));
         }
     }
 }

@@ -203,6 +203,7 @@
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_TypedReference.cs" Link="CorlibTests\InternalCall\TC_System_TypedReference.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_System_ValueType.cs" Link="CorlibTests\InternalCall\TC_System_ValueType.cs" />
     <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_String.cs" Link="CorlibTests\Intrinsic\TC_String.cs" />
+    <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_Syste_Span.cs" Link="CorlibTests\Intrinsic\TC_Syste_Span.cs" />
     <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_System_Object.cs" Link="CorlibTests\Intrinsic\TC_System_Object.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\*.cs" LinkBase="Regression" />
     <Compile Include="..\..\managed\CoreTests\Regression\GenericStruct\*.cs" LinkBase="Regression\GenericStruct" />
@@ -226,6 +227,7 @@
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_CustomAttribute.cs" Link="Runtime\TC_CustomAttribute.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_DynamicInvoke.cs" Link="Runtime\TC_Delegate_DynamicInvoke.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_OpenClose.cs" Link="Runtime\TC_Delegate_OpenClose.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_dynamic.cs" Link="Runtime\TC_dynamic.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Enum.cs" Link="Runtime\TC_Enum.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_event.cs" Link="Runtime\TC_event.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_foreach.cs" Link="Runtime\TC_foreach.cs" />

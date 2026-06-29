@@ -20,6 +20,7 @@ namespace ManagedNet10.LegacyTests
                 typeof(Tests.CSharp.TC_InterfaceDefaultMethod),
                 typeof(Tests.CSharp.TC_Marshal),
                 typeof(Tests.CSharp.TC_AOTTypeImplInterpInterface),
+                typeof(Tests.CSharp.Dynamics.TC_dynamic),
                 typeof(Tests.CSharp.TC_ArrayGenericInterface));
         }
 
@@ -251,6 +252,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunRuntimeAotTypeImplInterpInterface()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_AOTTypeImplInterpInterface));
+        }
+
+        public static void RunRuntimeDynamicPlaceholder()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.Dynamics.TC_dynamic));
         }
 
         public static void RunRuntimeArrayGenericInterface()

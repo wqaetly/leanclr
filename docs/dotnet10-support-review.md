@@ -1327,10 +1327,17 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本轮未新增 runtime façade；现有 IL interpreter 的 checked conversion opcode 与异常路径已足够支撑该旧用例切片。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunConvertOverflowIl`、`ManagedNet10.LegacyTests.Program::RunConvertOverflow`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
 
+2026-06-29 收口旧占位测试资产：
+
+- 将旧 `Tests.CSharp.Dynamics.TC_dynamic` 链接进 `ManagedNet10.LegacyTests`，新增 `RunRuntimeDynamicPlaceholder` 定位入口，并纳入 `RunRuntimeLanguageFeatures` 分组；该旧用例的 dynamic 行为代码在原素材中已全部注释，当前只作为库存占位纳入，不证明 dynamic binder 支持。
+- 将旧 `Tests.Intrinsic.TC_Syste_Span` 链接进 `ManagedNet10.LegacyTests`，新增 `RunCorlibIntrinsicSpanPlaceholder` 定位入口，并纳入 `RunCorlibArrayBufferIntrinsics` 分组；该旧用例原本带 `[IgnoreTest]` 且方法体只断言 `true`，当前保留旧 runner 语义，不改变 ignore 处理方式，也不扩大为完整 `System.Span<T>` contract。
+- 旧 managed `[UnitTest]` 扫描现在只剩 `src\tests\managed\SharedTests\Instructions\Arithmetic\TC_sub.cs`，该文件已由 `src\tests\managed-net10\ManagedNet10.LegacyTests\Instructions\Arithmetic\TC_sub.cs` 覆盖 20 个原测试方法；net10 本地替代仅把旧源码中无法在 net10 编译的 `UIntPtr` 减法运算符改为 `UIntPtr.Subtract(a, b)`。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunRuntimeDynamicPlaceholder`、`ManagedNet10.LegacyTests.Program::RunCorlibIntrinsicSpanPlaceholder`、`ManagedNet10.LegacyTests.Program::RunRuntimeLanguageFeatures`、`ManagedNet10.LegacyTests.Program::RunCorlibArrayBufferIntrinsics`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release`、旧 managed `[UnitTest]` 覆盖扫描和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
-- 原作者 managed / Mono 测试资产仍需继续分阶段迁移并最终全量跑通；当前 `ManagedNet10.LegacyTests.Program::RunAll` 只证明已迁入 net10 测试程序集的集合绿色。
+- 原作者 managed / Mono 测试资产中的活动 `[UnitTest]` 已纳入 `ManagedNet10.LegacyTests` 或由 net10 本地替代覆盖；当前 `ManagedNet10.LegacyTests.Program::RunAll` 证明 LeanCLR 自有 legacy managed 集合绿色。后续若新增旧素材目录、AOT native runner 或非 managed gate，需要另行纳入对应清点。
 - NKGGameFramework 真实纯逻辑 gate 已从 surface 扩展到 SampleGame 的核心 gameplay / ECS 两帧行为执行；仍需要继续推进 UniTask 行为执行、Odin 序列化/反序列化往返和更完整的 gameplay / ECS 样例覆盖。Hosting、Unity、Godot 仍不属于第一阶段边界。
 - mock host bridge 已完成 ABI skeleton、opaque handle registry、主线程 dispatcher、event/callback、value marshal 和 diagnostics 基线；真实 Unity/Godot SDK bridge 仍未接入，继续作为后置边界。
 - 完整 Microsoft.NETCore.App、generic math/static abstract、完整 ThreadPool、完整 resolver、AOT native run 均已后置，暂不作为当前未完成主线。
