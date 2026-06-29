@@ -6248,6 +6248,11 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.RuntimeHelpers::CompileMethod", nullptr,
                                    runtime_helpers_compile_method_invoker);
     vm::PInvokes::register_pinvoke(
+        "System.Runtime.CompilerServices.RuntimeHelpers::PrepareMethod(System.RuntimeMethodHandleInternal,System.IntPtr*,System.Int32)", nullptr,
+        runtime_helpers_compile_method_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.RuntimeHelpers::PrepareMethod", nullptr,
+                                   runtime_helpers_compile_method_invoker);
+    vm::PInvokes::register_pinvoke(
         "System.Runtime.CompilerServices.RuntimeHelpers::AllocateUninitializedClone(System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, runtime_helpers_allocate_uninitialized_clone_invoker);
     vm::PInvokes::register_pinvoke("ObjectNative_AllocateUninitializedClone", nullptr,

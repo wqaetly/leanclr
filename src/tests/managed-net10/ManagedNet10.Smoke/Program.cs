@@ -177,6 +177,7 @@ internal static class Program
         TestGenericsDelegatesAndExceptions();
         TestReflection();
         TestSpan();
+        TestRuntimeHelpers();
         TestThreadingSubset();
         await TestAsync();
     }
@@ -815,6 +816,22 @@ internal static class Program
         holder.Large = [7, 42];
         Require(holder.Buffer[15] == 42, "inline array element was clobbered");
         Require(holder.Large[1] == 42, "inline array tail reference read failed");
+    }
+
+    private static void TestRuntimeHelpers()
+    {
+        RuntimeHelpers.EnsureSufficientExecutionStack();
+        RuntimeHelpers.TryEnsureSufficientExecutionStack();
+
+        var method = typeof(Program).GetMethod(nameof(RuntimeHelpersPrepareTarget), BindingFlags.Static | BindingFlags.NonPublic);
+        Require(method != null, "runtime helper prepare target lookup failed");
+        RuntimeHelpers.PrepareMethod(method!.MethodHandle);
+        Require(RuntimeHelpersPrepareTarget(40, 2) == 42, "runtime helper prepared target failed");
+    }
+
+    private static int RuntimeHelpersPrepareTarget(int left, int right)
+    {
+        return left + right;
     }
 
     private static void TestThreadingSubset()

@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经完成 `CustomAttributeData` metadata-only 最小路径，并接入 NKG/Odin 轻量 attribute workload 作为真实项目 gate。下一步转向更宽的 handle/reflection consolidation、宿主桥接 ABI 与单线程调度边界。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade，以及 RuntimeHelpers / Span / RVA 最小语义。下一步转向更宽的 handle/reflection consolidation、AssemblyLoadContext / Reflection.Emit 受限 façade、宿主桥接 ABI 与单线程调度边界。
 
 已验证切片：
 
@@ -36,6 +36,7 @@
 | P1.2 NKG/Odin light workload | `ManagedNet10.NkgSmoke` 使用真实 NKGGameFramework、OdinSerializer 与 UniTask `net10.0` 输出目录验证轻量反射、attribute 枚举和白名单 API 边界；默认 sampler/Hosting 完整面仍在第一阶段外 | `scripts/dotnet10/api-scan.ps1` 扫描 NKG core/Odin/UniTask：unsupported `0`；`scripts/dotnet10/nkg-smoke.ps1` 通过 | 保留为真实 workload gate；后续失败按 contract、façade、VM 通用语义或白名单外 API 归类 |
 | P1.3 Thread / Monitor / WaitHandle bounded semantics | 单线程 profile 下补齐 `CurrentManagedThreadId`、Monitor fast path / wait PInvoke、ThreadPool sizing / queue dispatch、ManualResetEvent / WaitAny 最小路径；复杂并行调度仍不承诺 | `ManagedNet10.LegacyTests.Program::RunCorlibThreading` 通过；`ManagedNet10.LegacyTests.Program::RunCorlibMonitor` 通过 | 保留为 threading regression gate；后续 Task/dispatcher 只接可控 continuation |
 | P1.4 System.IO / Kernel32 platform façade | .NET 10 `FileStream` / `File` / `Path` 触发的 Kernel32 generated PInvoke 统一落到 LeanCLR cross-platform `platform::Kernel32` / `os::File` / `os::Path`，非 Windows 走 POSIX fallback 并写回 Win32-style last error | `ManagedNet10.LegacyTests.Program::RunCorlibIO` 通过 | 保留为 file I/O regression gate；完整 watcher、ACL、reparse point、overlapped I/O 后置 |
+| P1.5 RuntimeHelpers / Span / RVA | `RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor`、stack check、`CompileMethod` / `PrepareMethod`、RVA `InitializeArray` / `CreateSpan`、inline array span helper 和 bitwise/reference checks 统一映射到 LeanCLR class/module/interpreter metadata；method preparation 在解释 profile 中是 no-op façade | `ManagedNet10.LegacyTests.Program::RunCorlibRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestSpan`、`ManagedNet10.LegacyTests.Program::RunNet10SpanBinaryPrimitives` 通过 | 保留为 RuntimeHelpers/Span regression gate；byref-like escape、任意 function pointer 和完整 JIT preparation 后置 |
 
 下一批次：
 
@@ -170,11 +171,16 @@
 
 - `RuntimeHelpers` 的类型初始化、array data、object identity、generic helper 有明确映射。
 - `Unsafe` / `Span<T>` 的 byref、stackalloc、RVA initializer 和 ref reinterpret 路径可解释执行。
+- `SufficientExecutionStack` / `TryEnsureSufficientExecutionStack` 在解释 profile 下提供可前进的栈检查结果。
+- `RuntimeHelpers.CompileMethod(RuntimeMethodHandleInternal)` / `PrepareMethod(RuntimeMethodHandleInternal, IntPtr*, int)` 可被 CoreLib / reflection 路径调用；解释 profile 中它只确认入口可接受，不触发 JIT。
 
 内部映射：
 
 - `Span<T>` 不创建 CoreCLR 内部对象模型；它按 .NET 10 layout 在解释器栈和托管对象数据区中表达。
 - `Unsafe` 只支持已有解释器和内存模型能保证的路径。
+- `RuntimeHelpers.InitializeArray` / `CreateSpan` 从 `RtFieldInfo` 的 RVA blob 读取数据，使用同一 field handle decode 规则。
+- `RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor` 进入 LeanCLR class / module cctor 路径，不复制 CoreCLR loader lock 模型。
+- inline array helper 映射到托管对象或栈上缓冲区的元素地址，不允许 byref-like 结果逃逸到 heap。
 - byref-like 类型不得逃逸到 boxed object 或 heap field。
 
 验收入口：
@@ -182,6 +188,10 @@
 - Span stackalloc。
 - RVA initializer。
 - `Unsafe.As` / `Unsafe.Add` 的白名单子集。
+- inline array first element / indexed element helper。
+- `RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor`。
+- `RuntimeHelpers.SufficientExecutionStack` / `TryEnsureSufficientExecutionStack`。
+- `RuntimeHelpers.CompileMethod` / `PrepareMethod` no-op façade。
 
 ### 7. Exception / Delegate
 
@@ -303,6 +313,8 @@ ABI 分组：
 | `System.Delegate::GetInvokeMethod` / `GetMulticastInvoke` | delegate reflection / multicast | `MethodTable*` façade -> delegate `RtClass` -> invoke method | 部分完成，仍需修复 multicast allocation |
 | `System.RuntimeTypeHandle::InternalAllocNoChecks_FastPath(System.Runtime.CompilerServices.MethodTable*)` | `MulticastDelegate.NewMulticastDelegate` | `MethodTable*` façade -> `RtClass` -> object allocation | 已修复，`RunRuntimeDelegateDynamicInvoke` 通过 |
 | `System.RuntimeFieldHandle::<GetRVAFieldInfo>g____PInvoke|24_0` | Span/RVA initializer | `RtFieldInfo` RVA data | 已有修复需归档到 contract |
+| `System.Runtime.CompilerServices.RuntimeHelpers::CompileMethod` / `PrepareMethod` | reflection / dynamic method preparation | accepted no-op preparation façade in interpreter profile | 已桥接，`TestRuntimeHelpers` 通过 |
+| `RuntimeHelpers.InitializeArray` / `CreateSpan` / inline array helpers | Span/RVA / inline array lowering | `RtFieldInfo` RVA blob + interpreter stack/object buffer view | 已桥接，`TestSpan` 与 `RunNet10SpanBinaryPrimitives` 通过 |
 | `System.Threading.Monitor::<Wait>g____PInvoke|24_0` | Monitor wait / pulse | `vm::Monitor::monitor_wait` -> single-thread controlled wait | 已桥接，`RunCorlibMonitor` 通过 |
 | `System.Threading.WaitHandle::<WaitOneCore>g____PInvoke|0_0` / `WaitMultipleIgnoringSyncContext` | ManualResetEvent / WaitAny | runtime `EventHandle` -> `Kernel32` façade wait helpers | 已桥接，`RunCorlibThreading` 通过 |
 | `System.IO.FileStream` / generated `Kernel32` file PInvoke | File / Path / SafeFileHandle | `platform::Kernel32` façade -> `os::File` / `os::Path` / POSIX fallback | 已桥接，`RunCorlibIO` 通过 |
@@ -315,7 +327,7 @@ ABI 分组：
 4. 重写并收敛 type / method / field / module handle decode helper，把 direct pointer、stack slot、boxed handle、stub object 和 managed reflection object 都纳入同一边界校验。
 5. 重写 assembly / module façade，优先解锁 `RuntimeAssembly.GetFullName`、`Assembly.GetTypes()`、`RuntimeModule.GetTypes` 和 token resolve 白名单。
 6. 重写 custom attribute 最小路径，覆盖 smoke 与 NKG/Odin 会触发的读取模式。当前 metadata-only smoke 与 NKG/Odin 轻量 workload 已通过，后续只按真实失败补齐新 blob 形状或实例化路径。
-7. 固化 Span / Unsafe / RuntimeHelpers contract，确保解释路径和 AOT 路径使用同一份语义说明。
+7. 固化 Span / Unsafe / RuntimeHelpers contract，确保解释路径和 AOT 路径使用同一份语义说明。当前解释 profile 已覆盖 RuntimeHelpers cctor、栈检查、CompileMethod / PrepareMethod no-op façade、RVA `InitializeArray` / `CreateSpan` 与 inline array helper。
 8. 分级支持 exception / delegate / Thread / Monitor / Task；第一阶段单线程可控，复杂 ThreadPool 后置。
 9. 固化 System.IO / platform PInvoke 最小 contract，让真实 workload 可做临时文件、路径解析和基础资源读取。
 10. 建立 host bridge mock，证明 Unity/Godot 接入不需要扩大 BCL 支持面。
