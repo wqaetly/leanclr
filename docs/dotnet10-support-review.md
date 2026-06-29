@@ -1263,6 +1263,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本轮未新增 runtime façade；现有 LeanCLR array scanner、struct element scanner、GCHandle rooting 和 big object sweep 已足够支撑该旧用例切片。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcScanArrays`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
 
+2026-06-29 迁移旧 `TC_GC_ArrayNonSealedElement` 用例：
+
+- 将旧 `GcTests.Scan.TC_GC_ArrayNonSealedElement` 链接进 `ManagedNet10.LegacyTests`，新增 `RunGcScanArrayNonSealedElement` 定位入口。
+- 该旧用例覆盖静态元素类型为非 sealed base class 或 interface 的数组，slot 中运行时实例为 derived/implementor 且带引用字段时仍会被 GC 扫描；同时覆盖 multidimensional base array 和 sealed primitive struct array 不误标记无关对象。
+- 本轮未新增 runtime façade；现有 array slot 扫描按运行时对象继续递归的语义已足够支撑该旧用例切片。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcScanArrayNonSealedElement`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
