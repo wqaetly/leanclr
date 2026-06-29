@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade，以及 RuntimeHelpers / Span / RVA 最小语义。下一步转向更宽的 handle/reflection consolidation、AssemblyLoadContext / Reflection.Emit 受限 façade、宿主桥接 ABI 与单线程调度边界。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义，以及 AssemblyLoadContext / Reflection.Emit 受限 façade。下一步转向更宽的 handle/reflection consolidation、宿主桥接 ABI 与单线程调度边界。
 
 已验证切片：
 
@@ -37,6 +37,7 @@
 | P1.3 Thread / Monitor / WaitHandle bounded semantics | 单线程 profile 下补齐 `CurrentManagedThreadId`、Monitor fast path / wait PInvoke、ThreadPool sizing / queue dispatch、ManualResetEvent / WaitAny 最小路径；复杂并行调度仍不承诺 | `ManagedNet10.LegacyTests.Program::RunCorlibThreading` 通过；`ManagedNet10.LegacyTests.Program::RunCorlibMonitor` 通过 | 保留为 threading regression gate；后续 Task/dispatcher 只接可控 continuation |
 | P1.4 System.IO / Kernel32 platform façade | .NET 10 `FileStream` / `File` / `Path` 触发的 Kernel32 generated PInvoke 统一落到 LeanCLR cross-platform `platform::Kernel32` / `os::File` / `os::Path`，非 Windows 走 POSIX fallback 并写回 Win32-style last error | `ManagedNet10.LegacyTests.Program::RunCorlibIO` 通过 | 保留为 file I/O regression gate；完整 watcher、ACL、reparse point、overlapped I/O 后置 |
 | P1.5 RuntimeHelpers / Span / RVA | `RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor`、stack check、`CompileMethod` / `PrepareMethod`、RVA `InitializeArray` / `CreateSpan`、inline array span helper 和 bitwise/reference checks 统一映射到 LeanCLR class/module/interpreter metadata；method preparation 在解释 profile 中是 no-op façade | `ManagedNet10.LegacyTests.Program::RunCorlibRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestSpan`、`ManagedNet10.LegacyTests.Program::RunNet10SpanBinaryPrimitives` 通过 | 保留为 RuntimeHelpers/Span regression gate；byref-like escape、任意 function pointer 和完整 JIT preparation 后置 |
+| P1.6 AssemblyLoadContext / Reflection.Emit limited façade | `AssemblyLoadContext` 初始化、已加载程序集枚举、release bookkeeping、`RuntimeAssemblyBuilder.CreateDynamicAssembly` 和 `ModuleHandle.GetDynamicMethod` 只承诺 LeanCLR metadata / interpreter 能消费的受限动态程序集与 light lambda 路径；collectible ALC、LoaderAllocator、unload 和任意动态 IL/JIT codegen 后置 | `ManagedNet10.LegacyTests.Program::RunCorlibLightLambda` 通过 | 保留为 Reflection.Emit / light lambda regression gate；后续动态方法失败先区分 metadata façade 缺口和完整 JIT codegen 非目标 |
 
 下一批次：
 
@@ -144,6 +145,28 @@
 - `Assembly.GetTypes()`。
 - `RuntimeModule.InternalGetTypes`。
 - `RuntimeModule.ResolveTypeToken` / `ResolveMethodToken` 的白名单子集。
+
+### 4.1 AssemblyLoadContext / Reflection.Emit 受限 façade
+
+外部形状：
+
+- `AssemblyLoadContext` 的初始化入口返回稳定的非空 runtime handle，让 CoreLib 的上下文登记和默认上下文 bookkeeping 可以继续执行。
+- `AssemblyLoadContext.GetLoadedAssemblies` 返回 LeanCLR 当前已加载 assembly façade 数组，支撑 `AppDomain.GetAssemblies()` 和反射枚举。
+- `PrepareForAssemblyLoadContextRelease` 可被 CoreLib 调用，但第一阶段只做 release bookkeeping，不承诺 collectible ALC 或 unload。
+- `RuntimeAssemblyBuilder.CreateDynamicAssembly` 可创建 LeanCLR 可持有的动态 assembly façade，支撑 expression / light lambda 生成过程中的 metadata 对象。
+- `ModuleHandle.GetDynamicMethod` 可把受限 dynamic resolver 解析为 runtime method info stub，供解释 profile 的 lambda 调用路径继续执行。
+
+内部映射：
+
+- ALC handle 是 LeanCLR 自有稳定 token，不暴露 CoreCLR LoaderAllocator / AssemblyLoadContextNative 结构。
+- 已加载程序集枚举复用 LeanCLR appdomain / module registry，不从 CoreCLR loader graph 推导。
+- 动态 assembly 只映射到 metadata façade 和可解释方法入口；不构建完整 Reflection.Emit module builder、ILGenerator、JIT code buffer 或 collectible allocator。
+- `GetDynamicMethod` 优先从 resolver 托管对象读取可识别 method 信息，失败时输出具体 unsupported diagnostics，而不是宽松吞掉动态 codegen 缺口。
+
+验收入口：
+
+- `ManagedNet10.LegacyTests.Program::RunCorlibLightLambda`。
+- `CorlibLightLambdaNet10Semantics` 中的 static call lambda、`in` 参数 lambda 和 reflection invoke 语义。
 
 ### 5. CustomAttribute / RuntimeCustomAttributeData
 
@@ -315,6 +338,9 @@ ABI 分组：
 | `System.RuntimeFieldHandle::<GetRVAFieldInfo>g____PInvoke|24_0` | Span/RVA initializer | `RtFieldInfo` RVA data | 已有修复需归档到 contract |
 | `System.Runtime.CompilerServices.RuntimeHelpers::CompileMethod` / `PrepareMethod` | reflection / dynamic method preparation | accepted no-op preparation façade in interpreter profile | 已桥接，`TestRuntimeHelpers` 通过 |
 | `RuntimeHelpers.InitializeArray` / `CreateSpan` / inline array helpers | Span/RVA / inline array lowering | `RtFieldInfo` RVA blob + interpreter stack/object buffer view | 已桥接，`TestSpan` 与 `RunNet10SpanBinaryPrimitives` 通过 |
+| `System.Runtime.Loader.AssemblyLoadContext::GetLoadedAssemblies` / `InitializeAssemblyLoadContext` / `PrepareForAssemblyLoadContextRelease` | CoreLib ALC bookkeeping / `AppDomain.GetAssemblies` | stable LeanCLR ALC token + loaded assembly façade registry | 已桥接，`RunCorlibLightLambda` 通过 |
+| `System.Reflection.Emit.RuntimeAssemblyBuilder::CreateDynamicAssembly` | Reflection.Emit / expression light lambda setup | metadata-only dynamic assembly façade | 已桥接，`RunCorlibLightLambda` 通过 |
+| `System.ModuleHandle::<GetDynamicMethod>g____PInvoke|9_0` | dynamic resolver / DynamicMethod handle lookup | restricted resolver -> runtime method info stub | 已桥接，`RunCorlibLightLambda` 通过 |
 | `System.Threading.Monitor::<Wait>g____PInvoke|24_0` | Monitor wait / pulse | `vm::Monitor::monitor_wait` -> single-thread controlled wait | 已桥接，`RunCorlibMonitor` 通过 |
 | `System.Threading.WaitHandle::<WaitOneCore>g____PInvoke|0_0` / `WaitMultipleIgnoringSyncContext` | ManualResetEvent / WaitAny | runtime `EventHandle` -> `Kernel32` façade wait helpers | 已桥接，`RunCorlibThreading` 通过 |
 | `System.IO.FileStream` / generated `Kernel32` file PInvoke | File / Path / SafeFileHandle | `platform::Kernel32` façade -> `os::File` / `os::Path` / POSIX fallback | 已桥接，`RunCorlibIO` 通过 |
@@ -328,9 +354,10 @@ ABI 分组：
 5. 重写 assembly / module façade，优先解锁 `RuntimeAssembly.GetFullName`、`Assembly.GetTypes()`、`RuntimeModule.GetTypes` 和 token resolve 白名单。
 6. 重写 custom attribute 最小路径，覆盖 smoke 与 NKG/Odin 会触发的读取模式。当前 metadata-only smoke 与 NKG/Odin 轻量 workload 已通过，后续只按真实失败补齐新 blob 形状或实例化路径。
 7. 固化 Span / Unsafe / RuntimeHelpers contract，确保解释路径和 AOT 路径使用同一份语义说明。当前解释 profile 已覆盖 RuntimeHelpers cctor、栈检查、CompileMethod / PrepareMethod no-op façade、RVA `InitializeArray` / `CreateSpan` 与 inline array helper。
-8. 分级支持 exception / delegate / Thread / Monitor / Task；第一阶段单线程可控，复杂 ThreadPool 后置。
-9. 固化 System.IO / platform PInvoke 最小 contract，让真实 workload 可做临时文件、路径解析和基础资源读取。
-10. 建立 host bridge mock，证明 Unity/Godot 接入不需要扩大 BCL 支持面。
+8. 固化 AssemblyLoadContext / Reflection.Emit 受限 façade，支撑 light lambda / dynamic assembly metadata 路径，同时明确 collectible ALC、unload 与完整动态 codegen 后置。
+9. 分级支持 exception / delegate / Thread / Monitor / Task；第一阶段单线程可控，复杂 ThreadPool 后置。
+10. 固化 System.IO / platform PInvoke 最小 contract，让真实 workload 可做临时文件、路径解析和基础资源读取。
+11. 建立 host bridge mock，证明 Unity/Godot 接入不需要扩大 BCL 支持面。
 
 ## 验收方式
 
