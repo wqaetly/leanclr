@@ -17,7 +17,8 @@ typedef enum LeanClrHostBridgeStatus
     LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT = 1,
     LEANCLR_HOST_BRIDGE_UNSUPPORTED_VERSION = 2,
     LEANCLR_HOST_BRIDGE_MISSING_CAPABILITY = 3,
-    LEANCLR_HOST_BRIDGE_HOST_FAILURE = 4
+    LEANCLR_HOST_BRIDGE_HOST_FAILURE = 4,
+    LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED = 5
 } LeanClrHostBridgeStatus;
 
 typedef enum LeanClrHostBridgeCapability
@@ -43,6 +44,29 @@ typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeInvokeManagedEntryFn)(void* u
                                                                          const char* method_name,
                                                                          LeanClrHostBridgeError* error);
 
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeCreateHandleFn)(void* user_data,
+                                                                   const char* type_name,
+                                                                   const char* debug_name,
+                                                                   LeanClrHostHandle* out_handle,
+                                                                   LeanClrHostBridgeError* error);
+
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeRetainHandleFn)(void* user_data,
+                                                                   LeanClrHostHandle handle,
+                                                                   LeanClrHostBridgeError* error);
+
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeReleaseHandleFn)(void* user_data,
+                                                                    LeanClrHostHandle handle,
+                                                                    LeanClrHostBridgeError* error);
+
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeIsHandleAliveFn)(void* user_data,
+                                                                    LeanClrHostHandle handle,
+                                                                    int32_t* out_alive,
+                                                                    LeanClrHostBridgeError* error);
+
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeNotifyHandleDestroyedFn)(void* user_data,
+                                                                           LeanClrHostHandle handle,
+                                                                           LeanClrHostBridgeError* error);
+
 typedef struct LeanClrHostBridgeFunctions
 {
     uint32_t size;
@@ -51,6 +75,11 @@ typedef struct LeanClrHostBridgeFunctions
     void* user_data;
     LeanClrHostBridgeLogFn log;
     LeanClrHostBridgeInvokeManagedEntryFn invoke_managed_entry;
+    LeanClrHostBridgeCreateHandleFn create_handle;
+    LeanClrHostBridgeRetainHandleFn retain_handle;
+    LeanClrHostBridgeReleaseHandleFn release_handle;
+    LeanClrHostBridgeIsHandleAliveFn is_handle_alive;
+    LeanClrHostBridgeNotifyHandleDestroyedFn notify_handle_destroyed;
 } LeanClrHostBridgeFunctions;
 
 static inline void LeanClrHostBridge_SetError(LeanClrHostBridgeError* error,
@@ -95,7 +124,13 @@ static inline LeanClrHostBridgeStatus LeanClrHostBridge_ValidateFunctions(const 
     }
 
     if (((functions->capabilities & LEANCLR_HOST_BRIDGE_CAP_LOGGING) != 0 && functions->log == 0) ||
-        ((functions->capabilities & LEANCLR_HOST_BRIDGE_CAP_INVOKE_MANAGED_ENTRY) != 0 && functions->invoke_managed_entry == 0))
+        ((functions->capabilities & LEANCLR_HOST_BRIDGE_CAP_INVOKE_MANAGED_ENTRY) != 0 && functions->invoke_managed_entry == 0) ||
+        ((functions->capabilities & LEANCLR_HOST_BRIDGE_CAP_HANDLE_REGISTRY) != 0 &&
+         (functions->create_handle == 0 ||
+          functions->retain_handle == 0 ||
+          functions->release_handle == 0 ||
+          functions->is_handle_alive == 0 ||
+          functions->notify_handle_destroyed == 0)))
     {
         LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host bridge function pointer is missing");
         return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
