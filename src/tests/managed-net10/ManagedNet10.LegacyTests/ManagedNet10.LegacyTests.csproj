@@ -59,6 +59,7 @@
     <Compile Include="ToStringRegressionTestEntries.cs" />
     <Compile Include="Net10SpanRegressionTestEntries.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
+    <Compile Include="..\..\managed\Common\AotMethodAttribute.cs" Link="Common\AotMethodAttribute.cs" />
     <Compile Include="..\..\managed\Common\CoversIcallAttribute.cs" Link="Common\CoversIcallAttribute.cs" />
     <Compile Include="..\..\managed\Common\GcUnitTestAttribute.cs" Link="Common\GcUnitTestAttribute.cs" />
     <Compile Include="..\..\managed\Common\IgnoreTestAttribute.cs" Link="Common\IgnoreTestAttribute.cs" />
@@ -84,6 +85,9 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields.cs" Link="Fixtures\TypeStaticFields.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeStaticFields2.cs" Link="Fixtures\TypeStaticFields2.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\VectorTypes.cs" Link="Fixtures\VectorTypes.cs" />
+    <Compile Include="AotTestEntries.cs" />
+    <Compile Include="..\..\managed\AotTests\TC_Call_AotInterp.cs" Link="AotTests\TC_Call_AotInterp.cs" />
+    <Compile Include="..\..\managed\AotTests\TC_CallVir_AotInterp.cs" Link="AotTests\TC_CallVir_AotInterp.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_add.cs" Link="Instructions\Arithmetic\TC_add.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_and.cs" Link="Instructions\Arithmetic\TC_and.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_mul.cs" Link="Instructions\Arithmetic\TC_mul.cs" />
