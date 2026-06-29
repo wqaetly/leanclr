@@ -44,7 +44,10 @@
 
 | 批次 | 目标 | 输出 | 验收 |
 | --- | --- | --- | --- |
-| P2 Host Bridge ABI / scheduler boundary | 定义 Unity/Godot 共用 opaque handle、host function table、主线程 dispatcher、异常返回协议和单线程 continuation 边界 | native mock host + managed entry contract | mock host 调用、opaque handle 生命周期、主线程投递与结果回传 |
+| P2.1 Host Bridge ABI skeleton | 固定 Unity/Godot 共用 host function table、版本号、capability flags、状态码和错误字符串归属 | runtime header / C ABI + mock host 编译目标 | mock host 可初始化 runtime、注册函数表、调用托管静态入口 |
+| P2.2 Opaque handle registry | 定义宿主对象 handle 创建、retain/release、判活和销毁通知语义 | mock registry + managed wrapper contract | handle 生命周期、失效诊断和重复释放幂等 |
+| P2.3 Main-thread dispatcher | 定义主线程投递、下一帧执行、同步调用保护和托管 continuation 回传 | mock dispatcher + managed scheduling entry | 投递顺序、结果回传、异常转托管诊断 |
+| P2.4 Event / callback bridge | 定义托管 delegate 注册、取消注册、宿主事件触发和异常返回协议 | mock event source + subscription token | 回调成功、托管异常、取消订阅后不再触发 |
 
 ## 非目标
 
@@ -315,6 +318,22 @@ ABI 分组：
 | Scheduler | 主线程投递、下一帧执行、同步调用保护 | 阻塞 wait 和跨线程直接访问默认不支持 |
 | Event / Callback | 注册托管 delegate、取消注册、触发回调 | 订阅必须有可释放 token 或 handle |
 | Value Marshal | bool/int/float/string、opaque handle、小 struct、数组 view | 复杂 Variant / UnityEngine.Object 语义后置 |
+
+P2 mock host 节点拆解：
+
+| 节点 | 最小产物 | 必测场景 | 非目标 |
+| --- | --- | --- | --- |
+| P2.1 ABI skeleton | 一个 C ABI header、mock host 初始化流程、runtime 侧注册入口 | 版本 / capability 校验、初始化失败错误字符串、托管静态入口调用成功 | 不复制 CoreCLR hosting API；不加载真实 Unity/Godot |
+| P2.2 Opaque handle registry | 宿主侧 handle table、retain/release、destroy notification、托管 wrapper handle 字段 | 创建后查询、retain/release 平衡、宿主销毁后访问返回 ObjectDisposed / MissingReference 风格诊断 | 不暴露真实引擎指针；不承诺跨进程 handle |
+| P2.3 Main-thread dispatcher | mock 主线程队列、next-frame pump、同步 reentry guard、结果回传结构 | FIFO 投递、下一帧执行、托管异常转错误状态、阻塞 wait 明确拒绝 | 不实现完整 ThreadPool / work stealing；不允许跨线程直接访问引擎对象 |
+| P2.4 Event / callback bridge | delegate subscription token、触发入口、取消注册入口、异常返回字段 | 注册后触发托管 delegate、托管异常回传、取消后不再触发、重复取消幂等 | 不实现 UnityEvent / Godot Signal 完整语义；复杂 Variant marshal 后置 |
+
+P2 验收命令应新增独立脚本，避免混入 BCL smoke：
+
+- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario AbiSkeleton`。
+- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario HandleRegistry`。
+- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Dispatcher`。
+- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EventCallback`。
 
 验收入口：
 
