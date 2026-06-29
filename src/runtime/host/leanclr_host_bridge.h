@@ -18,7 +18,9 @@ typedef enum LeanClrHostBridgeStatus
     LEANCLR_HOST_BRIDGE_UNSUPPORTED_VERSION = 2,
     LEANCLR_HOST_BRIDGE_MISSING_CAPABILITY = 3,
     LEANCLR_HOST_BRIDGE_HOST_FAILURE = 4,
-    LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED = 5
+    LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED = 5,
+    LEANCLR_HOST_BRIDGE_REENTRANT_CALL = 6,
+    LEANCLR_HOST_BRIDGE_MANAGED_EXCEPTION = 7
 } LeanClrHostBridgeStatus;
 
 typedef enum LeanClrHostBridgeCapability
@@ -67,6 +69,25 @@ typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeNotifyHandleDestroyedFn)(void
                                                                            LeanClrHostHandle handle,
                                                                            LeanClrHostBridgeError* error);
 
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeDispatchCallbackFn)(void* callback_data,
+                                                                       LeanClrHostBridgeError* error);
+
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgePostToMainThreadFn)(void* user_data,
+                                                                       LeanClrHostBridgeDispatchCallbackFn callback,
+                                                                       void* callback_data,
+                                                                       uint64_t* out_ticket,
+                                                                       LeanClrHostBridgeError* error);
+
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgePumpMainThreadFn)(void* user_data,
+                                                                     uint32_t max_items,
+                                                                     uint32_t* out_executed,
+                                                                     LeanClrHostBridgeError* error);
+
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeCallMainThreadSyncFn)(void* user_data,
+                                                                         LeanClrHostBridgeDispatchCallbackFn callback,
+                                                                         void* callback_data,
+                                                                         LeanClrHostBridgeError* error);
+
 typedef struct LeanClrHostBridgeFunctions
 {
     uint32_t size;
@@ -80,6 +101,9 @@ typedef struct LeanClrHostBridgeFunctions
     LeanClrHostBridgeReleaseHandleFn release_handle;
     LeanClrHostBridgeIsHandleAliveFn is_handle_alive;
     LeanClrHostBridgeNotifyHandleDestroyedFn notify_handle_destroyed;
+    LeanClrHostBridgePostToMainThreadFn post_to_main_thread;
+    LeanClrHostBridgePumpMainThreadFn pump_main_thread;
+    LeanClrHostBridgeCallMainThreadSyncFn call_main_thread_sync;
 } LeanClrHostBridgeFunctions;
 
 static inline void LeanClrHostBridge_SetError(LeanClrHostBridgeError* error,
@@ -130,7 +154,11 @@ static inline LeanClrHostBridgeStatus LeanClrHostBridge_ValidateFunctions(const 
           functions->retain_handle == 0 ||
           functions->release_handle == 0 ||
           functions->is_handle_alive == 0 ||
-          functions->notify_handle_destroyed == 0)))
+          functions->notify_handle_destroyed == 0)) ||
+        ((functions->capabilities & LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH) != 0 &&
+         (functions->post_to_main_thread == 0 ||
+          functions->pump_main_thread == 0 ||
+          functions->call_main_thread_sync == 0)))
     {
         LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host bridge function pointer is missing");
         return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;

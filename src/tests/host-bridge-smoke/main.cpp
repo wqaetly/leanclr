@@ -1,9 +1,11 @@
 #include "host/leanclr_host_bridge.h"
 
 #include <cstring>
+#include <deque>
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace
 {
@@ -15,13 +17,31 @@ struct MockHandleRecord
     bool alive = true;
 };
 
+struct MockDispatchTask
+{
+    uint64_t ticket = 0;
+    LeanClrHostBridgeDispatchCallbackFn callback = nullptr;
+    void* callback_data = nullptr;
+};
+
 struct MockHostState
 {
     int log_count = 0;
     int invoke_count = 0;
     LeanClrHostHandle next_handle = 100;
+    uint64_t next_dispatch_ticket = 1;
+    bool is_pumping_main_thread = false;
     std::string last_entry;
     std::unordered_map<LeanClrHostHandle, MockHandleRecord> handles;
+    std::deque<MockDispatchTask> dispatch_queue;
+    std::vector<int> dispatch_order;
+};
+
+struct MockDispatchPayload
+{
+    MockHostState* state = nullptr;
+    int value = 0;
+    bool fail = false;
 };
 
 void mock_log(void* user_data, int32_t level, const char* message)
@@ -184,6 +204,103 @@ LeanClrHostBridgeStatus mock_notify_handle_destroyed(void* user_data,
     return LEANCLR_HOST_BRIDGE_OK;
 }
 
+LeanClrHostBridgeStatus mock_dispatch_callback(void* callback_data, LeanClrHostBridgeError* error)
+{
+    auto* payload = static_cast<MockDispatchPayload*>(callback_data);
+    if (payload == nullptr || payload->state == nullptr)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "main-thread callback payload is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    payload->state->dispatch_order.push_back(payload->value);
+    if (payload->fail)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_MANAGED_EXCEPTION, "managed continuation failed");
+        return LEANCLR_HOST_BRIDGE_MANAGED_EXCEPTION;
+    }
+
+    LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
+LeanClrHostBridgeStatus mock_post_to_main_thread(void* user_data,
+                                                 LeanClrHostBridgeDispatchCallbackFn callback,
+                                                 void* callback_data,
+                                                 uint64_t* out_ticket,
+                                                 LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    if (state == nullptr || callback == nullptr || out_ticket == nullptr)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "main-thread post request is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    MockDispatchTask task;
+    task.ticket = state->next_dispatch_ticket++;
+    task.callback = callback;
+    task.callback_data = callback_data;
+    state->dispatch_queue.push_back(task);
+    *out_ticket = task.ticket;
+
+    LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
+LeanClrHostBridgeStatus mock_pump_main_thread(void* user_data,
+                                              uint32_t max_items,
+                                              uint32_t* out_executed,
+                                              LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    if (state == nullptr || out_executed == nullptr)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "main-thread pump request is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    *out_executed = 0;
+    state->is_pumping_main_thread = true;
+    while (!state->dispatch_queue.empty() && (max_items == 0 || *out_executed < max_items))
+    {
+        const auto task = state->dispatch_queue.front();
+        state->dispatch_queue.pop_front();
+        ++(*out_executed);
+
+        auto status = task.callback(task.callback_data, error);
+        if (status != LEANCLR_HOST_BRIDGE_OK)
+        {
+            state->is_pumping_main_thread = false;
+            return status;
+        }
+    }
+
+    state->is_pumping_main_thread = false;
+    LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
+LeanClrHostBridgeStatus mock_call_main_thread_sync(void* user_data,
+                                                   LeanClrHostBridgeDispatchCallbackFn callback,
+                                                   void* callback_data,
+                                                   LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    if (state == nullptr || callback == nullptr)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "main-thread sync request is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+    if (state->is_pumping_main_thread)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_REENTRANT_CALL, "synchronous main-thread call is not allowed while pumping");
+        return LEANCLR_HOST_BRIDGE_REENTRANT_CALL;
+    }
+
+    return callback(callback_data, error);
+}
+
 bool require(bool condition, const char* message)
 {
     if (!condition)
@@ -202,7 +319,8 @@ LeanClrHostBridgeFunctions make_mock_functions(MockHostState* state)
     functions.abi_version = LEANCLR_HOST_BRIDGE_ABI_VERSION;
     functions.capabilities = LEANCLR_HOST_BRIDGE_CAP_LOGGING |
                              LEANCLR_HOST_BRIDGE_CAP_INVOKE_MANAGED_ENTRY |
-                             LEANCLR_HOST_BRIDGE_CAP_HANDLE_REGISTRY;
+                             LEANCLR_HOST_BRIDGE_CAP_HANDLE_REGISTRY |
+                             LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH;
     functions.user_data = state;
     functions.log = mock_log;
     functions.invoke_managed_entry = mock_invoke_managed_entry;
@@ -211,6 +329,9 @@ LeanClrHostBridgeFunctions make_mock_functions(MockHostState* state)
     functions.release_handle = mock_release_handle;
     functions.is_handle_alive = mock_is_handle_alive;
     functions.notify_handle_destroyed = mock_notify_handle_destroyed;
+    functions.post_to_main_thread = mock_post_to_main_thread;
+    functions.pump_main_thread = mock_pump_main_thread;
+    functions.call_main_thread_sync = mock_call_main_thread_sync;
     return functions;
 }
 
@@ -389,6 +510,91 @@ bool run_handle_registry()
 
     return true;
 }
+
+bool run_dispatcher()
+{
+    MockHostState state;
+    auto functions = make_mock_functions(&state);
+    LeanClrHostBridgeError error{};
+
+    auto status = LeanClrHostBridge_ValidateFunctions(&functions, LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "dispatcher function table should be accepted"))
+    {
+        return false;
+    }
+
+    MockDispatchPayload first{&state, 1, false};
+    MockDispatchPayload second{&state, 2, false};
+    uint64_t first_ticket = 0;
+    uint64_t second_ticket = 0;
+    status = functions.post_to_main_thread(functions.user_data, mock_dispatch_callback, &first, &first_ticket, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && first_ticket == 1, "first main-thread post should return a ticket"))
+    {
+        return false;
+    }
+    status = functions.post_to_main_thread(functions.user_data, mock_dispatch_callback, &second, &second_ticket, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && second_ticket == 2, "second main-thread post should return the next ticket"))
+    {
+        return false;
+    }
+
+    uint32_t executed = 0;
+    status = functions.pump_main_thread(functions.user_data, 1, &executed, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && executed == 1 && state.dispatch_order.size() == 1 && state.dispatch_order[0] == 1,
+                 "single-item pump should execute only the first queued continuation"))
+    {
+        return false;
+    }
+
+    status = functions.pump_main_thread(functions.user_data, 0, &executed, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && executed == 1 && state.dispatch_order.size() == 2 && state.dispatch_order[1] == 2,
+                 "next pump should preserve FIFO ordering"))
+    {
+        return false;
+    }
+
+    MockDispatchPayload sync_payload{&state, 3, false};
+    status = functions.call_main_thread_sync(functions.user_data, mock_dispatch_callback, &sync_payload, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && state.dispatch_order.size() == 3 && state.dispatch_order[2] == 3,
+                 "synchronous main-thread call should return callback results"))
+    {
+        return false;
+    }
+
+    state.is_pumping_main_thread = true;
+    status = functions.call_main_thread_sync(functions.user_data, mock_dispatch_callback, &sync_payload, &error);
+    state.is_pumping_main_thread = false;
+    if (!require(status == LEANCLR_HOST_BRIDGE_REENTRANT_CALL && error.message != nullptr,
+                 "synchronous reentry while pumping should be rejected"))
+    {
+        return false;
+    }
+
+    MockDispatchPayload failing{&state, 4, true};
+    uint64_t failing_ticket = 0;
+    status = functions.post_to_main_thread(functions.user_data, mock_dispatch_callback, &failing, &failing_ticket, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && failing_ticket == 3, "failing continuation should still be queued"))
+    {
+        return false;
+    }
+    status = functions.pump_main_thread(functions.user_data, 1, &executed, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_MANAGED_EXCEPTION && executed == 1 && error.message != nullptr,
+                 "managed exception should be returned as dispatcher diagnostic"))
+    {
+        return false;
+    }
+
+    auto missing_dispatcher = functions;
+    missing_dispatcher.post_to_main_thread = nullptr;
+    status = LeanClrHostBridge_ValidateFunctions(&missing_dispatcher, LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT && error.message != nullptr,
+                 "missing dispatcher callback should return a diagnostic"))
+    {
+        return false;
+    }
+
+    return true;
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -421,6 +627,17 @@ int main(int argc, char** argv)
         }
 
         std::cout << "ok! host bridge HandleRegistry" << std::endl;
+        return 0;
+    }
+
+    if (scenario == "Dispatcher")
+    {
+        if (!run_dispatcher())
+        {
+            return 1;
+        }
+
+        std::cout << "ok! host bridge Dispatcher" << std::endl;
         return 0;
     }
 

@@ -3,7 +3,7 @@ param(
     [string]$NativeBuildDir,
     [string]$CMakeGenerator,
     [string]$CMakeArchitecture,
-    [ValidateSet("AbiSkeleton", "HandleRegistry")]
+    [ValidateSet("AbiSkeleton", "HandleRegistry", "Dispatcher")]
     [string]$Scenario = "AbiSkeleton",
     [switch]$BuildOnly
 )
