@@ -1,6 +1,6 @@
 # LeanCLR .NET 10 Runtime Contract Plan
 
-状态：第二版执行基准（2026-06-28）
+状态：第三版执行基准（2026-06-29）
 
 本文档是 `coreclr-net10` / `minimal-net10` 的 contract-first 改造清单。它回答两个问题：
 
@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；下一步进入 P1 的 handle/reflection consolidation 与 CustomAttribute 最小路径。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经完成 `CustomAttributeData` metadata-only 最小路径，并接入 NKG/Odin 轻量 attribute workload 作为真实项目 gate。下一步转向更宽的 handle/reflection consolidation、宿主桥接 ABI 与单线程调度边界。
 
 已验证切片：
 
@@ -33,13 +33,14 @@
 | P0.5 Delegate allocation / multicast | `MulticastDelegate.NewMulticastDelegate` 触发的 `RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 解析 net10 MethodTable façade，而不是 raw `RtClass*` | `ManagedNet10.LegacyTests.Program::RunRuntimeDelegateDynamicInvoke` 通过；未发现 `[delegate-dyn]` 临时日志残留 | 保留为 delegate multicast allocation gate |
 | P0.6 RunAll 重新分层 | delegate 切片通过后重新跑 `ManagedNet10.LegacyTests.Program::RunAll`，把后续失败归类为 contract、façade、VM 通用语义或白名单外 API | `ManagedNet10.LegacyTests.Program::RunAll` 通过 | 保留为 P0 回归基线，不作为设计来源 |
 | P1.1 CustomAttributeData metadata-only | `RuntimeCustomAttributeData` 最小路径可从 assembly / module / type / field / method / parameter / property / event target 的 metadata blob 解出 constructor arguments、property named argument 和 field named argument，不需要实例化 attribute；同时覆盖 enum、Type、int[]、Type[]、object、object[]、named enum/type/array/object 等 Odin/NKG 常见 blob 形状 | `ManagedNet10.Smoke.Program::TestCustomAttributeDataOnly` 纳入默认 smoke；`interp-smoke.ps1 -Configuration Release` 通过 | 继续接 NKG/Odin 轻量 attribute 枚举作为真实 workload gate |
+| P1.2 NKG/Odin light workload | `ManagedNet10.NkgSmoke` 使用真实 NKGGameFramework、OdinSerializer 与 UniTask `net10.0` 输出目录验证轻量反射、attribute 枚举和白名单 API 边界；默认 sampler/Hosting 完整面仍在第一阶段外 | `scripts/dotnet10/api-scan.ps1` 扫描 NKG core/Odin/UniTask：unsupported `0`；`scripts/dotnet10/nkg-smoke.ps1` 通过 | 保留为真实 workload gate；后续失败按 contract、façade、VM 通用语义或白名单外 API 归类 |
 
 下一批次：
 
 | 批次 | 目标 | 输出 | 验收 |
 | --- | --- | --- | --- |
-| P1 Handle / reflection consolidation | 收敛 method / field / type / module handle 的 decode helper、GC allocated-object guard 和 NotSupported 诊断 | 统一的 net10 handle boundary | Reflection、Span/RVA、ValueType、delegate 子集全部保持绿色 |
-| P1 Assembly / Module / CustomAttribute 扩展 | assembly/module façade 与 attribute blob decoder 成为正式 net10 路径 | `RuntimeAssembly`、`RuntimeModule`、真实 workload attribute 枚举 contract | reflection smoke、NKG/Odin 轻量 attribute 路径 |
+| P1 Handle / reflection consolidation | 收敛 method / field / type / module handle 的 decode helper、GC allocated-object guard 和 NotSupported 诊断 | 统一的 net10 handle boundary | Reflection、Span/RVA、ValueType、delegate、NKG/Odin 轻量 workload 全部保持绿色 |
+| P2 Host Bridge ABI / scheduler boundary | 定义 Unity/Godot 共用 opaque handle、host function table、主线程 dispatcher、异常返回协议和单线程 continuation 边界 | native mock host + managed entry contract | mock host 调用、opaque handle 生命周期、主线程投递与结果回传 |
 
 ## 非目标
 
@@ -159,7 +160,7 @@
 - `ManagedNet10.Smoke` 中的自定义 attribute 查询。
 - `ManagedNet10.Smoke.Program::TestCustomAttributeDataOnly` 中 assembly / module / type / field / method / parameter / property / event target 的 metadata-only constructor arguments、property named argument 和 field named argument。
 - `ManagedNet10.Smoke.Program::TestCustomAttributeDataOnly` 中的 Odin/NKG 常见 blob 形状：enum、Type、int[]、Type[]、object、object[]、named enum/type/array/object。
-- NKG / Odin 会触发的轻量 attribute 枚举。
+- NKG / Odin 会触发的轻量 attribute 枚举，当前由 `scripts/dotnet10/nkg-smoke.ps1` 验收。
 
 ### 6. RuntimeHelpers / Unsafe / Span
 
@@ -245,7 +246,7 @@
 | `System.RuntimeTypeHandle::is_subclass_of` | reflection / type query | `vm::Class` assignability | 重写并验收 |
 | `System.Reflection.RuntimeAssembly::GetFullName` | legacy `RunAll` blocker / .NET 10 QCall | assembly metadata -> managed string via `StringHandleOnStack` | QCall façade 已实现，smoke 通过 |
 | `System.Reflection.RuntimeModule::InternalGetTypes` | reflection smoke | `RtModuleDef` type table -> `RuntimeType[]` | P0/P1 |
-| `System.Reflection.CustomAttributeData` minimal path | attribute smoke / Odin | metadata blob decoder -> attribute data façade | 已覆盖核心 target 与常见 blob-shape metadata-only smoke；继续接真实 workload |
+| `System.Reflection.CustomAttributeData` minimal path | attribute smoke / Odin | metadata blob decoder -> attribute data façade | 已覆盖核心 target 与常见 blob-shape metadata-only smoke；NKG/Odin 轻量 workload gate 通过 |
 | `System.RuntimeFieldHandle::GetApproxDeclaringMethodTable` | `RuntimeModule.ResolveField` / field reflection | `RtFieldInfo` -> declaring `RtClass` -> net10 MethodTable façade | 已修复，`RunCorlibReflectionRuntimeModule` 通过 |
 | `System.ValueType::<CanCompareBitsOrUseFastGetHashCodeHelper>g____PInvoke|2_0` | `ValueType.Equals` / `GetHashCode` | `MethodTable*` façade -> `RtClass` | 已修复，ValueType 子入口通过 |
 | `System.Delegate::GetInvokeMethod` / `GetMulticastInvoke` | delegate reflection / multicast | `MethodTable*` façade -> delegate `RtClass` -> invoke method | 部分完成，仍需修复 multicast allocation |
@@ -260,7 +261,7 @@
 3. 保持 delegate allocation / multicast 路径绿色：`RunRuntimeDelegateDynamicInvoke` 作为 `MethodTable*` façade 回归 gate。
 4. 重写并收敛 type / method / field / module handle decode helper，把 direct pointer、stack slot、boxed handle、stub object 和 managed reflection object 都纳入同一边界校验。
 5. 重写 assembly / module façade，优先解锁 `RuntimeAssembly.GetFullName`、`Assembly.GetTypes()`、`RuntimeModule.GetTypes` 和 token resolve 白名单。
-6. 重写 custom attribute 最小路径，覆盖 smoke 与 NKG/Odin 会触发的读取模式。
+6. 重写 custom attribute 最小路径，覆盖 smoke 与 NKG/Odin 会触发的读取模式。当前 metadata-only smoke 与 NKG/Odin 轻量 workload 已通过，后续只按真实失败补齐新 blob 形状或实例化路径。
 7. 固化 Span / Unsafe / RuntimeHelpers contract，确保解释路径和 AOT 路径使用同一份语义说明。
 8. 分级支持 exception / delegate / Thread / Monitor / Task；第一阶段单线程可控，复杂 ThreadPool 后置。
 9. 建立 host bridge mock，证明 Unity/Godot 接入不需要扩大 BCL 支持面。
@@ -275,8 +276,8 @@
 
 当前第一道自动化 gate 已落在 `src/generator/check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .`：它会用 .NET 10 runtime pack externs 校验 `coreclr-net10` catalog，并禁止 `Mono.*`、`System.IO.Mono*`、`System.Reflection.Mono*`、`System.Runtime.Remoting*`、`mscorlib` 以及 Mono-era implementation symbol/header 混入 active profile。
 
-API 边界 gate 已落在 `scripts/dotnet10/api-scan.ps1`：它构建 `src/tools/net10apiscan`，用 `minimal-net10-whitelist.json` 扫描 `AssemblyRef`、`TypeRef` 和 `MemberRef`，并在白名单外引用出现时输出 `unsupported_api` 诊断。当前默认扫描 `ManagedNet10.Smoke`、`ManagedNet10.NkgSmoke` 与 NKG core/Odin/UniTask 三件套；完整 sampler/Hosting 仍在第一阶段边界外。
+API 边界 gate 已落在 `scripts/dotnet10/api-scan.ps1`：它构建 `src/tools/net10apiscan`，用 `minimal-net10-whitelist.json` 扫描 `AssemblyRef`、`TypeRef` 和 `MemberRef`，并在白名单外引用出现时输出 `unsupported_api` 诊断。当前默认扫描 `ManagedNet10.Smoke`、`ManagedNet10.NkgSmoke` 与 NKG core/Odin/UniTask 三件套；2026-06-29 验收结果为 NKG core/Odin/UniTask 扫描 unsupported `0`。完整 sampler/Hosting 仍在第一阶段边界外。
 
-NKG/Odin 真实 workload gate 使用 `scripts/dotnet10/nkg-smoke.ps1`。脚本默认查找仓库同级的 `NKGGameFramework`，构建 `samples/NKGGameFramework.Sampler`，再把带齐 `NKGGameFramework`、`OdinSerializer` 和 `UniTask` 的 `net10.0` 输出目录传给 `ManagedNet10.NkgSmoke`。如果本机目录不同，可显式传入 `-NkgRoot`。
+NKG/Odin 真实 workload gate 使用 `scripts/dotnet10/nkg-smoke.ps1`。脚本默认查找仓库同级的 `NKGGameFramework`，构建 `samples/NKGGameFramework.Sampler`，再把带齐 `NKGGameFramework`、`OdinSerializer` 和 `UniTask` 的 `net10.0` 输出目录传给 `ManagedNet10.NkgSmoke`。2026-06-29 已在默认路径通过；如果本机目录不同，可显式传入 `-NkgRoot`。
 
 完整 `RunAll` 和原作者测试资产仍是最终质量线，但执行顺序后置。测试失败时先归类：contract 缺口、façade 映射缺口、LeanCLR VM 通用语义缺口、或白名单外 API。只有前两类进入本计划的 contract/model 重写循环。
