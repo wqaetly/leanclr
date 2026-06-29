@@ -17,5 +17,16 @@ namespace ManagedNet10.LegacyTests
             RunAotCallInterp();
             RunAotCallVirInterp();
         }
+
+        public static void RunAotMisc()
+        {
+            LegacyTestRunner.RunTypes(
+                typeof(TestNewMdArray),
+                typeof(TestLdslfda),
+                typeof(Tests.CSharp.TestCCtor),
+                typeof(TestEvalStackNotEmpty),
+                typeof(TC_Stopwatch),
+                typeof(TC_MonoPInvokeCallback));
+        }
     }
 }

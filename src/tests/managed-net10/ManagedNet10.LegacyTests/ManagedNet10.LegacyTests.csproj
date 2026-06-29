@@ -63,6 +63,7 @@
     <Compile Include="..\..\managed\Common\CoversIcallAttribute.cs" Link="Common\CoversIcallAttribute.cs" />
     <Compile Include="..\..\managed\Common\GcUnitTestAttribute.cs" Link="Common\GcUnitTestAttribute.cs" />
     <Compile Include="..\..\managed\Common\IgnoreTestAttribute.cs" Link="Common\IgnoreTestAttribute.cs" />
+    <Compile Include="..\..\managed\Common\MonoPInvokeCallbackAttribute.cs" Link="Common\MonoPInvokeCallbackAttribute.cs" />
     <Compile Include="..\..\managed\Common\TestCaseBase.cs" Link="Common\TestCaseBase.cs" />
     <Compile Include="..\..\managed\Common\UnitTestAttribute.cs" Link="Common\UnitTestAttribute.cs" />
     <Compile Include="GcTestEntries.cs" />
@@ -88,6 +89,12 @@
     <Compile Include="AotTestEntries.cs" />
     <Compile Include="..\..\managed\AotTests\TC_Call_AotInterp.cs" Link="AotTests\TC_Call_AotInterp.cs" />
     <Compile Include="..\..\managed\AotTests\TC_CallVir_AotInterp.cs" Link="AotTests\TC_CallVir_AotInterp.cs" />
+    <Compile Include="..\..\managed\AotTests\TC_EvalStackNotEmpty.cs" Link="AotTests\TC_EvalStackNotEmpty.cs" />
+    <Compile Include="..\..\managed\AotTests\TC_ldsflda.cs" Link="AotTests\TC_ldsflda.cs" />
+    <Compile Include="..\..\managed\AotTests\TC_MonoPInvokeCallback.cs" Link="AotTests\TC_MonoPInvokeCallback.cs" />
+    <Compile Include="..\..\managed\AotTests\TC_NewMdArray.cs" Link="AotTests\TC_NewMdArray.cs" />
+    <Compile Include="..\..\managed\AotTests\TC_StaticCtorOrder.cs" Link="AotTests\TC_StaticCtorOrder.cs" />
+    <Compile Include="..\..\managed\AotTests\TC_System_Diagnostics_StopWatch.cs" Link="AotTests\TC_System_Diagnostics_StopWatch.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_add.cs" Link="Instructions\Arithmetic\TC_add.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_and.cs" Link="Instructions\Arithmetic\TC_and.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_mul.cs" Link="Instructions\Arithmetic\TC_mul.cs" />

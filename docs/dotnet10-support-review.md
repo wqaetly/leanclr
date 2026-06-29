@@ -1305,6 +1305,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本轮未新增 runtime façade；现有解释 profile 的 method resolution、callvirt/interface dispatch、boxing/unboxing 和 value type override 调用已足够支撑该旧用例切片。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunAotCallInterop`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
 
+2026-06-29 迁移旧 AOT misc 用例：
+
+- 将旧 `TestNewMdArray`、`TestLdslfda`、`Tests.CSharp.TestCCtor`、`TestEvalStackNotEmpty`、`TC_Stopwatch` 和 `TC_MonoPInvokeCallback` 链接进 `ManagedNet10.LegacyTests`，新增组合入口 `RunAotMisc`；同时链接旧 `MonoPInvokeCallbackAttribute`，仅作为旧素材 marker 使用。
+- 该组合用例覆盖多维数组创建与负长度溢出、`ldsflda` 对 static/thread-static 字段的 byref 写入、静态构造函数顺序、条件分支后的 eval stack 返回、`Stopwatch.ElapsedTicks` / `ElapsedMilliseconds` 非负值，以及带 ref struct 参数的 `MonoPInvokeCallback` marker 方法普通托管调用。
+- 本轮未新增 runtime façade；现有数组创建、字段地址、cctor、分支栈平衡、diagnostics stopwatch 和普通托管调用路径已足够支撑该旧用例切片。真正 reverse P/Invoke / native callback 仍不由该 marker-only 用例证明。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunAotMisc`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
