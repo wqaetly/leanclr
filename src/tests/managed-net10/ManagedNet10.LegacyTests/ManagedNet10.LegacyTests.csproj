@@ -57,6 +57,7 @@
     <Compile Include="CorlibReflectionAssemblyNameTestEntries.cs" />
     <Compile Include="CorlibStringTestEntries.cs" />
     <Compile Include="CoreRegressionTestEntries.cs" />
+    <Compile Include="CoreBootstrapTestEntries.cs" />
     <Compile Include="ToStringRegressionTestEntries.cs" />
     <Compile Include="Net10SpanRegressionTestEntries.cs" />
     <Compile Include="..\..\managed\Common\Assert.cs" Link="Common\Assert.cs" />
@@ -207,6 +208,9 @@
     <Compile Include="..\..\managed\CorlibTests\Intrinsic\TC_System_Object.cs" Link="CorlibTests\Intrinsic\TC_System_Object.cs" />
     <Compile Include="..\..\managed\CoreTests\Regression\*.cs" LinkBase="Regression" />
     <Compile Include="..\..\managed\CoreTests\Regression\GenericStruct\*.cs" LinkBase="Regression\GenericStruct" />
+    <Compile Include="..\..\managed\CoreTests\Bootstrap\TestCallMethod.cs" Link="Bootstrap\TestCallMethod.cs" />
+    <Compile Include="..\..\managed\CoreTests\Bootstrap\TestPassArgument.cs" Link="Bootstrap\TestPassArgument.cs" />
+    <Compile Include="..\..\managed\CoreTests\Bootstrap\TestReturnValue.cs" Link="Bootstrap\TestReturnValue.cs" />
     <Compile Include="..\..\managed\GcTests\Fixtures\GcGraphTypes.cs" Link="GcTests\Fixtures\GcGraphTypes.cs" />
     <Compile Include="..\..\managed\GcTests\Fixtures\GcTestCaseBase.cs" Link="GcTests\Fixtures\GcTestCaseBase.cs" />
     <Compile Include="..\..\managed\GcTests\Collection\TC_GC_Collection.cs" Link="GcTests\Collection\TC_GC_Collection.cs" />
