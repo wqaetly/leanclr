@@ -211,6 +211,68 @@ public static class ValueMarshalSmoke
     }
 }
 
+public static class DiagnosticsSmoke
+{
+    public static void Run()
+    {
+        var bridge = new MockHostBridge();
+
+        bridge.Log(HostLogLevel.Info, "engine adapter started");
+        bridge.Log(HostLogLevel.Warning, "engine adapter warning");
+        bridge.Log(HostLogLevel.Error, "engine adapter error");
+        Require(bridge.Logs.Count == 3, "diagnostic log count failed");
+        Require(bridge.Logs[0] == "Info:engine adapter started", "info log failed");
+        Require(bridge.Logs[1] == "Warning:engine adapter warning", "warning log failed");
+        Require(bridge.Logs[2] == "Error:engine adapter error", "error log failed");
+
+        var status = bridge.ReportManagedException(
+            "System.InvalidOperationException",
+            "managed callback failed",
+            "ManagedNet10.Smoke.EngineNode.OnReady",
+            out var message);
+        HostBridgeStatusConverter.ThrowIfFailed(status, message, nameof(DiagnosticsSmoke));
+        Require(bridge.LastManagedException == "System.InvalidOperationException:managed callback failed:ManagedNet10.Smoke.EngineNode.OnReady",
+            "managed exception diagnostic failed");
+
+        status = bridge.ReportManagedException(
+            "System.InvalidOperationException",
+            "",
+            "ManagedNet10.Smoke.EngineNode.OnReady",
+            out message);
+        Require(status == HostBridgeStatus.InvalidArgument && message != null, "incomplete managed exception diagnostic failed");
+
+        bridge.FailNextCreate("host create failed");
+        ExpectHostBridgeException(static state => HostObject.Create((MockHostBridge)state!, "Mock.Node", "Failure"),
+            bridge,
+            HostBridgeStatus.HostFailure);
+    }
+
+    private static void ExpectHostBridgeException(Action<object?> action, object? state, HostBridgeStatus expectedStatus)
+    {
+        try
+        {
+            action(state);
+        }
+        catch (Exception ex)
+        {
+            if (ex is HostBridgeException hostBridgeException && hostBridgeException.Status == expectedStatus)
+            {
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("expected HostBridgeException");
+    }
+
+    private static void Require([DoesNotReturnIf(false)] bool condition, string message)
+    {
+        if (!condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+}
+
 internal sealed class EngineNode : IDisposable
 {
     private readonly HostObject _hostObject;
@@ -314,6 +376,14 @@ internal enum HostBridgeStatus
     ObjectDisposed = 5,
     ReentrantCall = 6,
     ManagedException = 7,
+}
+
+internal enum HostLogLevel
+{
+    Trace = 0,
+    Info = 1,
+    Warning = 2,
+    Error = 3,
 }
 
 internal enum HostValueKind
@@ -541,6 +611,10 @@ internal sealed class MockHostBridge
     private string? _nextCreateFailure;
     private string? _nextSetPropertyFailureName;
     private string? _nextSetPropertyFailureMessage;
+
+    public List<string> Logs { get; } = [];
+
+    public string LastManagedException { get; private set; } = "";
 
     public HostBridgeStatus CreateHandle(string typeName, string debugName, out ulong handle, out string? message)
     {
@@ -798,6 +872,24 @@ internal sealed class MockHostBridge
         }
 
         message = null;
+        return HostBridgeStatus.Ok;
+    }
+
+    public void Log(HostLogLevel level, string message)
+    {
+        Logs.Add(level + ":" + message);
+    }
+
+    public HostBridgeStatus ReportManagedException(string exceptionType, string message, string stackTrace, out string? errorMessage)
+    {
+        if (string.IsNullOrEmpty(exceptionType) || string.IsNullOrEmpty(message) || string.IsNullOrEmpty(stackTrace))
+        {
+            errorMessage = "managed exception diagnostic is incomplete";
+            return HostBridgeStatus.InvalidArgument;
+        }
+
+        LastManagedException = exceptionType + ":" + message + ":" + stackTrace;
+        errorMessage = null;
         return HostBridgeStatus.Ok;
     }
 

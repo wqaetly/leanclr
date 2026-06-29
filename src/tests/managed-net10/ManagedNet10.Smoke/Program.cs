@@ -182,6 +182,7 @@ internal static class Program
         HostBridgeWrapperSmoke.Run();
         EngineBindingSmoke.Run();
         ValueMarshalSmoke.Run();
+        DiagnosticsSmoke.Run();
         await TestAsync();
     }
 

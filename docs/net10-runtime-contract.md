@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已启动托管 wrapper contract、engine binding minimal adapter 和 value marshal / property-call 最小交互面，下一步转向 host diagnostics / failure policy。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已覆盖托管 wrapper contract、engine binding minimal adapter、value marshal / property-call 最小交互面和 host diagnostics / failure policy。下一步转向第一阶段完成审计与全量 gate sweep。
 
 已验证切片：
 
@@ -46,12 +46,13 @@
 | P3.1 Managed host wrapper contract | 新增 `ManagedNet10.Smoke.HostBridgeWrapperSmoke`，定义托管侧 `HostObject` / `HostEventSubscription` / `HostDispatcher` 最小 wrapper contract；wrapper 只保存 opaque handle / subscription token，通过 mock bridge 把 host status 转成 `ObjectDisposedException` 或 `HostBridgeException` | `scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.HostBridgeWrapperSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0`；P2 host bridge 四场景仍通过 | 保留为 managed wrapper regression gate；后续真实 Unity/Godot 接入必须先落到同一 wrapper contract，再连接具体引擎对象模型 |
 | P3.2 Engine binding minimal adapter | 新增 native `EngineAdapter` mock 场景和 `ManagedNet10.Smoke.EngineBindingSmoke`，把引擎节点创建、事件订阅、事件触发、主线程 pump 和宿主销毁诊断串到 P2/P3.1 contract；托管 `EngineNode` 只持有 `HostObject`，不接触真实引擎指针 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EngineAdapter` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.EngineBindingSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 engine binding adapter regression gate；后续属性/方法调用必须继续经过 opaque handle、dispatcher 和明确 value marshal |
 | P3.3 Value marshal / property-call adapter | 在 host bridge ABI 中新增 `LeanClrHostValue` / `LeanClrHostVector3`、value marshal capability，以及 property get/set / command invoke 入口；native `ValueMarshal` 场景和 managed `ValueMarshalSmoke` 覆盖 bool/int/float/string/vector3、属性 round trip、`MoveBy` / `Damage` command、错误类型诊断和销毁后访问 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario ValueMarshal` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.ValueMarshalSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 value marshal regression gate；复杂 Variant、数组 view、UnityEngine.Object / Godot Object 语义后置 |
+| P3.4 Host diagnostics / failure policy | 在 host bridge ABI 中新增 log level enum、diagnostics capability 和 `report_managed_exception` 回调；native `Diagnostics` 场景和 managed `DiagnosticsSmoke` 覆盖 info/warning/error 日志、托管异常类型/消息/栈字符串回传、不完整诊断拒绝，以及 host failure 到 `HostBridgeException` 的转换 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Diagnostics` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.DiagnosticsSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 diagnostics regression gate；完整 debugger、符号解析和宿主异常对象跨 ABI 后置 |
 
 下一批次：
 
 | 批次 | 目标 | 输出 | 验收 |
 | --- | --- | --- | --- |
-| P3.4 Host diagnostics / failure policy | 固化 log level、warning/error、托管异常消息回传和 host failure 到托管异常的分级策略 | native diagnostics smoke + managed failure smoke | 错误字符串稳定，日志不跨 ABI 泄露宿主异常对象 |
+| P4.1 First-stage completion audit | 对照第一阶段完成标准和已验证切片跑全量 gate sweep，移除已完成批次中的“下一步”残留并标注后置边界 | completion checklist + consolidated verification log | contract evidence、catalog evidence、runtime evidence 均有当前证据 |
 
 ## 非目标
 
@@ -344,8 +345,10 @@ P3 托管 wrapper 验收命令：
 - `scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.HostBridgeWrapperSmoke::Run"`（已通过）。
 - `scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.EngineBindingSmoke::Run"`（已通过）。
 - `scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.ValueMarshalSmoke::Run"`（已通过）。
+- `scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.DiagnosticsSmoke::Run"`（已通过）。
 - `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EngineAdapter`（已通过）。
 - `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario ValueMarshal`（已通过）。
+- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Diagnostics`（已通过）。
 - `scripts/dotnet10/api-scan.ps1 -Configuration Release`（已通过，unsupported `0`）。
 
 验收入口：
@@ -358,6 +361,7 @@ P3 托管 wrapper 验收命令：
 - 托管 `HostObject` / `HostEventSubscription` wrapper 的释放、重复释放、事件订阅取消和 host status 到托管异常的转换。
 - 托管 `EngineNode` binding 只通过 `HostObject`、dispatcher 和 subscription token 操作 mock engine adapter。
 - bool/int/float/string/vector3 的 value marshal、属性 get/set、command 返回值和错误类型诊断。
+- info/warning/error 日志级别、托管异常诊断回传和 host failure 到托管异常的分级转换。
 
 ### 10. System.IO / Platform PInvoke
 

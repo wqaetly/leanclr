@@ -31,8 +31,17 @@ typedef enum LeanClrHostBridgeCapability
     LEANCLR_HOST_BRIDGE_CAP_HANDLE_REGISTRY = 1ull << 2,
     LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH = 1ull << 3,
     LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK = 1ull << 4,
-    LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL = 1ull << 5
+    LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL = 1ull << 5,
+    LEANCLR_HOST_BRIDGE_CAP_DIAGNOSTICS = 1ull << 6
 } LeanClrHostBridgeCapability;
+
+typedef enum LeanClrHostBridgeLogLevel
+{
+    LEANCLR_HOST_BRIDGE_LOG_TRACE = 0,
+    LEANCLR_HOST_BRIDGE_LOG_INFO = 1,
+    LEANCLR_HOST_BRIDGE_LOG_WARNING = 2,
+    LEANCLR_HOST_BRIDGE_LOG_ERROR = 3
+} LeanClrHostBridgeLogLevel;
 
 typedef enum LeanClrHostValueKind
 {
@@ -160,6 +169,12 @@ typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeInvokeCommandFn)(void* user_d
                                                                     LeanClrHostValue* out_value,
                                                                     LeanClrHostBridgeError* error);
 
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeReportManagedExceptionFn)(void* user_data,
+                                                                            const char* exception_type,
+                                                                            const char* message,
+                                                                            const char* stack_trace,
+                                                                            LeanClrHostBridgeError* error);
+
 typedef struct LeanClrHostBridgeFunctions
 {
     uint32_t size;
@@ -182,6 +197,7 @@ typedef struct LeanClrHostBridgeFunctions
     LeanClrHostBridgeGetPropertyFn get_property;
     LeanClrHostBridgeSetPropertyFn set_property;
     LeanClrHostBridgeInvokeCommandFn invoke_command;
+    LeanClrHostBridgeReportManagedExceptionFn report_managed_exception;
 } LeanClrHostBridgeFunctions;
 
 static inline void LeanClrHostBridge_SetError(LeanClrHostBridgeError* error,
@@ -244,7 +260,9 @@ static inline LeanClrHostBridgeStatus LeanClrHostBridge_ValidateFunctions(const 
         ((functions->capabilities & LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL) != 0 &&
          (functions->get_property == 0 ||
           functions->set_property == 0 ||
-          functions->invoke_command == 0)))
+          functions->invoke_command == 0)) ||
+        ((functions->capabilities & LEANCLR_HOST_BRIDGE_CAP_DIAGNOSTICS) != 0 &&
+         functions->report_managed_exception == 0))
     {
         LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host bridge function pointer is missing");
         return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;

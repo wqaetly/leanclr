@@ -50,6 +50,8 @@ struct MockHostState
     std::unordered_map<LeanClrHostSubscription, MockEventSubscription> subscriptions;
     std::deque<MockDispatchTask> dispatch_queue;
     std::vector<int> dispatch_order;
+    std::vector<std::string> logs;
+    std::string last_managed_exception;
 };
 
 struct MockDispatchPayload
@@ -77,6 +79,7 @@ void mock_log(void* user_data, int32_t level, const char* message)
     if (level >= 0)
     {
         ++state->log_count;
+        state->logs.push_back(std::to_string(level) + ":" + message);
     }
 }
 
@@ -645,6 +648,24 @@ LeanClrHostBridgeStatus mock_invoke_command(void* user_data,
     return LEANCLR_HOST_BRIDGE_OK;
 }
 
+LeanClrHostBridgeStatus mock_report_managed_exception(void* user_data,
+                                                      const char* exception_type,
+                                                      const char* message,
+                                                      const char* stack_trace,
+                                                      LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    if (state == nullptr || exception_type == nullptr || message == nullptr || stack_trace == nullptr)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "managed exception diagnostic is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    state->last_managed_exception = std::string(exception_type) + ":" + message + ":" + stack_trace;
+    LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
 bool require(bool condition, const char* message)
 {
     if (!condition)
@@ -666,7 +687,8 @@ LeanClrHostBridgeFunctions make_mock_functions(MockHostState* state)
                              LEANCLR_HOST_BRIDGE_CAP_HANDLE_REGISTRY |
                              LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH |
                              LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK |
-                             LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL;
+                             LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL |
+                             LEANCLR_HOST_BRIDGE_CAP_DIAGNOSTICS;
     functions.user_data = state;
     functions.log = mock_log;
     functions.invoke_managed_entry = mock_invoke_managed_entry;
@@ -684,6 +706,7 @@ LeanClrHostBridgeFunctions make_mock_functions(MockHostState* state)
     functions.get_property = mock_get_property;
     functions.set_property = mock_set_property;
     functions.invoke_command = mock_invoke_command;
+    functions.report_managed_exception = mock_report_managed_exception;
     return functions;
 }
 
@@ -1301,6 +1324,68 @@ bool run_value_marshal()
 
     return true;
 }
+
+bool run_diagnostics()
+{
+    MockHostState state;
+    auto functions = make_mock_functions(&state);
+    LeanClrHostBridgeError error{};
+
+    auto status = LeanClrHostBridge_ValidateFunctions(
+        &functions,
+        LEANCLR_HOST_BRIDGE_CAP_LOGGING | LEANCLR_HOST_BRIDGE_CAP_DIAGNOSTICS,
+        &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "diagnostics function table should be accepted"))
+    {
+        return false;
+    }
+
+    functions.log(functions.user_data, LEANCLR_HOST_BRIDGE_LOG_INFO, "engine adapter started");
+    functions.log(functions.user_data, LEANCLR_HOST_BRIDGE_LOG_WARNING, "engine adapter warning");
+    functions.log(functions.user_data, LEANCLR_HOST_BRIDGE_LOG_ERROR, "engine adapter error");
+    if (!require(state.logs.size() == 3 &&
+                     state.logs[0] == "1:engine adapter started" &&
+                     state.logs[1] == "2:engine adapter warning" &&
+                     state.logs[2] == "3:engine adapter error",
+                 "diagnostic log levels should be preserved"))
+    {
+        return false;
+    }
+
+    status = functions.report_managed_exception(functions.user_data,
+                                                "System.InvalidOperationException",
+                                                "managed callback failed",
+                                                "ManagedNet10.Smoke.EngineNode.OnReady",
+                                                &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK &&
+                     state.last_managed_exception == "System.InvalidOperationException:managed callback failed:ManagedNet10.Smoke.EngineNode.OnReady",
+                 "managed exception diagnostic should be reported"))
+    {
+        return false;
+    }
+
+    status = functions.report_managed_exception(functions.user_data,
+                                                "System.InvalidOperationException",
+                                                nullptr,
+                                                "ManagedNet10.Smoke.EngineNode.OnReady",
+                                                &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT && error.message != nullptr,
+                 "incomplete managed exception diagnostic should fail clearly"))
+    {
+        return false;
+    }
+
+    auto missing_diagnostics = functions;
+    missing_diagnostics.report_managed_exception = nullptr;
+    status = LeanClrHostBridge_ValidateFunctions(&missing_diagnostics, LEANCLR_HOST_BRIDGE_CAP_DIAGNOSTICS, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT && error.message != nullptr,
+                 "missing diagnostics callback should return a diagnostic"))
+    {
+        return false;
+    }
+
+    return true;
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -1377,6 +1462,17 @@ int main(int argc, char** argv)
         }
 
         std::cout << "ok! host bridge ValueMarshal" << std::endl;
+        return 0;
+    }
+
+    if (scenario == "Diagnostics")
+    {
+        if (!run_diagnostics())
+        {
+            return 1;
+        }
+
+        std::cout << "ok! host bridge Diagnostics" << std::endl;
         return 0;
     }
 
