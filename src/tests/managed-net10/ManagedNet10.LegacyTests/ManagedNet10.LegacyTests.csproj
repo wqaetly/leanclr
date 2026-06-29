@@ -198,6 +198,7 @@
     <Compile Include="..\..\managed\GcTests\Roots\TC_GC_Roots.cs" Link="GcTests\Roots\TC_GC_Roots.cs" />
     <Compile Include="..\..\managed\GcTests\Roots\TC_GC_StaticBitmapBitZero.cs" Link="GcTests\Roots\TC_GC_StaticBitmapBitZero.cs" />
     <Compile Include="..\..\managed\GcTests\Handles\TC_GC_Handles.cs" Link="GcTests\Handles\TC_GC_Handles.cs" />
+    <Compile Include="..\..\managed\GcTests\Scan\TC_GC_Graph.cs" Link="GcTests\Scan\TC_GC_Graph.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Assembly.cs" Link="Runtime\TC_Assembly.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_ArrayGenericInterface.cs" Link="Runtime\TC_ArrayGenericInterface.cs" />

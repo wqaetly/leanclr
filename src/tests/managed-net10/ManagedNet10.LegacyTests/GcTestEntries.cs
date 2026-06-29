@@ -1,6 +1,7 @@
 using GcTests.Collection;
 using GcTests.Handles;
 using GcTests.Roots;
+using GcTests.Scan;
 
 namespace ManagedNet10.LegacyTests
 {
@@ -31,6 +32,11 @@ namespace ManagedNet10.LegacyTests
         public static void RunGcHandles()
         {
             LegacyTestRunner.RunType(typeof(TC_GC_Handles));
+        }
+
+        public static void RunGcScanGraph()
+        {
+            LegacyTestRunner.RunType(typeof(TC_GC_Graph));
         }
     }
 }
