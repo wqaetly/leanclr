@@ -215,6 +215,7 @@
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_event.cs" Link="Runtime\TC_event.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_foreach.cs" Link="Runtime\TC_foreach.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Interlocked.cs" Link="Runtime\TC_Interlocked.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_InterfaceDefaultMethod.cs" Link="Runtime\TC_InterfaceDefaultMethod.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Nullable.cs" Link="Runtime\TC_Nullable.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Reflection.cs" Link="Runtime\TC_Reflection.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_String.cs" Link="Runtime\TC_String.cs" />

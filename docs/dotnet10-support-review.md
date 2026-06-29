@@ -1284,6 +1284,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本轮未新增 runtime façade；当前 value type / struct scanner 已能递归扫描实例字段、静态字段和 array element 中的嵌套 reference，并能正确跳过 primitive-only value type 数据。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcScanValueTypes`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
 
+2026-06-29 迁移旧 `TC_InterfaceDefaultMethod` 用例：
+
+- 将旧 `Tests.CSharp.TC_InterfaceDefaultMethod` 链接进 `ManagedNet10.LegacyTests`，新增 `RunRuntimeInterfaceDefaultMethod` 定位入口，并纳入 `RunRuntimeLanguageFeatures` 分组。
+- 该旧用例在当前非 Unity net10 profile 下覆盖普通接口实现调用，以及继承接口转基类接口后的 interface dispatch；真正带方法体的 C# default interface method 仍需后续单独建模。
+- 本轮未新增 runtime façade；现有 interface dispatch / inherited interface slot 解析已足够支撑该旧用例切片。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunRuntimeInterfaceDefaultMethod`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
