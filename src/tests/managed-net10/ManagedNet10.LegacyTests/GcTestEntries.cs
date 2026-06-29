@@ -41,6 +41,11 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunType(typeof(TC_GC_Graph));
         }
 
+        public static void RunGcScanArrays()
+        {
+            LegacyTestRunner.RunType(typeof(TC_GC_Arrays));
+        }
+
         public static void RunGcSweep()
         {
             LegacyTestRunner.RunType(typeof(TC_GC_Sweep));

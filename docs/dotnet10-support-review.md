@@ -1256,6 +1256,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - `GcFinalizer::suppress_finalize` 现在会同步移除已进入 f-reachable pending 队列的对象，保证 suppress 发生在 promotion 后但 finalizer 执行前时也不会继续调用 finalizer。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcFinalizer`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release`、`scripts\dotnet10\api-scan.ps1 -Configuration Release`、默认 `scripts\dotnet10\nkg-smoke.ps1 -Configuration Release`、`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 和 `git diff --check` 均通过。
 
+2026-06-29 迁移旧 `TC_GC_Arrays` 用例：
+
+- 将旧 `GcTests.Scan.TC_GC_Arrays` 链接进 `ManagedNet10.LegacyTests`，新增 `RunGcScanArrays` 定位入口。
+- 该旧用例覆盖 reference SZArray 元素保活与 slot clear 后回收、空 reference array 回收、primitive int array 不误标记无关对象、struct array 嵌套引用扫描、64 槽宽 reference array、jagged object array、multidimensional object array，以及 big byte array pinned/unrooted 回收语义。
+- 本轮未新增 runtime façade；现有 LeanCLR array scanner、struct element scanner、GCHandle rooting 和 big object sweep 已足够支撑该旧用例切片。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcScanArrays`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。

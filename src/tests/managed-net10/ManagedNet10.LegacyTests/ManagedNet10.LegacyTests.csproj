@@ -199,6 +199,7 @@
     <Compile Include="..\..\managed\GcTests\Roots\TC_GC_StaticBitmapBitZero.cs" Link="GcTests\Roots\TC_GC_StaticBitmapBitZero.cs" />
     <Compile Include="..\..\managed\GcTests\Handles\TC_GC_Handles.cs" Link="GcTests\Handles\TC_GC_Handles.cs" />
     <Compile Include="..\..\managed\GcTests\Scan\TC_GC_Graph.cs" Link="GcTests\Scan\TC_GC_Graph.cs" />
+    <Compile Include="..\..\managed\GcTests\Scan\TC_GC_Arrays.cs" Link="GcTests\Scan\TC_GC_Arrays.cs" />
     <Compile Include="..\..\managed\GcTests\Sweep\TC_GC_Sweep.cs" Link="GcTests\Sweep\TC_GC_Sweep.cs" />
     <Compile Include="..\..\managed\GcTests\Finalizer\TC_GC_Finalizer.cs" Link="GcTests\Finalizer\TC_GC_Finalizer.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Activator.cs" Link="Runtime\TC_Activator.cs" />
