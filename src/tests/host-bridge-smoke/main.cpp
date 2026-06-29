@@ -24,15 +24,26 @@ struct MockDispatchTask
     void* callback_data = nullptr;
 };
 
+struct MockEventSubscription
+{
+    LeanClrHostHandle source_handle = 0;
+    std::string event_name;
+    LeanClrHostBridgeDispatchCallbackFn callback = nullptr;
+    void* callback_data = nullptr;
+    bool active = true;
+};
+
 struct MockHostState
 {
     int log_count = 0;
     int invoke_count = 0;
     LeanClrHostHandle next_handle = 100;
     uint64_t next_dispatch_ticket = 1;
+    LeanClrHostSubscription next_subscription = 1;
     bool is_pumping_main_thread = false;
     std::string last_entry;
     std::unordered_map<LeanClrHostHandle, MockHandleRecord> handles;
+    std::unordered_map<LeanClrHostSubscription, MockEventSubscription> subscriptions;
     std::deque<MockDispatchTask> dispatch_queue;
     std::vector<int> dispatch_order;
 };
@@ -301,6 +312,85 @@ LeanClrHostBridgeStatus mock_call_main_thread_sync(void* user_data,
     return callback(callback_data, error);
 }
 
+LeanClrHostBridgeStatus mock_subscribe_event(void* user_data,
+                                             LeanClrHostHandle source_handle,
+                                             const char* event_name,
+                                             LeanClrHostBridgeDispatchCallbackFn callback,
+                                             void* callback_data,
+                                             LeanClrHostSubscription* out_subscription,
+                                             LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    if (state == nullptr || event_name == nullptr || callback == nullptr || out_subscription == nullptr)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "event subscription request is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+    if (find_live_handle(state, source_handle, error) == nullptr)
+    {
+        return error == nullptr ? LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED : error->status;
+    }
+
+    const LeanClrHostSubscription subscription = state->next_subscription++;
+    MockEventSubscription record;
+    record.source_handle = source_handle;
+    record.event_name = event_name;
+    record.callback = callback;
+    record.callback_data = callback_data;
+    state->subscriptions.emplace(subscription, record);
+    *out_subscription = subscription;
+
+    LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
+LeanClrHostBridgeStatus mock_unsubscribe_event(void* user_data,
+                                               LeanClrHostSubscription subscription,
+                                               LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    if (state == nullptr || subscription == 0)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "event unsubscribe request is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    auto it = state->subscriptions.find(subscription);
+    if (it != state->subscriptions.end())
+    {
+        it->second.active = false;
+    }
+
+    LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
+LeanClrHostBridgeStatus mock_trigger_event(void* user_data,
+                                           LeanClrHostSubscription subscription,
+                                           LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    if (state == nullptr || subscription == 0)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "event trigger request is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    auto it = state->subscriptions.find(subscription);
+    if (it == state->subscriptions.end() || !it->second.active)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+        return LEANCLR_HOST_BRIDGE_OK;
+    }
+    if (find_live_handle(state, it->second.source_handle, error) == nullptr)
+    {
+        return error == nullptr ? LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED : error->status;
+    }
+
+    uint64_t ignored_ticket = 0;
+    return mock_post_to_main_thread(state, it->second.callback, it->second.callback_data, &ignored_ticket, error);
+}
+
 bool require(bool condition, const char* message)
 {
     if (!condition)
@@ -320,7 +410,8 @@ LeanClrHostBridgeFunctions make_mock_functions(MockHostState* state)
     functions.capabilities = LEANCLR_HOST_BRIDGE_CAP_LOGGING |
                              LEANCLR_HOST_BRIDGE_CAP_INVOKE_MANAGED_ENTRY |
                              LEANCLR_HOST_BRIDGE_CAP_HANDLE_REGISTRY |
-                             LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH;
+                             LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH |
+                             LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK;
     functions.user_data = state;
     functions.log = mock_log;
     functions.invoke_managed_entry = mock_invoke_managed_entry;
@@ -332,6 +423,9 @@ LeanClrHostBridgeFunctions make_mock_functions(MockHostState* state)
     functions.post_to_main_thread = mock_post_to_main_thread;
     functions.pump_main_thread = mock_pump_main_thread;
     functions.call_main_thread_sync = mock_call_main_thread_sync;
+    functions.subscribe_event = mock_subscribe_event;
+    functions.unsubscribe_event = mock_unsubscribe_event;
+    functions.trigger_event = mock_trigger_event;
     return functions;
 }
 
@@ -595,6 +689,127 @@ bool run_dispatcher()
 
     return true;
 }
+
+bool run_event_callback()
+{
+    MockHostState state;
+    auto functions = make_mock_functions(&state);
+    LeanClrHostBridgeError error{};
+
+    auto status = LeanClrHostBridge_ValidateFunctions(&functions, LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "event callback function table should be accepted"))
+    {
+        return false;
+    }
+
+    LeanClrHostHandle source_handle = 0;
+    status = functions.create_handle(functions.user_data, "Mock.Button", "Start", &source_handle, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && source_handle != 0, "event source handle should be created"))
+    {
+        return false;
+    }
+
+    MockDispatchPayload click_payload{&state, 10, false};
+    LeanClrHostSubscription click_subscription = 0;
+    status = functions.subscribe_event(functions.user_data,
+                                       source_handle,
+                                       "OnClick",
+                                       mock_dispatch_callback,
+                                       &click_payload,
+                                       &click_subscription,
+                                       &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && click_subscription != 0,
+                 "event subscription should return a token"))
+    {
+        return false;
+    }
+
+    status = functions.trigger_event(functions.user_data, click_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && state.dispatch_order.empty(),
+                 "event trigger should enqueue the callback instead of invoking it inline"))
+    {
+        return false;
+    }
+
+    uint32_t executed = 0;
+    status = functions.pump_main_thread(functions.user_data, 0, &executed, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && executed == 1 && state.dispatch_order.size() == 1 && state.dispatch_order[0] == 10,
+                 "event callback should run through the main-thread dispatcher"))
+    {
+        return false;
+    }
+
+    status = functions.unsubscribe_event(functions.user_data, click_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "event unsubscribe should succeed"))
+    {
+        return false;
+    }
+    status = functions.unsubscribe_event(functions.user_data, click_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "duplicate event unsubscribe should be idempotent"))
+    {
+        return false;
+    }
+    status = functions.trigger_event(functions.user_data, click_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "triggering an inactive subscription should be a no-op"))
+    {
+        return false;
+    }
+    status = functions.pump_main_thread(functions.user_data, 0, &executed, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && executed == 0 && state.dispatch_order.size() == 1,
+                 "unsubscribed event should not enqueue callbacks"))
+    {
+        return false;
+    }
+
+    MockDispatchPayload failing_payload{&state, 20, true};
+    LeanClrHostSubscription failing_subscription = 0;
+    status = functions.subscribe_event(functions.user_data,
+                                       source_handle,
+                                       "OnFail",
+                                       mock_dispatch_callback,
+                                       &failing_payload,
+                                       &failing_subscription,
+                                       &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && failing_subscription != 0,
+                 "failing event subscription should return a token"))
+    {
+        return false;
+    }
+    status = functions.trigger_event(functions.user_data, failing_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "failing event should still enqueue"))
+    {
+        return false;
+    }
+    status = functions.pump_main_thread(functions.user_data, 1, &executed, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_MANAGED_EXCEPTION && executed == 1 && error.message != nullptr,
+                 "event callback managed exception should be returned by dispatcher pump"))
+    {
+        return false;
+    }
+
+    status = functions.notify_handle_destroyed(functions.user_data, source_handle, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "destroying an event source should succeed"))
+    {
+        return false;
+    }
+    status = functions.trigger_event(functions.user_data, failing_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED && error.message != nullptr,
+                 "triggering an event on a destroyed source should return a diagnostic"))
+    {
+        return false;
+    }
+
+    auto missing_event = functions;
+    missing_event.subscribe_event = nullptr;
+    status = LeanClrHostBridge_ValidateFunctions(&missing_event, LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT && error.message != nullptr,
+                 "missing event callback should return a diagnostic"))
+    {
+        return false;
+    }
+
+    return true;
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -638,6 +853,17 @@ int main(int argc, char** argv)
         }
 
         std::cout << "ok! host bridge Dispatcher" << std::endl;
+        return 0;
+    }
+
+    if (scenario == "EventCallback")
+    {
+        if (!run_event_callback())
+        {
+            return 1;
+        }
+
+        std::cout << "ok! host bridge EventCallback" << std::endl;
         return 0;
     }
 

@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 已经启动 Host Bridge ABI skeleton、opaque handle registry 和主线程 dispatcher；下一步转向 event/callback bridge。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；下一步转向托管 wrapper contract 与真实 Unity/Godot 接入面的最小闭环。
 
 已验证切片：
 
@@ -42,12 +42,13 @@
 | P2.1 Host Bridge ABI skeleton | 新增 `LeanClrHostBridgeFunctions` C ABI、ABI version、capability flags、状态码、错误字符串和最小 managed entry callback；mock host 只验证初始化、函数表校验和托管静态入口回调，不加载真实 Unity/Godot 或完整 runtime hosting API | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario AbiSkeleton` 通过 | 保留为 host bridge ABI regression gate；后续 P2.2-P2.4 在同一脚本上扩展 scenario |
 | P2.2 Opaque handle registry | 在 host function table 中定义宿主对象 handle 创建、retain/release、判活和销毁通知；mock host 维护 opaque handle table，托管侧只接收 `LeanClrHostHandle`，不暴露真实宿主对象指针 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario HandleRegistry` 通过 | 保留为 handle lifecycle regression gate；后续 dispatcher/event callback 必须复用同一 handle 失效诊断语义 |
 | P2.3 Main-thread dispatcher | 在 host function table 中定义主线程投递、next-frame pump、同步调用和 reentry guard；mock host 只承诺 FIFO 队列、受控 pump、callback 结果回传和托管异常诊断，不扩展完整 ThreadPool | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Dispatcher` 通过 | 保留为 dispatcher regression gate；event/callback bridge 必须通过同一主线程队列回到托管调用边界 |
+| P2.4 Event / callback bridge | 在 host function table 中定义 event subscription token、取消订阅和宿主事件触发；mock host 触发事件时先投递到主线程 dispatcher，再由 pump 进入托管回调边界，取消订阅后触发为 no-op | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EventCallback` 通过 | 保留为 event/callback regression gate；真实 UnityEvent / Godot Signal 和复杂 Variant marshal 后置 |
 
 下一批次：
 
 | 批次 | 目标 | 输出 | 验收 |
 | --- | --- | --- | --- |
-| P2.4 Event / callback bridge | 定义托管 delegate 注册、取消注册、宿主事件触发和异常返回协议 | mock event source + subscription token | 回调成功、托管异常、取消订阅后不再触发 |
+| P3.1 Managed host wrapper contract | 定义托管侧 `HostObject` / `HostEventSubscription` 最小 wrapper、释放语义和异常转换 | managed wrapper smoke + host bridge mock | wrapper 生命周期、销毁后访问诊断、事件订阅释放 |
 
 ## 非目标
 
@@ -326,14 +327,14 @@ P2 mock host 节点拆解：
 | P2.1 ABI skeleton | 一个 C ABI header、mock host 初始化流程、runtime 侧注册入口 | 版本 / capability 校验、初始化失败错误字符串、托管静态入口调用成功；`host-bridge-smoke.ps1 -Scenario AbiSkeleton` 已通过 | 不复制 CoreCLR hosting API；不加载真实 Unity/Godot |
 | P2.2 Opaque handle registry | 宿主侧 handle table、retain/release、destroy notification、托管 wrapper handle 字段 | 创建后查询、retain/release 平衡、宿主销毁后访问返回 ObjectDisposed / MissingReference 风格诊断；`host-bridge-smoke.ps1 -Scenario HandleRegistry` 已通过 | 不暴露真实引擎指针；不承诺跨进程 handle |
 | P2.3 Main-thread dispatcher | mock 主线程队列、next-frame pump、同步 reentry guard、结果回传结构 | FIFO 投递、下一帧执行、托管异常转错误状态、阻塞 wait 明确拒绝；`host-bridge-smoke.ps1 -Scenario Dispatcher` 已通过 | 不实现完整 ThreadPool / work stealing；不允许跨线程直接访问引擎对象 |
-| P2.4 Event / callback bridge | delegate subscription token、触发入口、取消注册入口、异常返回字段 | 注册后触发托管 delegate、托管异常回传、取消后不再触发、重复取消幂等 | 不实现 UnityEvent / Godot Signal 完整语义；复杂 Variant marshal 后置 |
+| P2.4 Event / callback bridge | delegate subscription token、触发入口、取消注册入口、异常返回字段 | 注册后触发托管 delegate、托管异常回传、取消后不再触发、重复取消幂等；`host-bridge-smoke.ps1 -Scenario EventCallback` 已通过 | 不实现 UnityEvent / Godot Signal 完整语义；复杂 Variant marshal 后置 |
 
 P2 验收命令使用独立脚本，避免混入 BCL smoke：
 
 - `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario AbiSkeleton`（已通过）。
 - `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario HandleRegistry`（已通过）。
 - `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Dispatcher`（已通过）。
-- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EventCallback`。
+- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EventCallback`（已通过）。
 
 验收入口：
 
