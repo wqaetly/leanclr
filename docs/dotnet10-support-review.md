@@ -1202,10 +1202,24 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本轮未新增 runtime façade；现有 `.NET 10` RuntimeMethodInfo / RuntimeParameterInfo / CustomAttributeData 路径已足够支撑该旧用例切片。
 - 本机已验证 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 通过，`RunCorlibReflectionMonoMethodInfo`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke` 均输出 `ok!`，`scripts\dotnet10\api-scan.ps1 -Configuration Release` 两组扫描均为 `unsupported: 0`。
 
+2026-06-29 当前代码基线确认：
+
+- `ManagedNet10.LegacyTests` 当前已不仅覆盖反射切片，也已把旧 `Type` / `RuntimeType` / `RuntimeTypeHandle`、`Object` / `ValueType` / `DateTime`、`Math` / `GC` / `RuntimeHelpers` / `GCHandle` / `Monitor`、`TypedReference`、`ThreadPool` 和 `WaitHandle` 等 Corlib 用例纳入程序集级 `RunAll` 扫描。对应定位入口保留在 `CorlibTypeSystemTestEntries`、`CorlibRuntimeTypeTestEntries`、`CorlibRuntimeTypeHandleTestEntries`、`CorlibCoreObjectValueTestEntries`、`CorlibRuntimeServicesTestEntries`、`CorlibTypedReferenceTestEntries` 和 `CorlibThreadingTestEntries`。
+- 这些切片覆盖的运行时能力包括 `Type.GetTypeFromHandle`、数组/ByRef/Pointer 类型构造、嵌套类型枚举、generic instantiation 查询、对象哈希和 `MemberwiseClone`、值类型 `Equals` / `GetHashCode`、`RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor`、GCHandle normal/pinned/weak 基础路径、Monitor enter/exit/try/wait/pulse、TypedReference make/to-object，以及 `ThreadPool.QueueUserWorkItem` 和 `ManualResetEvent` / `WaitAny` 的最小同步语义。
+- 这仍是 minimal net10 profile 的受控验证面：当前 `ThreadPool` / `WaitHandle` 只证明旧用例与少量 net10 语义探针通过，不代表完整 CoreCLR ThreadPool、I/O completion port、timer、cancellation wait 或跨线程调度模型已经完成。
+- 本机本轮复验 `ManagedNet10.LegacyTests.Program::RunAll`、默认 `ManagedNet10.Smoke`、`scripts\dotnet10\api-scan.ps1 -Configuration Release` 和 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 均通过；API scan 中 managed smoke/NKG smoke 与 NKG core/Odin/UniTask 仍为 `unsupported: 0`，runtime API catalog 报告 `All entries matched extern signatures.`。
+
+2026-06-29 已把 NKGGameFramework 默认 gate 从 surface 推进到 SampleGame/ECS 行为：
+
+- `ManagedNet10.NkgSmoke.Program::RunCoreWorkloadSurfaceSmoke` 现在额外执行 `RunSamplerCoreGameplaySmoke`，通过反射加载 `NKGGameFramework.Sampler.SampleGame`，调用 `Start()` 并连续驱动 4 次 `Update(double,double)`。这会真实跑过 Boot/Load/Gameplay procedure 切换、`RuntimeContext.Update`、ECS `World` / `Scene` 更新、`PresentationBindingSystem` 组件添加回调、`MovementSystem` 双组件查询和 `DamageOverTimeSystem` 单组件查询。
+- 新 gate 在第 2 个 gameplay 帧后调用 SampleGame 私有 `CreateSnapshot()`，校验 `Frame == 2`、位置 X/Y 均已大于 0、生命值已从 10 降到 8，避免只做 metadata/reflection surface 检查。
+- 新增 `RunSamplerOdinRoundTripProbe` 作为后续缺口复现入口：它驱动到第 3 个 gameplay 帧并触发 SampleGame 的 `SaveSnapshot()`，当前在 `NKGGameFramework.Serialization.OdinGameSerializer::SerializeToBytes<NKGGameFramework.Sampler.GameSnapshot>` 入口抛 `System.BadImageFormatException`。这确认 Odin 序列化/反序列化往返仍未跑通，下一步需要沿该 probe 定位 generic method call / Odin serialization metadata 相关缺口。
+- 本机已验证默认 `scripts\dotnet10\nkg-smoke.ps1 -Configuration Release`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release`、`ManagedNet10.LegacyTests.Program::RunAll`、`scripts\dotnet10\api-scan.ps1 -Configuration Release` 和 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 均通过。并行跑两个 `interp-smoke.ps1` 会竞争同一个 CMake `ZERO_CHECK.lastbuildstate`，本轮已用串行重跑确认默认 smoke 通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
 - 原作者 managed / Mono 测试资产仍需继续分阶段迁移并最终全量跑通；当前 `ManagedNet10.LegacyTests.Program::RunAll` 只证明已迁入 net10 测试程序集的集合绿色。
-- NKGGameFramework 真实纯逻辑 gate 还需要从 surface 扩展到 UniTask 行为执行、Odin 序列化/反序列化往返、核心 gameplay / ECS 样例执行；Hosting、Unity、Godot 仍不属于第一阶段边界。
-- Unity/Godot bridge、opaque handle registry、主线程 dispatcher 和 mock host 验证尚未实现。
+- NKGGameFramework 真实纯逻辑 gate 已从 surface 扩展到 SampleGame 的核心 gameplay / ECS 两帧行为执行；仍需要继续推进 UniTask 行为执行、Odin 序列化/反序列化往返和更完整的 gameplay / ECS 样例覆盖。Hosting、Unity、Godot 仍不属于第一阶段边界。
+- mock host bridge 已完成 ABI skeleton、opaque handle registry、主线程 dispatcher、event/callback、value marshal 和 diagnostics 基线；真实 Unity/Godot SDK bridge 仍未接入，继续作为后置边界。
 - 完整 Microsoft.NETCore.App、generic math/static abstract、完整 ThreadPool、完整 resolver、AOT native run 均已后置，暂不作为当前未完成主线。

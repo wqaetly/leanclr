@@ -14,6 +14,7 @@ internal static class Program
     {
         RunReflectionAttributeSmoke();
         RunAsyncAndSerializationSurfaceSmoke();
+        RunSamplerCoreGameplaySmoke();
     }
 
     public static void RunReflectionAttributeSmoke()
@@ -115,6 +116,46 @@ internal static class Program
         RequireMethod(odinSerializerType, "Serialize", "System.String", parameterCount: 1, genericArgumentCount: 1);
         RequireMethod(odinSerializerType, "SerializeToBytes", "System.Byte[]", parameterCount: 1, genericArgumentCount: 1);
         RequireMethod(odinSerializerType, "SerializeToJson", "System.String", parameterCount: 1, genericArgumentCount: 1);
+    }
+
+    public static void RunSamplerCoreGameplaySmoke()
+    {
+        RunSampleGameUpdates(updateCount: 4, expectedFrame: 2, expectSnapshot: true);
+    }
+
+    public static void RunSamplerOdinRoundTripProbe()
+    {
+        RunSampleGameUpdates(updateCount: 5, expectedFrame: 3, expectSnapshot: false);
+    }
+
+    private static void RunSampleGameUpdates(int updateCount, int expectedFrame, bool expectSnapshot)
+    {
+        var assembly = Assembly.Load("NKGGameFramework.Sampler");
+        var sampleGameType = RequireType(assembly, "NKGGameFramework.Sampler.SampleGame");
+        var game = Activator.CreateInstance(sampleGameType, nonPublic: true);
+        Require(game != null, "NKG SampleGame construction failed");
+
+        InvokeInstance(sampleGameType, game!, "Start");
+        Require((bool)RequirePropertyValue(sampleGameType, game!, "IsRunning"), "NKG SampleGame did not start");
+
+        for (int i = 0; i < updateCount; i++)
+        {
+            InvokeInstance(sampleGameType, game!, "Update", 0.016d, 0.016d);
+        }
+
+        Require((int)RequirePropertyValue(sampleGameType, game!, "Frame") == expectedFrame, "NKG SampleGame frame progression failed");
+        if (expectSnapshot)
+        {
+            var snapshot = InvokeInstance(sampleGameType, game!, "CreateSnapshot");
+            Require(snapshot != null, "NKG SampleGame snapshot creation failed");
+            var snapshotType = snapshot!.GetType();
+            Require((int)RequirePropertyValue(snapshotType, snapshot, "Frame") == expectedFrame, "NKG SampleGame snapshot frame mismatch");
+            Require((double)RequirePropertyValue(snapshotType, snapshot, "PositionX") > 0d, "NKG ECS movement did not update X position");
+            Require((double)RequirePropertyValue(snapshotType, snapshot, "PositionY") > 0d, "NKG ECS movement did not update Y position");
+            Require((int)RequirePropertyValue(snapshotType, snapshot, "Health") == 8, "NKG ECS damage system did not update health");
+        }
+
+        InvokeInstance(sampleGameType, game!, "Dispose");
     }
 
     public static void RunAssemblyNameSmoke()
@@ -329,6 +370,30 @@ internal static class Program
         var type = assembly.GetType(fullName);
         Require(type != null, fullName + " type lookup failed");
         return type!;
+    }
+
+    private static object? InvokeInstance(Type declaringType, object instance, string name, params object[] arguments)
+    {
+        var methods = declaringType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        for (int i = 0; i < methods.Length; i++)
+        {
+            var method = methods[i];
+            if (method.Name == name && method.GetParameters().Length == arguments.Length)
+            {
+                return method.Invoke(instance, arguments);
+            }
+        }
+
+        throw new MissingMethodException(declaringType.FullName, name);
+    }
+
+    private static object RequirePropertyValue(Type declaringType, object instance, string name)
+    {
+        var property = declaringType.GetProperty(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        Require(property != null, declaringType.FullName + "." + name + " property missing");
+        var value = property!.GetValue(instance);
+        Require(value != null, declaringType.FullName + "." + name + " property returned null");
+        return value!;
     }
 
     private static void RequireProperty(Type declaringType, string name, string expectedPropertyTypeName)
