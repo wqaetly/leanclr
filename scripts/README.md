@@ -18,10 +18,13 @@ Clean all outputs: `scripts\dev\clean-out.bat` (Windows) or `./scripts/dev/clean
 | --- | --- |
 | Default interpreter smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release` |
 | Legacy net10 regression | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunAll"` |
+| Legacy managed asset audit | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\legacy-managed-audit.ps1` |
+| Interpreter smoke matrix | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke-matrix.ps1 -Configuration Release` |
 | API whitelist scan | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\api-scan.ps1 -Configuration Release` |
 | NKG/Odin workload smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` |
-| Host bridge smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\host-bridge-smoke.ps1 -Configuration Release -Scenario AbiSkeleton` |
+| Host bridge smoke | Run `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\host-bridge-smoke.ps1 -Configuration Release -Scenario <scenario>` for `AbiSkeleton`, `HandleRegistry`, `Dispatcher`, `EventCallback`, `EngineAdapter`, `ValueMarshal`, and `Diagnostics` |
 | Runtime API signature gate | `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` |
+| LeanAOT net10 native smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\aot-smoke.ps1 -Configuration Release -NativeRun` |
 | Build runtime | `scripts\build.bat runtime Release` |
 | Build LeanAOT | `scripts\build.bat leanaot Release` |
 | Format runtime C++ | `scripts\dev\format-cpp-files.bat` |
