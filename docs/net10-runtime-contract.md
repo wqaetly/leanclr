@@ -1,6 +1,6 @@
 # LeanCLR .NET 10 Runtime Contract Plan
 
-状态：第四版执行基准（2026-06-29，第一阶段完成审计通过）
+状态：第五版执行基准（2026-06-29，第一阶段完成审计通过，Mono profile 物理清理完成）
 
 本文档是 `coreclr-net10` / `minimal-net10` 的 contract-first 改造清单。它回答两个问题：
 
@@ -15,12 +15,12 @@
 
 - 每个 net10 runtime 入口都能说明来源：CoreLib 调用链、runtime pack extern、smoke 入口或真实 workload。
 - 每个 façade 都有明确的 LeanCLR 内部映射：`RtClass`、`RtMethodInfo`、`RtFieldInfo`、`RtModuleDef`、metadata cache、interpreter、GC 或 host bridge。
-- `coreclr-net10` 不隐式命中 Mono-era 入口；旧 Mono 适配保留在 `mono45` / legacy profile。
+- `coreclr-net10` 不隐式命中 Mono-era 入口；仓库不再保留 `mono45` runtime API profile、`mono-4.5` BCL 和旧 Mono-only internal call 注册面。
 - 白名单外 API 输出明确诊断或 `NotSupported`，不以宽松签名匹配继续前进。
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程同步 / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已覆盖托管 wrapper contract、engine binding minimal adapter、value marshal / property-call 最小交互面和 host diagnostics / failure policy。P4.1 已完成第一阶段完成审计和全量 gate sweep，第一阶段关闭为受控 `net10.0` 纯逻辑 runtime contract 与 mock host bridge 基线。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程同步 / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已覆盖托管 wrapper contract、engine binding minimal adapter、value marshal / property-call 最小交互面和 host diagnostics / failure policy。P4.1 已完成第一阶段完成审计和全量 gate sweep，第一阶段关闭为受控 `net10.0` 纯逻辑 runtime contract 与 mock host bridge 基线。P4.2 在所有 leanclr 自有 gate 通过后执行 Mono profile 物理清理：删除 `src/libraries/mono-4.5`、旧 `src/libraries/LeanCLR` profile、`runtime-apis/mono45`、LeanAOT 根目录旧 catalog、Mono-only icall 实现、旧 mono 测试构建脚本和旧样例入口；`src/tests/managed` 下仍被 `ManagedNet10.LegacyTests` 通过 `Link` 复用的源码素材暂留。
 
 已验证切片：
 
@@ -64,11 +64,12 @@
 | P3.3 Value marshal / property-call adapter | 在 host bridge ABI 中新增 `LeanClrHostValue` / `LeanClrHostVector3`、value marshal capability，以及 property get/set / command invoke 入口；native `ValueMarshal` 场景和 managed `ValueMarshalSmoke` 覆盖 bool/int/float/string/vector3、属性 round trip、`MoveBy` / `Damage` command、错误类型诊断和销毁后访问 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario ValueMarshal` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.ValueMarshalSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 value marshal regression gate；复杂 Variant、数组 view、UnityEngine.Object / Godot Object 语义后置 |
 | P3.4 Host diagnostics / failure policy | 在 host bridge ABI 中新增 log level enum、diagnostics capability 和 `report_managed_exception` 回调；native `Diagnostics` 场景和 managed `DiagnosticsSmoke` 覆盖 info/warning/error 日志、托管异常类型/消息/栈字符串回传、不完整诊断拒绝，以及 host failure 到 `HostBridgeException` 的转换 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Diagnostics` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.DiagnosticsSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 diagnostics regression gate；完整 debugger、符号解析和宿主异常对象跨 ABI 后置 |
 | P4.1 First-stage completion audit | 对照第一阶段完成标准复核 P0-P3 已验证切片，补齐 consolidated verification log，并确认 contract evidence、catalog evidence、runtime evidence 都有当前证据 | `check_runtime_api_signatures.py --profile coreclr-net10` 通过；`api-scan.ps1 -Configuration Release` 两组扫描 unsupported `0`；`nkg-smoke.ps1 -Configuration Release` 通过；`ManagedNet10.LegacyTests.Program::RunAll` 通过；P2/P3 host bridge 七个 scenario 与 P3 managed wrapper 四个入口全通过 | 第一阶段关闭为 minimal `net10.0` 纯逻辑 DLL + mock host bridge 基线；真实 Unity/Godot SDK 绑定、完整 sampler/Hosting、ALC/debugger 仍是后置边界；动态 native codegen 和多线程 runtime 不进入计划 |
+| P4.2 Mono profile physical cleanup | 删除 `mono-4.5` BCL、`mono45` runtime API profile、LeanAOT 旧根 catalog、Mono-only internal call 注册面和依赖这些资产的旧脚本/样例；LeanAOT 默认 runtime API profile 改为 `coreclr-net10`，runtime corlib 加载不再回退 `mscorlib` | 清理前 `RunAll`、默认 `interp-smoke.ps1`、`api-scan.ps1`、`nkg-smoke.ps1`、签名 gate、host bridge 七场景和 P3 managed wrapper 四入口均通过；清理后完整复跑上述 gate：`check_runtime_api_signatures.py --profile coreclr-net10`、默认 `interp-smoke.ps1`、`ManagedNet10.LegacyTests.Program::RunAll`、`api-scan.ps1` unsupported `0`、`nkg-smoke.ps1`、host bridge 七场景和 P3 managed wrapper 四入口均通过 | 保留 `src/tests/managed` 中被 net10 legacy 项目 `Link` 复用的源码素材；后续若要彻底删除旧测试目录，需要先把这些源码迁入 `src/tests/managed-net10` |
 
 第一阶段完成审计结果：
 
 - contract evidence：P0-P1 将 CoreLib 入口收敛到 type / handle / reflection / delegate / RuntimeHelpers / Span / IO / single-thread sync / ALC / Reflection.Emit 的 LeanCLR façade 映射；P2-P3 将 engine integration 限定在 opaque handle、dispatcher、event、value marshal、diagnostics 的 host bridge contract。
-- catalog evidence：`coreclr-net10` active profile 由 runtime pack extern gate 校验，`icalls.json`、`intrinsics.json`、`pinvokes.json` 当前全部匹配 extern 签名，Mono-era active entry 继续由 profile gate 隔离。
+- catalog evidence：`coreclr-net10` active profile 由 runtime pack extern gate 校验，`icalls.json`、`intrinsics.json`、`pinvokes.json` 当前全部匹配 extern 签名；`mono45` profile 与旧根 catalog 已删除，不再作为 fallback。
 - runtime evidence：legacy `RunAll`、smoke 子入口、NKG/Odin 轻量 workload、host bridge native scenario 和 managed wrapper scenario 均有独立命令可复验。
 - 第一阶段边界：当前目标是受控纯逻辑 `net10.0` DLL 与 mock host bridge，不承诺完整 `Microsoft.NETCore.App`、真实 Unity/Godot SDK binding、完整 sampler/Hosting、完整 CoreCLR ALC/debugger、复杂 Variant / engine object 语义、动态 native codegen 或多线程 runtime。
 
@@ -79,7 +80,7 @@
 - 不实现动态 native codegen、多线程 runtime 或 ThreadPool worker 调度模型。
 - 不承诺第一阶段完整承载 `Microsoft.NETCore.App`。
 - 不再把 extern diff 归零作为近期目标；extern diff 只作为定位工具。
-- 不删除 `mono45` / Unity 旧资产；先隔离 profile，等 `coreclr-net10` 跑绿后再清理。
+- 不保留 `mono45` / `mono-4.5` 兼容 profile；Unity/Godot 接入必须走 P2/P3 host bridge contract，而不是复用 Mono BCL profile。
 
 ## 输入来源
 
@@ -89,7 +90,7 @@
 | CoreCLR VM / native entry 源码 | 理解入口语义，但不照搬实现 | LeanCLR 映射说明 |
 | .NET 10 runtime pack extern 清单 | 确认签名和调用入口是否仍存在 | `coreclr-net10` catalog 差异 |
 | `ManagedNet10.Smoke` | 稳定触发小能力入口 | 每个领域的最小验收 |
-| 原作者 managed / Mono 测试资产 | 证明 LeanCLR runtime 能力没有退化 | 分阶段回归验收 |
+| 原作者 managed 测试源码素材 | 证明 LeanCLR runtime 能力没有退化；当前通过 `ManagedNet10.LegacyTests` 链接到 `net10.0` 项目 | 分阶段回归验收 |
 | NKGGameFramework 纯逻辑 DLL | 证明真实项目结构能跑 | workload 验收 |
 
 ## Contract 领域

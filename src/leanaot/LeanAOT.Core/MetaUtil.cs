@@ -29,9 +29,6 @@ namespace LeanAOT.Core
     {
         private static readonly HashSet<string> s_defaultCoreLibraryModules = new HashSet<string>(StringComparer.Ordinal)
         {
-            "mscorlib",
-            "System",
-            "System.Core",
             "System.Private.CoreLib",
             "System.Runtime",
             "netstandard",

@@ -6,6 +6,8 @@
 
 ## 结论摘要
 
+2026-06-29 状态更新：在 `coreclr-net10`、LeanCLR 自有 legacy `RunAll`、API scan、NKG smoke、host bridge 和 P3 managed wrapper gates 均通过后，仓库已按 [`docs/net10-runtime-contract.md`](net10-runtime-contract.md) 的 P4.2 执行 Mono profile 物理清理。下文中关于保留 `mono45` / `mono-4.5` 的内容保留为迁移过程中的历史分析，不再代表当前仓库状态。
+
 2026-06-27 范围收敛决策：当前主线不再追求“完整承载 `System.Private.CoreLib` / `Microsoft.NETCore.App` 的 .NET 10 BCL 子集”。新的目标是 **LeanCLR minimal net10 profile**：让项目自己的、受控的、纯逻辑 `net10.0` DLL 能在 LeanCLR 上稳定运行。
 
 2026-06-27 验收口径补充：`minimal net10 profile` 是近期工程边界，不代表只跑少量精选测试就宣告合格。原作者已经设计好的 managed / Mono 测试资产应作为 LeanCLR 自身能力的完整质量门槛：可以按优先级分阶段迁移、分批排缺口，但最终需要全量跑通，才能认为 `.NET 10` 接入是完整可靠的。

@@ -10,11 +10,11 @@ LeanCLR 对接 .NET 10 不是从零重新实现一套 CLR，也不是把元数�
 
 更准确的说法是：LeanCLR 已经有自己的 VM、元数据加载、类型系统、对象模型、解释器、AOT、GC、反射框架、ICALL/Intrinsic 注册表。当前 `.NET 10` 适配的主线已经收敛为 **LeanCLR minimal net10 profile**：运行项目自己的、受控的、纯逻辑 `net10.0` DLL，而不是完整承接 `System.Private.CoreLib` / `Microsoft.NETCore.App`。
 
-这里的 `minimal` 只定义近期支持边界，不缩减最终测试门槛。原作者已经设计好的 managed / Mono 测试资产仍应分阶段迁移，并最终全量跑通；同时用 `C:\study\wqaetly\new\NKGGameFramework` 作为第一批真实框架 workload，验证纯逻辑 DLL、async、轻量反射、序列化和后续引擎 bridge 在真实项目结构下是否成立。
+这里的 `minimal` 只定义近期支持边界，不缩减最终测试门槛。原作者已经设计好的 managed 测试源码素材仍应通过 `ManagedNet10.LegacyTests` 分阶段迁移，并最终全量跑通；同时用 `C:\study\wqaetly\new\NKGGameFramework` 作为第一批真实框架 workload，验证纯逻辑 DLL、async、轻量反射、序列化和后续引擎 bridge 在真实项目结构下是否成立。
 
 因此工作重点是：
 
-- 保留独立的 `coreclr-net10` / `minimal-net10` profile 边界，不污染现有 `mono45` / Unity profile。
+- 保留独立的 `coreclr-net10` / `minimal-net10` profile 边界；Mono profile 清理后，Unity/Godot 接入走 host bridge contract，不再复用 `mono45` BCL profile。
 - 基于 .NET 10 `System.Private.CoreLib` / CoreCLR VM 源码抽取 contract map，先定义 RuntimeType、RuntimeHandle、Assembly、Module、CustomAttribute、Span/Unsafe、单线程 Monitor/Task continuation 等 net10 façade；执行基准见 [`docs/net10-runtime-contract.md`](net10-runtime-contract.md)。
 - 重写 `coreclr-net10` 活跃路径的 model/façade，外部满足 CoreLib 期待，内部映射到 LeanCLR 自己的 `RtClass` / `RtMethodInfo` / `RtFieldInfo` / metadata cache / interpreter。
 - 只支持项目纯逻辑 DLL 实际使用到的核心类型、基础 IL、泛型、异常、委托、少量反射、必要 Span/Unsafe 和 host bridge API。
@@ -40,9 +40,8 @@ flowchart TD
     C --> D["解析程序集引用和 BCL 搜索路径"]
     D --> E["选择 runtime API profile"]
 
-    E --> F{"profile"}
-    F --> F1["mono45: mscorlib"]
-    F --> F2["minimal-net10: 项目纯逻辑 DLL 所需 BCL/API 子集"]
+    E --> F["coreclr-net10 / minimal-net10"]
+    F --> F2["项目纯逻辑 DLL 所需 BCL/API 子集"]
 
     F2 --> G["加载 minimal profile 所需核心程序集"]
     G --> H["初始化核心类型：Object/String/Array/Type/Exception/Delegate"]
@@ -99,9 +98,8 @@ flowchart TD
     D --> E["注册 ICALL / Intrinsic / PInvoke / Host Bridge"]
     E --> F["加载 corlib"]
 
-    F --> G{"profile"}
-    G --> G1["mono45: mscorlib"]
-    G --> G2["minimal-net10: 受控核心程序集"]
+    F --> G["coreclr-net10 / minimal-net10"]
+    G --> G2["受控核心程序集"]
 
     G2 --> H["加载用户 DLL"]
     H --> I["解析 AssemblyRef / TypeRef / MemberRef"]
@@ -356,7 +354,7 @@ flowchart TD
 | 阶段 | 目标 | 验收方式 |
 | --- | --- | --- |
 | 1. minimal net10 解释执行基线 | `ManagedNet10.Smoke` 和最小真实纯逻辑 DLL 的核心入口稳定通过 | `scripts/dotnet10/interp-smoke.ps1 -Configuration Release` 加真实 DLL smoke |
-| 2. 原作者测试资产迁移 | 将已有 managed / Mono 测试按能力分层迁入 `.NET 10` 验证路径 | 每批迁移测试通过；最终全量跑通才算 LeanCLR 自身能力合格 |
+| 2. 原作者测试资产迁移 | 将已有 managed 测试源码按能力分层迁入 `.NET 10` 验证路径 | 每批迁移测试通过；最终全量跑通才算 LeanCLR 自身能力合格 |
 | 3. API 白名单与静态扫描 | 定义允许的 BCL/API 集合，并扫描 `AssemblyRef` / `TypeRef` / `MemberRef` | 白名单外 API 在构建或加载阶段给出明确错误 |
 | 4. NKGGameFramework 真实 workload | 用 `C:\study\wqaetly\new\NKGGameFramework` 的核心 `net10.0` 逻辑库验证真实项目 | NKG core smoke 通过，且不依赖完整 `Microsoft.NETCore.App` |
 | 5. Host Bridge ABI | 定义 Unity/Godot 共用的对象 handle、函数表、dispatcher、异常返回协议 | native mock host 可调用托管入口并返回 |
@@ -366,10 +364,10 @@ flowchart TD
 
 ## 设计原则
 
-- profile 必须隔离：`mono45`、Unity、`coreclr-net10` 不应混用同一份 runtime API catalog。
+- profile 必须收敛：当前仓库只保留 `coreclr-net10` active catalog；Unity/Godot 通过 host bridge 扩展，不新增 `mono45` BCL 兼容路径。
 - 先解释执行，再 AOT：解释路径更适合证明 BCL/runtime contract 正确。
 - 先小入口，再真实纯逻辑 workload：每个缺口都用可复现 smoke 固定住，不按完整 BCL 面积扩张。
-- 测试资产不缩水：原作者已有 managed / Mono 测试可以分阶段迁移，但最终要全量跑通，不能以精选通过替代合格线。
+- 测试资产不缩水：原作者已有 managed 测试源码素材可以分阶段迁移，但最终要全量跑通，不能以精选通过替代合格线。
 - 白名单优先于兼容幻想：不支持的 BCL/API 应尽早诊断，而不是在运行中随机失败。
 - 引擎桥接使用 opaque handle：托管层不能依赖 Unity/Godot 内部对象布局。
 - 所有跨边界调用要可诊断：缺 API、签名不匹配、越界调度、对象已销毁都应给出清晰错误。

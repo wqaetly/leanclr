@@ -31,13 +31,7 @@ RtResult<metadata::RtAssembly*> Assembly::load_corlib()
         RET_OK(loaded_corlib);
     }
 
-    auto coreclr_corlib = load_by_name_impl(STR_SYSTEM_PRIVATE_CORELIB_NAME, false);
-    if (!coreclr_corlib.is_err())
-    {
-        return coreclr_corlib;
-    }
-
-    return load_by_name(STR_CORLIB_NAME);
+    return load_by_name(STR_SYSTEM_PRIVATE_CORELIB_NAME);
 }
 
 metadata::RtAssembly* Assembly::get_corlib()

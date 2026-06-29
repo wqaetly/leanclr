@@ -211,8 +211,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("mono45", "unity", "coreclr-net10"),
-        help="Runtime API profile. mono45 uses src/libraries/mono-4.5 externs; coreclr-net10 uses artifacts/dotnet10-externs.",
+        choices=("coreclr-net10",),
+        help="Runtime API profile. coreclr-net10 uses artifacts/dotnet10-externs.",
     )
     parser.add_argument(
         "--repo-root",
@@ -282,16 +282,7 @@ def collect_extern_paths(args: argparse.Namespace, repo_root: Path) -> list[Path
 
     externs_dir = args.externs_dir
     if args.profile and not extern_paths and externs_dir is None:
-        if args.profile in ("mono45", "unity"):
-            mono45_dir = repo_root / "src" / "libraries" / "mono-4.5"
-            extern_paths.extend(
-                [
-                    mono45_dir / "mscorlib_externs.txt",
-                    mono45_dir / "System_externs.txt",
-                    mono45_dir / "System.Core_externs.txt",
-                ]
-            )
-        elif args.profile == "coreclr-net10":
+        if args.profile == "coreclr-net10":
             externs_dir = repo_root / "artifacts" / "dotnet10-externs"
 
     if externs_dir is not None:
@@ -312,9 +303,6 @@ def resolve_runtime_api_dir(args: argparse.Namespace, repo_root: Path) -> Path |
     profile_dir = repo_root / "src" / "leanaot" / "LeanAOT" / "runtime-apis" / args.profile
     if profile_dir.is_dir():
         return profile_dir
-
-    if args.profile in ("mono45", "unity"):
-        return repo_root / "src" / "leanaot" / "LeanAOT"
 
     return profile_dir
 

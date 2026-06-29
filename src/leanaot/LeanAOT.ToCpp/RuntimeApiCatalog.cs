@@ -217,8 +217,13 @@ namespace LeanAOT.ToCpp
 
             if (string.IsNullOrWhiteSpace(profileName))
             {
-                var mono45ProfileDirectory = Path.Combine(runtimeApisRoot, "mono45");
-                return Directory.Exists(mono45ProfileDirectory) ? mono45ProfileDirectory : normalizedBaseDirectory;
+                var coreClrProfileDirectory = Path.Combine(runtimeApisRoot, "coreclr-net10");
+                if (!Directory.Exists(coreClrProfileDirectory))
+                {
+                    throw new DirectoryNotFoundException($"Default runtime API profile 'coreclr-net10' was not found under: {runtimeApisRoot}");
+                }
+
+                return coreClrProfileDirectory;
             }
 
             var profileDirectory = Path.Combine(runtimeApisRoot, profileName.Trim());
@@ -237,9 +242,7 @@ namespace LeanAOT.ToCpp
                 return profileName.Trim();
             }
 
-            return string.Equals(Path.GetFileName(catalogDirectory), "mono45", StringComparison.OrdinalIgnoreCase)
-                ? "mono45"
-                : "legacy";
+            return Path.GetFileName(catalogDirectory);
         }
 
         private static HashSet<string> LoadCoreLibraryModules(string catalogDirectory, string profileName, JsonSerializerOptions options)
@@ -262,24 +265,19 @@ namespace LeanAOT.ToCpp
 
         private static IEnumerable<string> GetDefaultCoreLibraryModules(string profileName)
         {
-            if (string.Equals(profileName, "coreclr-net10", StringComparison.OrdinalIgnoreCase))
+            return new[]
             {
-                return new[]
-                {
-                    "System.Private.CoreLib",
-                    "System.Runtime",
-                    "System.Console",
-                    "System.Collections",
-                    "System.Linq",
-                    "System.Threading",
-                    "System.Runtime.InteropServices",
-                    "System.Reflection",
-                    "netstandard",
-                    "LeanCLR",
-                };
-            }
-
-            return new[] { "mscorlib", "System", "System.Core", "LeanCLR" };
+                "System.Private.CoreLib",
+                "System.Runtime",
+                "System.Console",
+                "System.Collections",
+                "System.Linq",
+                "System.Threading",
+                "System.Runtime.InteropServices",
+                "System.Reflection",
+                "netstandard",
+                "LeanCLR",
+            };
         }
 
         private static HashSet<string> CreateCoreLibraryModuleSet(IEnumerable<string> moduleNames, string source)

@@ -127,7 +127,7 @@ internal class Program
         [Option("leanaot-may-throw-exception-in-icall", Required = false, HelpText = "LeanAOT-only: enable may throw exception in icall (default off).")]
         public bool LeanAotMayThrowExceptionInIcall { get; set; }
 
-        [Option("leanaot-runtime-api-profile", Required = false, HelpText = "LeanAOT-only: runtime API profile to load, e.g. mono45 or coreclr-net10. Defaults to LEANCLR_RUNTIME_API_PROFILE or mono45.")]
+        [Option("leanaot-runtime-api-profile", Required = false, HelpText = "LeanAOT-only: runtime API profile to load. Defaults to LEANCLR_RUNTIME_API_PROFILE or coreclr-net10.")]
         public string LeanAotRuntimeApiProfile { get; set; }
 
         [Option("leanaot-unity-version", Required = false, HelpText = "LeanAOT-only: Unity editor version string (e.g. 6000.0.4f1).")]
@@ -235,7 +235,7 @@ internal class Program
         var profile = string.IsNullOrWhiteSpace(requestedProfile)
             ? Environment.GetEnvironmentVariable("LEANCLR_RUNTIME_API_PROFILE")
             : requestedProfile;
-        var catalog = RuntimeApiCatalog.LoadFromDirectory(baseDir, string.IsNullOrWhiteSpace(profile) ? "mono45" : profile.Trim());
+        var catalog = RuntimeApiCatalog.LoadFromDirectory(baseDir, string.IsNullOrWhiteSpace(profile) ? "coreclr-net10" : profile.Trim());
         s_logger.Info(
             "Loaded runtime API profile {0} from {1}: core_modules={2}, icalls={3}, intrinsics={4}, icalls_newobj={5}, intrinsics_newobj={6}, static_linked_pinvoke_dlls={7}, static_linked_pinvoke_methods={8}",
             catalog.ProfileName,
