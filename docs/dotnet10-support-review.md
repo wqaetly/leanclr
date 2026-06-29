@@ -1270,6 +1270,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 本轮未新增 runtime façade；现有 array slot 扫描按运行时对象继续递归的语义已足够支撑该旧用例切片。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcScanArrayNonSealedElement`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
 
+2026-06-29 迁移旧 `TC_GC_InstanceFields` 用例：
+
+- 将旧 `GcTests.Scan.TC_GC_InstanceFields` 链接进 `ManagedNet10.LegacyTests`，新增 `RunGcScanInstanceFields` 定位入口。
+- 该旧用例覆盖直接 reference field、两个 reference field 的 container rooting、container 不可达后 child 回收、string field 保活与 clear、base/derived 继承字段、嵌套 struct reference field、object 持有 array field、primitive-only object、替换 reference field 后旧 child 回收，以及 null reference field 不误标记无关对象。
+- 本轮未新增 runtime façade；当前 object scanner 已能处理实例字段、继承字段、嵌套 struct reference、string、array field、primitive-only object，以及 replaced/null field 的正确标记语义。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcScanInstanceFields`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 和 `git diff --check` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
