@@ -34,6 +34,7 @@
 | P0.6 RunAll 重新分层 | delegate 切片通过后重新跑 `ManagedNet10.LegacyTests.Program::RunAll`，把后续失败归类为 contract、façade、VM 通用语义或白名单外 API | `ManagedNet10.LegacyTests.Program::RunAll` 通过 | 保留为 P0 回归基线，不作为设计来源 |
 | P1.1 CustomAttributeData metadata-only | `RuntimeCustomAttributeData` 最小路径可从 assembly / module / type / field / method / parameter / property / event target 的 metadata blob 解出 constructor arguments、property named argument 和 field named argument，不需要实例化 attribute；同时覆盖 enum、Type、int[]、Type[]、object、object[]、named enum/type/array/object 等 Odin/NKG 常见 blob 形状 | `ManagedNet10.Smoke.Program::TestCustomAttributeDataOnly` 纳入默认 smoke；`interp-smoke.ps1 -Configuration Release` 通过 | 继续接 NKG/Odin 轻量 attribute 枚举作为真实 workload gate |
 | P1.2 NKG/Odin light workload | `ManagedNet10.NkgSmoke` 使用真实 NKGGameFramework、OdinSerializer 与 UniTask `net10.0` 输出目录验证轻量反射、attribute 枚举和白名单 API 边界；默认 sampler/Hosting 完整面仍在第一阶段外 | `scripts/dotnet10/api-scan.ps1` 扫描 NKG core/Odin/UniTask：unsupported `0`；`scripts/dotnet10/nkg-smoke.ps1` 通过 | 保留为真实 workload gate；后续失败按 contract、façade、VM 通用语义或白名单外 API 归类 |
+| P1.3 Thread / Monitor / WaitHandle bounded semantics | 单线程 profile 下补齐 `CurrentManagedThreadId`、Monitor fast path / wait PInvoke、ThreadPool sizing / queue dispatch、ManualResetEvent / WaitAny 最小路径；复杂并行调度仍不承诺 | `ManagedNet10.LegacyTests.Program::RunCorlibThreading` 通过；`ManagedNet10.LegacyTests.Program::RunCorlibMonitor` 通过 | 保留为 threading regression gate；后续 Task/dispatcher 只接可控 continuation |
 
 下一批次：
 
@@ -203,20 +204,27 @@
 
 外部形状：
 
-- 单线程 profile 下，`Thread.CurrentThread`、`Monitor.Enter/Exit/TryEnter/IsEntered` 和基础 `Task` continuation 有最小语义。
-- blocking wait、ThreadPool、Timer、complex async scheduler 必须明确分级。
+- 单线程 profile 下，`Thread.CurrentThread`、`Environment.CurrentManagedThreadId`、`Monitor.Enter/Exit/TryEnter/IsEntered/Wait/Pulse` 和基础 `Task` continuation 有最小语义。
+- `ManualResetEvent` / `WaitHandle.WaitOne` / `WaitHandle.WaitAny` 支持由 runtime 创建的事件 handle 和受控 timeout。
+- `ThreadPool.GetMinThreads/GetMaxThreads/GetAvailableThreads/SetMinThreads/SetMaxThreads` 返回逻辑容量；`QueueUserWorkItem` 可触发 callback，但不承诺真实并行 worker。
+- blocking wait、Timer、complex async scheduler、跨线程取消和真实 OS thread affinity 必须明确分级。
 
 内部映射：
 
 - 第一阶段以单线程 frame scheduler / host dispatcher 为边界。
-- `Monitor.Wait` / CoreLib generated PInvoke path 若无法安全支持，应给出明确 `NotSupported`，不能静默挂起。
+- `Monitor.Wait` / CoreLib generated PInvoke path 映射到 `vm::Monitor::monitor_wait`，只保证当前单线程 runtime 可控场景。
+- `WaitHandle` generated PInvoke path 映射到 runtime 自建 `platform::EventHandle`，不接任意宿主 OS handle。
+- `ThreadPool` sizing 是逻辑状态，queue dispatch 走 LeanCLR 调用边界，不扩展为完整 work-stealing pool。
 - async continuation 优先映射到 LeanCLR frame pump 或宿主主线程 dispatcher。
 
 验收入口：
 
 - `lock` / `Monitor.Enter` / `Monitor.Exit`。
+- `Monitor.TryEnter` / `Monitor.IsEntered` / `Monitor.Wait` / `Pulse`。
+- `ManualResetEvent.WaitOne(0)` 和 `WaitHandle.WaitAny(..., 0)`。
+- `ThreadPool.QueueUserWorkItem`、`GetAvailableThreads`、`GetMaxThreads`。
 - `Task.Yield()` 的可控 continuation。
-- `System.Threading.Monitor::<Wait>g____PInvoke|24_0` 当前作为阻塞点记录。
+- `System.Threading.Monitor::<Wait>g____PInvoke|24_0`、`System.Threading.WaitHandle::<WaitOneCore>g____PInvoke|0_0`、`System.Threading.WaitHandle::<WaitMultipleIgnoringSyncContext>g____PInvoke|2_0`。
 
 ### 9. Host Bridge
 
@@ -270,7 +278,8 @@ ABI 分组：
 | `System.Delegate::GetInvokeMethod` / `GetMulticastInvoke` | delegate reflection / multicast | `MethodTable*` façade -> delegate `RtClass` -> invoke method | 部分完成，仍需修复 multicast allocation |
 | `System.RuntimeTypeHandle::InternalAllocNoChecks_FastPath(System.Runtime.CompilerServices.MethodTable*)` | `MulticastDelegate.NewMulticastDelegate` | `MethodTable*` façade -> `RtClass` -> object allocation | 已修复，`RunRuntimeDelegateDynamicInvoke` 通过 |
 | `System.RuntimeFieldHandle::<GetRVAFieldInfo>g____PInvoke|24_0` | Span/RVA initializer | `RtFieldInfo` RVA data | 已有修复需归档到 contract |
-| `System.Threading.Monitor::<Wait>g____PInvoke|24_0` | full smoke blocker | single-thread wait policy | P0 诊断或受限实现 |
+| `System.Threading.Monitor::<Wait>g____PInvoke|24_0` | Monitor wait / pulse | `vm::Monitor::monitor_wait` -> single-thread controlled wait | 已桥接，`RunCorlibMonitor` 通过 |
+| `System.Threading.WaitHandle::<WaitOneCore>g____PInvoke|0_0` / `WaitMultipleIgnoringSyncContext` | ManualResetEvent / WaitAny | runtime `EventHandle` -> `Kernel32` façade wait helpers | 已桥接，`RunCorlibThreading` 通过 |
 
 ## 迁移顺序
 
