@@ -48,6 +48,11 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_callvir_aot));
         }
 
+        public static void RunFunctionCallvirtInterp()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.Instruments.Funcs.TC_callvir_interp));
+        }
+
         public static void RunFunctionAotParamReturn()
         {
             LegacyTestRunner.RunTypes(

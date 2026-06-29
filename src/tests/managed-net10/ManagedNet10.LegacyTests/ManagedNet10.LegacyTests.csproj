@@ -141,6 +141,12 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Exceptions\*.cs" LinkBase="Instructions\Exceptions" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Fields\*.cs" LinkBase="Instructions\Fields" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInherenGenericAotValue.cs" Link="Instructions\Funcs\ForInherenGenericAotValue.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInhereInterpClass.cs" Link="Instructions\Funcs\ForInhereInterpClass.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInhereInterpValue.cs" Link="Instructions\Funcs\ForInhereInterpValue.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInherenGenericInterpValue.cs" Link="Instructions\Funcs\ForInherenGenericInterpValue.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\IInterpBar.cs" Link="Instructions\Funcs\IInterpBar.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\IInterpFoo.cs" Link="Instructions\Funcs\IInterpFoo.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\IInterpRun.cs" Link="Instructions\Funcs\IInterpRun.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInhereAotClass.cs" Link="Instructions\Funcs\ForInhereAotClass.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInhereAotValue.cs" Link="Instructions\Funcs\ForInhereAotValue.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\ForInterpCtorParam.cs" Link="Instructions\Funcs\ForInterpCtorParam.cs" />
@@ -149,6 +155,7 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_aot_return.cs" Link="Instructions\Funcs\TC_call_aot_return.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_interp.cs" Link="Instructions\Funcs\TC_call_interp.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_callvir_aot.cs" Link="Instructions\Funcs\TC_callvir_aot.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_callvir_interp.cs" Link="Instructions\Funcs\TC_callvir_interp.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_ldftn.cs" Link="Instructions\Funcs\TC_ldftn.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_ldvirftn.cs" Link="Instructions\Funcs\TC_ldvirftn.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_newobj_aot.cs" Link="Instructions\Funcs\TC_newobj_aot.cs" />
