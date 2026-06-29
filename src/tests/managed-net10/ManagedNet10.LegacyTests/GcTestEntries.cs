@@ -20,6 +20,12 @@ namespace ManagedNet10.LegacyTests
         public static void RunGcRoots()
         {
             LegacyTestRunner.RunType(typeof(TC_GC_Roots));
+            RunGcStaticBitmapBitZero();
+        }
+
+        public static void RunGcStaticBitmapBitZero()
+        {
+            LegacyTestRunner.RunType(typeof(TC_GC_StaticBitmapBitZero));
         }
 
         public static void RunGcHandles()

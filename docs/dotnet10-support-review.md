@@ -1230,6 +1230,12 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 删除本地 `GcNet10RootHandleTests` 精简替代类；当前覆盖直接来自旧 roots / handles 素材，包括静态 object/string/value-type/array/container 根、实例字段链、继承字段链、strong/weak/pinned handle、多 weak handle 和强 handle 传递标记。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcRootsAndHandles`、`ManagedNet10.LegacyTests.Program::RunAll` 和默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 均通过。
 
+2026-06-29 迁移旧 static GC bitmap bit 0 regression：
+
+- 将旧 `GcTests.Roots.TC_GC_StaticBitmapBitZero` 链接进 `ManagedNet10.LegacyTests`，新增 `RunGcStaticBitmapBitZero` 定位入口，并把该入口纳入 `RunGcRoots` 分组。
+- 该旧用例覆盖 static object field 位于 layout offset 0、static value type 第一个嵌套引用位于 layout offset 0，以及清空 offset 0 静态根后弱句柄可被回收，防止 `static_gc_bitmap` finalize 把 `max_bitmap_index == 0` 误判为空 bitmap。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcStaticBitmapBitZero`、`ManagedNet10.LegacyTests.Program::RunAll` 和默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
