@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已启动托管 wrapper contract，下一步转向真实 Unity/Godot 接入面的最小闭环。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已启动托管 wrapper contract 和 engine binding minimal adapter，下一步转向 value marshal / property-call 的最小引擎交互面。
 
 已验证切片：
 
@@ -44,12 +44,13 @@
 | P2.3 Main-thread dispatcher | 在 host function table 中定义主线程投递、next-frame pump、同步调用和 reentry guard；mock host 只承诺 FIFO 队列、受控 pump、callback 结果回传和托管异常诊断，不扩展完整 ThreadPool | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Dispatcher` 通过 | 保留为 dispatcher regression gate；event/callback bridge 必须通过同一主线程队列回到托管调用边界 |
 | P2.4 Event / callback bridge | 在 host function table 中定义 event subscription token、取消订阅和宿主事件触发；mock host 触发事件时先投递到主线程 dispatcher，再由 pump 进入托管回调边界，取消订阅后触发为 no-op | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EventCallback` 通过 | 保留为 event/callback regression gate；真实 UnityEvent / Godot Signal 和复杂 Variant marshal 后置 |
 | P3.1 Managed host wrapper contract | 新增 `ManagedNet10.Smoke.HostBridgeWrapperSmoke`，定义托管侧 `HostObject` / `HostEventSubscription` / `HostDispatcher` 最小 wrapper contract；wrapper 只保存 opaque handle / subscription token，通过 mock bridge 把 host status 转成 `ObjectDisposedException` 或 `HostBridgeException` | `scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.HostBridgeWrapperSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0`；P2 host bridge 四场景仍通过 | 保留为 managed wrapper regression gate；后续真实 Unity/Godot 接入必须先落到同一 wrapper contract，再连接具体引擎对象模型 |
+| P3.2 Engine binding minimal adapter | 新增 native `EngineAdapter` mock 场景和 `ManagedNet10.Smoke.EngineBindingSmoke`，把引擎节点创建、事件订阅、事件触发、主线程 pump 和宿主销毁诊断串到 P2/P3.1 contract；托管 `EngineNode` 只持有 `HostObject`，不接触真实引擎指针 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EngineAdapter` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.EngineBindingSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 engine binding adapter regression gate；后续属性/方法调用必须继续经过 opaque handle、dispatcher 和明确 value marshal |
 
 下一批次：
 
 | 批次 | 目标 | 输出 | 验收 |
 | --- | --- | --- | --- |
-| P3.2 Engine binding minimal adapter | 定义 Unity/Godot 共用的最小 adapter seam，把真实引擎对象创建、事件触发和主线程 pump 接到 P2/P3.1 contract | native adapter stub + managed binding smoke | 不扩大 BCL 面，真实对象仍经 opaque handle / dispatcher / subscription token |
+| P3.3 Value marshal / property-call adapter | 定义 bool/int/float/string 与小 struct 的最小 value marshal，以及引擎属性 get/set / command 调用的错误转换 | native value marshal stub + managed property smoke | 不引入复杂 Variant / UnityEngine.Object 语义；失败仍走 host status + managed exception |
 
 ## 非目标
 
@@ -340,6 +341,8 @@ P2 验收命令使用独立脚本，避免混入 BCL smoke：
 P3 托管 wrapper 验收命令：
 
 - `scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.HostBridgeWrapperSmoke::Run"`（已通过）。
+- `scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.EngineBindingSmoke::Run"`（已通过）。
+- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EngineAdapter`（已通过）。
 - `scripts/dotnet10/api-scan.ps1 -Configuration Release`（已通过，unsupported `0`）。
 
 验收入口：
@@ -350,6 +353,7 @@ P3 托管 wrapper 验收命令：
 - 托管 delegate 注册为宿主事件回调，触发后返回成功或托管异常诊断。
 - 宿主对象销毁后再次访问 wrapper，稳定输出 ObjectDisposed / MissingReference 风格诊断。
 - 托管 `HostObject` / `HostEventSubscription` wrapper 的释放、重复释放、事件订阅取消和 host status 到托管异常的转换。
+- 托管 `EngineNode` binding 只通过 `HostObject`、dispatcher 和 subscription token 操作 mock engine adapter。
 
 ### 10. System.IO / Platform PInvoke
 

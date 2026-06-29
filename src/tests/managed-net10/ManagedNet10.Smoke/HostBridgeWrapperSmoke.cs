@@ -87,6 +87,94 @@ public static class HostBridgeWrapperSmoke
     }
 }
 
+public static class EngineBindingSmoke
+{
+    public static void Run()
+    {
+        var bridge = new MockHostBridge();
+        using var node = EngineNode.Create(bridge, "Player");
+        Require(node.Handle != 0, "engine node did not receive a host handle");
+        Require(node.Name == "Player", "engine node name was not preserved");
+
+        var readyCount = 0;
+        using (var ready = node.OnReady(() => readyCount++))
+        {
+            bridge.TriggerEvent(ready.Token);
+            Require(readyCount == 0, "engine binding event ran inline");
+            HostDispatcher.PumpMainThread(bridge);
+            Require(readyCount == 1, "engine binding event did not use dispatcher");
+
+            ready.Dispose();
+            bridge.TriggerEvent(ready.Token);
+            HostDispatcher.PumpMainThread(bridge);
+            Require(readyCount == 1, "disposed engine binding event should not run");
+        }
+
+        bridge.NotifyDestroyed(node.Handle);
+        ExpectObjectDisposed(static state => ((EngineNode)state!).EnsureAlive(), node);
+        node.Dispose();
+        node.Dispose();
+    }
+
+    private static void ExpectObjectDisposed(Action<object?> action, object? state)
+    {
+        try
+        {
+            action(state);
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException("expected ObjectDisposedException");
+    }
+
+    private static void Require([DoesNotReturnIf(false)] bool condition, string message)
+    {
+        if (!condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+}
+
+internal sealed class EngineNode : IDisposable
+{
+    private readonly HostObject _hostObject;
+
+    private EngineNode(HostObject hostObject, string name)
+    {
+        _hostObject = hostObject;
+        Name = name;
+    }
+
+    public string Name { get; }
+
+    public ulong Handle => _hostObject.Handle;
+
+    public static EngineNode Create(MockHostBridge bridge, string name)
+    {
+        return new EngineNode(HostObject.Create(bridge, "MockEngine.Node", name), name);
+    }
+
+    public HostEventSubscription OnReady(Action callback)
+    {
+        EnsureAlive();
+        return _hostObject.Subscribe("Ready", callback);
+    }
+
+    public void EnsureAlive()
+    {
+        _hostObject.EnsureAlive();
+    }
+
+    public void Dispose()
+    {
+        _hostObject.Dispose();
+    }
+}
+
 internal enum HostBridgeStatus
 {
     Ok = 0,

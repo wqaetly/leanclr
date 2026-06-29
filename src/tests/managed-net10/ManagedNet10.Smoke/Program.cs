@@ -180,6 +180,7 @@ internal static class Program
         TestRuntimeHelpers();
         TestThreadingSubset();
         HostBridgeWrapperSmoke.Run();
+        EngineBindingSmoke.Run();
         await TestAsync();
     }
 

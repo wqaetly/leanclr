@@ -55,6 +55,13 @@ struct MockDispatchPayload
     bool fail = false;
 };
 
+struct MockEngineAdapter
+{
+    LeanClrHostBridgeFunctions* functions = nullptr;
+    LeanClrHostHandle player_handle = 0;
+    LeanClrHostSubscription ready_subscription = 0;
+};
+
 void mock_log(void* user_data, int32_t level, const char* message)
 {
     auto* state = static_cast<MockHostState*>(user_data);
@@ -810,6 +817,104 @@ bool run_event_callback()
 
     return true;
 }
+
+bool run_engine_adapter()
+{
+    MockHostState state;
+    auto functions = make_mock_functions(&state);
+    MockEngineAdapter adapter{&functions};
+    LeanClrHostBridgeError error{};
+
+    auto status = LeanClrHostBridge_ValidateFunctions(
+        adapter.functions,
+        LEANCLR_HOST_BRIDGE_CAP_HANDLE_REGISTRY |
+            LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH |
+            LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK,
+        &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "engine adapter function table should be accepted"))
+    {
+        return false;
+    }
+
+    status = adapter.functions->create_handle(adapter.functions->user_data,
+                                              "MockEngine.Node",
+                                              "Player",
+                                              &adapter.player_handle,
+                                              &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && adapter.player_handle != 0,
+                 "engine adapter should create an opaque node handle"))
+    {
+        return false;
+    }
+    if (!require(state.handles[adapter.player_handle].type_name == "MockEngine.Node",
+                 "engine adapter should keep native object identity behind the handle"))
+    {
+        return false;
+    }
+
+    MockDispatchPayload ready_payload{&state, 42, false};
+    status = adapter.functions->subscribe_event(adapter.functions->user_data,
+                                                adapter.player_handle,
+                                                "Ready",
+                                                mock_dispatch_callback,
+                                                &ready_payload,
+                                                &adapter.ready_subscription,
+                                                &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && adapter.ready_subscription != 0,
+                 "engine adapter should subscribe by token"))
+    {
+        return false;
+    }
+
+    status = adapter.functions->trigger_event(adapter.functions->user_data, adapter.ready_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && state.dispatch_order.empty(),
+                 "engine event should enqueue through the host dispatcher"))
+    {
+        return false;
+    }
+
+    uint32_t executed = 0;
+    status = adapter.functions->pump_main_thread(adapter.functions->user_data, 0, &executed, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && executed == 1 && state.dispatch_order.size() == 1 && state.dispatch_order[0] == 42,
+                 "engine event should run on the main-thread pump"))
+    {
+        return false;
+    }
+
+    status = adapter.functions->notify_handle_destroyed(adapter.functions->user_data, adapter.player_handle, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "engine destroy should invalidate the handle"))
+    {
+        return false;
+    }
+
+    int32_t alive = 1;
+    status = adapter.functions->is_handle_alive(adapter.functions->user_data, adapter.player_handle, &alive, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && alive == 0,
+                 "engine adapter should expose destroyed objects as not alive"))
+    {
+        return false;
+    }
+
+    status = adapter.functions->trigger_event(adapter.functions->user_data, adapter.ready_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED && error.message != nullptr,
+                 "engine event on a destroyed source should return a diagnostic"))
+    {
+        return false;
+    }
+
+    status = adapter.functions->unsubscribe_event(adapter.functions->user_data, adapter.ready_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "engine adapter unsubscribe should succeed"))
+    {
+        return false;
+    }
+    status = adapter.functions->unsubscribe_event(adapter.functions->user_data, adapter.ready_subscription, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "engine adapter duplicate unsubscribe should be idempotent"))
+    {
+        return false;
+    }
+
+    return true;
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -864,6 +969,17 @@ int main(int argc, char** argv)
         }
 
         std::cout << "ok! host bridge EventCallback" << std::endl;
+        return 0;
+    }
+
+    if (scenario == "EngineAdapter")
+    {
+        if (!run_engine_adapter())
+        {
+            return 1;
+        }
+
+        std::cout << "ok! host bridge EngineAdapter" << std::endl;
         return 0;
     }
 
