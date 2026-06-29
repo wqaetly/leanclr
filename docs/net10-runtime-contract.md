@@ -224,17 +224,35 @@
 
 - 托管代码通过稳定 ABI 调用 Unity/Godot 宿主服务。
 - 引擎对象通过 opaque handle 暴露，不让托管对象持有真实引擎指针。
+- 托管 wrapper 可表现为普通 C# 对象、属性、事件和 delegate，但跨边界只传递基础值、字符串、托管对象引用、opaque handle 和明确 layout 的小 struct。
+- 引擎回调托管代码必须重新进入 LeanCLR 调用边界，由 runtime 负责异常捕获、返回值 marshal 和 GC root 生命周期。
 
 内部映射：
 
-- host function table / PInvoke / internal call 三者只能选定一种主路径后 profile 化。
-- handle registry、主线程 dispatcher、错误转换和生命周期释放由宿主侧负责。
+- 第一阶段主路径采用 host function table：宿主在 runtime 初始化时注册版本号、能力 flags 和函数表；PInvoke / internal call 只作为 façade，不直接绑定 Unity/Godot C++ 对象布局。
+- handle registry 由宿主侧持有真实引擎对象，LeanCLR 只保存不透明整数 / 指针形 handle；访问时必须校验 handle 是否仍有效。
+- 主线程 dispatcher 由宿主侧提供，LeanCLR 把需要引擎主线程的调用、托管回调和 `Task` continuation 投递到同一队列。
+- 错误转换采用显式状态码 + 可选错误字符串；host bridge 返回失败时，LeanCLR 转成托管异常，不把宿主异常对象跨 ABI 泄露。
+- 生命周期释放分为托管 wrapper 释放、GCHandle / delegate 订阅释放和宿主对象销毁三类；任意一侧销毁后 registry 必须让 handle 失效。
+
+ABI 分组：
+
+| 组 | 最小 contract | 第一阶段边界 |
+| --- | --- | --- |
+| Runtime | 初始化、关闭、设置搜索路径、加载 assembly、调用静态入口 | 不承诺完整 CoreCLR hosting API |
+| Object / Handle | 创建、查询、判活、retain/release、销毁通知 | handle 不暴露真实引擎指针和布局 |
+| Logging / Diagnostics | log、warning、error、托管异常栈回传 | 不要求宿主实现完整 debugger |
+| Scheduler | 主线程投递、下一帧执行、同步调用保护 | 阻塞 wait 和跨线程直接访问默认不支持 |
+| Event / Callback | 注册托管 delegate、取消注册、触发回调 | 订阅必须有可释放 token 或 handle |
+| Value Marshal | bool/int/float/string、opaque handle、小 struct、数组 view | 复杂 Variant / UnityEngine.Object 语义后置 |
 
 验收入口：
 
 - mock host 调用托管入口。
 - opaque handle 创建、查询、释放。
 - 主线程投递和结果回传。
+- 托管 delegate 注册为宿主事件回调，触发后返回成功或托管异常诊断。
+- 宿主对象销毁后再次访问 wrapper，稳定输出 ObjectDisposed / MissingReference 风格诊断。
 
 ## 初始 Contract Inventory
 
