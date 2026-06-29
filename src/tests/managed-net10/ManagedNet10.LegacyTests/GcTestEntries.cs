@@ -56,6 +56,11 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunType(typeof(TC_GC_InstanceFields));
         }
 
+        public static void RunGcScanValueTypes()
+        {
+            LegacyTestRunner.RunType(typeof(TC_GC_ValueTypes));
+        }
+
         public static void RunGcSweep()
         {
             LegacyTestRunner.RunType(typeof(TC_GC_Sweep));
