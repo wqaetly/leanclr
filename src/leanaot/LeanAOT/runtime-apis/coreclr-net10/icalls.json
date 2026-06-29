@@ -40,6 +40,11 @@
     "header": "icalls/system_gc.h"
   },
   {
+    "name": "System.GC::_CollectionCount(System.Int32,System.Int32)",
+    "func": "SystemGC::get_collection_count",
+    "header": "icalls/system_gc.h"
+  },
+  {
     "name": "System.GC::GetMaxGeneration()",
     "func": "SystemGC::get_max_generation",
     "header": "icalls/system_gc.h"
@@ -512,6 +517,11 @@
   {
     "name": "System.RuntimeTypeHandle::IsGenericVariable",
     "func": "SystemRuntimeTypeHandle::is_generic_variable",
+    "header": "icalls/system_runtimetypehandle.h"
+  },
+  {
+    "name": "System.RuntimeTypeHandle::ContainsGenericVariables(System.RuntimeType)",
+    "func": "SystemRuntimeTypeHandle::contains_generic_variables",
     "header": "icalls/system_runtimetypehandle.h"
   },
   {

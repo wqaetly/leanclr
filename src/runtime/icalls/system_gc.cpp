@@ -322,6 +322,8 @@ utils::Span<vm::InternalCallEntry> SystemGC::get_internal_call_entries() noexcep
     static vm::InternalCallEntry s_entries[] = {
         {"System.GC::get_ephemeron_tombstone", (vm::InternalCallFunction)&SystemGC::get_ephemeron_tombstone, get_ephemeron_tombstone_invoker},
         {"System.GC::register_ephemeron_array", (vm::InternalCallFunction)&SystemGC::register_ephemeron_array, register_ephemeron_array_invoker},
+        {"System.GC::_CollectionCount(System.Int32,System.Int32)", (vm::InternalCallFunction)&SystemGC::get_collection_count,
+         get_collection_count_invoker},
         {"System.GC::GetCollectionCount(System.Int32)", (vm::InternalCallFunction)&SystemGC::get_collection_count, get_collection_count_invoker},
         {"System.GC::GetMaxGeneration()", (vm::InternalCallFunction)&SystemGC::get_max_generation, get_max_generation_invoker},
         {"System.GC::InternalCollect(System.Int32)", (vm::InternalCallFunction)&SystemGC::internal_collect, internal_collect_invoker},

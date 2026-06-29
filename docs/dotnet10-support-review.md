@@ -1216,6 +1216,13 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 新增 `RunSamplerOdinRoundTripProbe` 作为后续缺口复现入口：它驱动到第 3 个 gameplay 帧并触发 SampleGame 的 `SaveSnapshot()`，当前在 `NKGGameFramework.Serialization.OdinGameSerializer::SerializeToBytes<NKGGameFramework.Sampler.GameSnapshot>` 入口抛 `System.BadImageFormatException`。这确认 Odin 序列化/反序列化往返仍未跑通，下一步需要沿该 probe 定位 generic method call / Odin serialization metadata 相关缺口。
 - 本机已验证默认 `scripts\dotnet10\nkg-smoke.ps1 -Configuration Release`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release`、`ManagedNet10.LegacyTests.Program::RunAll`、`scripts\dotnet10\api-scan.ps1 -Configuration Release` 和 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 均通过。并行跑两个 `interp-smoke.ps1` 会竞争同一个 CMake `ZERO_CHECK.lastbuildstate`，本轮已用串行重跑确认默认 smoke 通过。
 
+2026-06-29 补齐 `.NET 10` GC collection count 最小验证：
+
+- `.NET 10` 的 `GC.CollectionCount(int)` 走 `System.GC::_CollectionCount(System.Int32,System.Int32)` 私有入口，已把该入口加入 `coreclr-net10` runtime API catalog，并复用现有 `SystemGC::get_collection_count` invoker 注册到 runtime。
+- `ManagedNet10.LegacyTests` 新增 `RunGcCollection`，当前只纳入 `GcNet10CollectionTests` 的受控 minimal 语义：验证 generation 0 的 `GC.CollectionCount(0)` 可查询且非负，`GC.Collect()` 可调用且不会破坏后续 collection count 查询。
+- 原旧用例 `TC_GC_Collection` 暂未整类迁入：其断言要求 `GC.Collect()` 推进 collection count 和实际回收内存，但当前 `.NET 10` `_Collect` P/Invoke 在 LeanCLR 中仍是 no-op，以避免托管执行中强制收集造成未建模根集合风险。完整强制 GC / collection count 增长语义仍留在后续 GC 安全点与栈根建模工作中。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcCollection`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release`、`scripts\dotnet10\api-scan.ps1 -Configuration Release` 和 `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
