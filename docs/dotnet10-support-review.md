@@ -1224,6 +1224,12 @@ NKGGameFramework 应作为 `.NET 10` 接入的第一批真实 workload：它不�
 - 真实 collect 后会触发 CoreLib finalizer cleanup 路径；本轮补齐 `System.Threading.Thread::InternalFinalize()` internal call 和 `System.RuntimeMethodHandle::Destroy(System.RuntimeMethodHandleInternal)` P/Invoke façade，LeanCLR 当前没有对应 CoreCLR native allocation 需要释放，因此二者作为清理边界接受调用并返回。
 - 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcCollection`、`ManagedNet10.LegacyTests.Program::RunAll`、默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release`、`scripts\dotnet10\api-scan.ps1 -Configuration Release`、默认 `scripts\dotnet10\nkg-smoke.ps1 -Configuration Release`、`python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` 和 `git diff --check` 均通过。
 
+2026-06-29 整类迁移旧 `TC_GC_Roots` / `TC_GC_Handles`：
+
+- 将旧 `GcTests.Roots.TC_GC_Roots` 和 `GcTests.Handles.TC_GC_Handles` 链接进 `ManagedNet10.LegacyTests`，`RunGcRoots` / `RunGcHandles` 分别执行对应旧整类，`RunGcRootsAndHandles` 作为组合定位入口。
+- 删除本地 `GcNet10RootHandleTests` 精简替代类；当前覆盖直接来自旧 roots / handles 素材，包括静态 object/string/value-type/array/container 根、实例字段链、继承字段链、strong/weak/pinned handle、多 weak handle 和强 handle 传递标记。
+- 本机已验证 `ManagedNet10.LegacyTests.Program::RunGcRootsAndHandles`、`ManagedNet10.LegacyTests.Program::RunAll` 和默认 `scripts\dotnet10\interp-smoke.ps1 -Configuration Release` 均通过。
+
 仍未完成：
 
 - `ManagedNet10.Smoke` 已有默认子入口矩阵门禁，但仍需要继续按 minimal profile 整理：保留真实会用到的纯逻辑能力，继续拆分或标注仅用于 BCL 探路的深水区场景。
