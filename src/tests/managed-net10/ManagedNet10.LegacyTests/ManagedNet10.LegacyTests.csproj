@@ -78,13 +78,17 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTValueTypes.cs" Link="Fixtures\AOTValueTypes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\ArmHFAStructs.cs" Link="Fixtures\ArmHFAStructs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\BaseImplNone.cs" Link="Fixtures\BaseImplNone.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\CallFromNatives.cs" Link="Fixtures\CallFromNatives.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\CallDefs.cs" Link="Fixtures\CallDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\CustomAttributes.cs" Link="Fixtures\CustomAttributes.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\FullGenericClass.cs" Link="Fixtures\FullGenericClass.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\FunctionPointers.cs" Link="Fixtures\FunctionPointers.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\InnerTypes.cs" Link="Fixtures\InnerTypes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdftnDefs.cs" Link="Fixtures\LdftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdvirftnDefs.cs" Link="Fixtures\LdvirftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\MethodRefs.cs" Link="Fixtures\MethodRefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\NullableTypeUtil.cs" Link="Fixtures\NullableTypeUtil.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\Test.cs" Link="Fixtures\Test.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTCtorParam.cs" Link="Fixtures\TestAOTCtorParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTParam.cs" Link="Fixtures\TestAOTParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTReturn.cs" Link="Fixtures\TestAOTReturn.cs" />
@@ -96,7 +100,9 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeThreadStaticFields.cs" Link="Fixtures\TypeThreadStaticFields.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TypeThreadStaticFields2.cs" Link="Fixtures\TypeThreadStaticFields2.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\VectorTypes.cs" Link="Fixtures\VectorTypes.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\VirtualGenericMethod.cs" Link="Fixtures\VirtualGenericMethod.cs" />
     <Compile Include="AotTestEntries.cs" />
+    <Compile Include="..\..\managed\AotTests\App.cs" Link="AotTests\App.cs" />
     <Compile Include="..\..\managed\AotTests\TC_Call_AotInterp.cs" Link="AotTests\TC_Call_AotInterp.cs" />
     <Compile Include="..\..\managed\AotTests\TC_CallVir_AotInterp.cs" Link="AotTests\TC_CallVir_AotInterp.cs" />
     <Compile Include="..\..\managed\AotTests\TC_EvalStackNotEmpty.cs" Link="AotTests\TC_EvalStackNotEmpty.cs" />

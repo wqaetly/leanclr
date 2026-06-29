@@ -1,6 +1,6 @@
-# LeanCLR 如何承载 .NET 10：从 BCL 契约到运行时架构
+# 点亮CLR技能树：LeanCLR 全面接入 .NET 10 开发笔记
 
-`.NET 10` 支持听起来像是把项目文件里的 `TargetFramework` 改成 `net10.0`。对普通 C# 项目来说，这通常意味着“用新的 SDK 编译”。但对 LeanCLR 这类自研 runtime 来说，问题会下沉到更底层：它不只是要看懂用户写的代码，还要看懂 `.NET 10` 基础类库对运行时的要求。
+对普通 C# 项目来说，切换运行时通常意味着“用新的 SDK 编译”。但对 LeanCLR 这类自研 runtime 来说，问题会下沉到更底层：它不只是要看懂用户写的代码，还要看懂 `.NET 10` 基础类库对运行时的要求。
 
 LeanCLR 已经有自己的 metadata loader、类型系统、对象模型、解释器、GC、异常、委托、泛型、基础反射和 AOT 生成框架。因此，接入 `.NET 10` 不应被理解为重写一个完整 CLR。更准确地说，这是一次 **BCL 与 runtime contract 的 profile 化适配**：让 LeanCLR 能在明确边界内运行受控的 `net10.0` 纯逻辑程序集，同时把不支持的 BCL 能力暴露为清晰诊断。
 
@@ -383,35 +383,23 @@ flowchart TD
     Q --> R["返回托管世界继续执行"]
 ```
 
-`mono45` profile 下，core library 是 `mscorlib`，大量类型和 internal call 名称符合 Mono 4.5 的假设。`.NET 10` 下，core library 变成 `System.Private.CoreLib`，方法签名、类型布局、runtime handle 和内部调用链都可能不同。如果仍用 Mono-era 假设启动，就会在 core library 加载、核心类型初始化、反射句柄解析或 BCL runtime API 调用处失败。
+对 `coreclr-net10` 来说，图里的 profile 选择会把 core library 固定到 `System.Private.CoreLib`，把 BCL runtime API 固定到 `.NET 10` runtime pack 导出的入口和签名。如果这些入口没有被登记，或者登记后返回的对象形态不符合 `.NET 10` BCL 的预期，失败通常会出现在 core library 加载、核心类型初始化、反射句柄解析或 BCL runtime API 调用处。
 
 ## profile 是隔离边界
 
-profile 决定当前 runtime 面向哪套 BCL 和 runtime API contract。它不只是一个配置名，而是防止 Mono、Unity、CoreCLR 三套语义互相污染的架构边界。
+profile 决定当前 runtime 面向哪套 BCL 和 runtime API contract。本文只讨论 `coreclr-net10`，它的作用是把 `.NET 10` core library、runtime pack、runtime API catalog 和 LeanCLR native helper 绑定在同一条解释规则下。
 
 ```mermaid
 flowchart TD
-    A["选择 runtime API profile"] --> B{"profile"}
-    B --> C["mono45"]
-    B --> D["unity"]
-    B --> E["coreclr-net10"]
-
-    C --> C1["corlib: mscorlib"]
-    C --> C2["BCL: mono-4.5"]
-    C --> C3["API catalog: mono45 icall / intrinsic / pinvoke"]
-
-    D --> D1["corlib: Unity 对应核心库"]
-    D --> D2["BCL: Unity profile"]
-    D --> D3["API catalog: Unity 兼容入口"]
-
-    E --> E1["corlib: System.Private.CoreLib"]
-    E --> E2["BCL: Microsoft.NETCore.App runtime pack"]
-    E --> E3["API catalog: coreclr-net10"]
+    A["选择 coreclr-net10 profile"] --> B["core library: System.Private.CoreLib"]
+    A --> C["BCL 输入: .NET 10 runtime pack"]
+    A --> D["runtime API catalog: coreclr-net10"]
+    D --> E["icall / intrinsic / PInvoke entries"]
+    E --> F["LeanCLR C++ runtime helpers"]
+    F --> G["RtClass / RtMethodInfo / RtFieldInfo / metadata cache"]
 ```
 
-正确做法是让 corlib 识别、required type 表、internal call 表、intrinsic 表、P/Invoke facade、coverage 报告和诊断逻辑都跟随 profile 选择。
-
-不应该把 `.NET 10` 缺口直接塞进既有 `mono45` 表。否则一个为了适配 `System.Private.CoreLib` 的入口，可能会改变 Mono/Unity BCL 原本依赖的行为。
+正确做法是让 corlib 识别、required type 表、internal call 表、intrinsic 表、P/Invoke facade 和诊断逻辑都跟随 `coreclr-net10`。这样读者看到某个 BCL 入口时，可以一路追到它在 `.NET 10` runtime pack 中的来源、catalog 中的登记，以及 LeanCLR C++ runtime 里的实现。
 
 ## runtime API catalog 的作用
 
@@ -485,7 +473,7 @@ sequenceDiagram
 因此 `coreclr-net10` profile 需要偏向精确签名：
 
 - icall 注册以完整方法签名为主。
-- Mono-only 入口不应在 `System.Private.CoreLib` 路径下继续兜底。
+- 不属于 `coreclr-net10` catalog 的入口不应在 `System.Private.CoreLib` 路径下隐式兜底。
 - 找不到匹配项时应 fail fast，并输出 profile、方法签名和调用来源。
 
 ## CoreCLR contract 应映射到 LeanCLR 模型

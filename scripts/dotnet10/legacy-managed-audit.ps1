@@ -58,6 +58,8 @@ function Get-ActiveMarkers {
             $kind = "UnitTest"
         } elseif ($trimmed -match "Assert\.|Assert\(") {
             $kind = "Assert"
+        } elseif ($trimmed -match "\[AotMethod") {
+            $kind = "AotMethod"
         } elseif ($trimmed -match "public\s+static\s+void\s+Main\s*\(") {
             $kind = "Main"
         } elseif ($trimmed -match "public\s+static\s+void\s+[A-Za-z0-9_]+\s*\(") {
@@ -77,13 +79,59 @@ function Get-ActiveMarkers {
 }
 
 $allowedKindsByPath = @{
-    "AotTests\App.cs" = @("Main")
     "SharedTests\Instructions\Arithmetic\TC_sub.cs" = @("UnitTest", "Assert", "PublicStatic")
-    "SharedTests\Fixtures\CallFromNatives.cs" = @("PublicStatic")
-    "SharedTests\Fixtures\FullGenericClass.cs" = @("PublicStatic")
-    "SharedTests\Fixtures\FunctionPointers.cs" = @("PublicStatic")
-    "SharedTests\Fixtures\Test.cs" = @("PublicStatic")
-    "SharedTests\Fixtures\VirtualGenericMethod.cs" = @("PublicStatic")
+}
+
+function Get-UnitTestMethodNames {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $lines = Get-Content -LiteralPath $Path
+    $names = @()
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $trimmed = $lines[$i].TrimStart()
+        if ($trimmed.StartsWith("//", [System.StringComparison]::Ordinal)) {
+            continue
+        }
+        if ($trimmed -notmatch "^\[UnitTest\]") {
+            continue
+        }
+
+        for ($j = $i + 1; $j -lt [Math]::Min($i + 8, $lines.Count); $j++) {
+            $methodLine = $lines[$j]
+            if ($methodLine -match "public\s+static\s+void\s+(?<name>[A-Za-z0-9_]+)\s*\(") {
+                $names += $Matches.name
+                break
+            }
+        }
+    }
+
+    return $names | Sort-Object -Unique
+}
+
+function Assert-ReplacementUnitTestsMatch {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceRelativePath,
+        [Parameter(Mandatory = $true)][string]$ReplacementPath
+    )
+
+    $sourcePath = Join-Path $managedRoot $SourceRelativePath
+    $sourceNames = @(Get-UnitTestMethodNames -Path $sourcePath)
+    $replacementNames = @(Get-UnitTestMethodNames -Path $ReplacementPath)
+    $missing = @($sourceNames | Where-Object { $replacementNames -notcontains $_ })
+    $extra = @($replacementNames | Where-Object { $sourceNames -notcontains $_ })
+
+    if ($missing.Count -ne 0 -or $extra.Count -ne 0) {
+        $details = @()
+        if ($missing.Count -ne 0) {
+            $details += "missing replacement UnitTest methods: $($missing -join ', ')"
+        }
+        if ($extra.Count -ne 0) {
+            $details += "extra replacement UnitTest methods: $($extra -join ', ')"
+        }
+        throw "$SourceRelativePath replacement does not match source tests: $($details -join '; ')"
+    }
+
+    Write-Host "$SourceRelativePath replacement UnitTest methods matched: $($sourceNames.Count)"
 }
 
 $activeUnlinked = @()
@@ -137,5 +185,9 @@ if ($violations.Count -gt 0) {
     $violations | Sort-Object Path | Format-Table -AutoSize -Wrap
     throw "Legacy managed audit failed."
 }
+
+Assert-ReplacementUnitTestsMatch `
+    -SourceRelativePath "SharedTests\Instructions\Arithmetic\TC_sub.cs" `
+    -ReplacementPath ([System.IO.Path]::Combine($projectDir, "Instructions", "Arithmetic", "TC_sub.cs"))
 
 Write-Host "Legacy managed audit passed."
