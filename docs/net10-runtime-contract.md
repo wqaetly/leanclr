@@ -1,6 +1,6 @@
 # LeanCLR .NET 10 Runtime Contract Plan
 
-状态：第三版执行基准（2026-06-29）
+状态：第四版执行基准（2026-06-29，第一阶段完成审计通过）
 
 本文档是 `coreclr-net10` / `minimal-net10` 的 contract-first 改造清单。它回答两个问题：
 
@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已覆盖托管 wrapper contract、engine binding minimal adapter、value marshal / property-call 最小交互面和 host diagnostics / failure policy。下一步转向第一阶段完成审计与全量 gate sweep。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 mock host 已覆盖 ABI skeleton、opaque handle registry、主线程 dispatcher 和 event/callback bridge；P3 已覆盖托管 wrapper contract、engine binding minimal adapter、value marshal / property-call 最小交互面和 host diagnostics / failure policy。P4.1 已完成第一阶段完成审计和全量 gate sweep，第一阶段关闭为受控 `net10.0` 纯逻辑 runtime contract 与 mock host bridge 基线。
 
 已验证切片：
 
@@ -47,12 +47,14 @@
 | P3.2 Engine binding minimal adapter | 新增 native `EngineAdapter` mock 场景和 `ManagedNet10.Smoke.EngineBindingSmoke`，把引擎节点创建、事件订阅、事件触发、主线程 pump 和宿主销毁诊断串到 P2/P3.1 contract；托管 `EngineNode` 只持有 `HostObject`，不接触真实引擎指针 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EngineAdapter` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.EngineBindingSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 engine binding adapter regression gate；后续属性/方法调用必须继续经过 opaque handle、dispatcher 和明确 value marshal |
 | P3.3 Value marshal / property-call adapter | 在 host bridge ABI 中新增 `LeanClrHostValue` / `LeanClrHostVector3`、value marshal capability，以及 property get/set / command invoke 入口；native `ValueMarshal` 场景和 managed `ValueMarshalSmoke` 覆盖 bool/int/float/string/vector3、属性 round trip、`MoveBy` / `Damage` command、错误类型诊断和销毁后访问 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario ValueMarshal` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.ValueMarshalSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 value marshal regression gate；复杂 Variant、数组 view、UnityEngine.Object / Godot Object 语义后置 |
 | P3.4 Host diagnostics / failure policy | 在 host bridge ABI 中新增 log level enum、diagnostics capability 和 `report_managed_exception` 回调；native `Diagnostics` 场景和 managed `DiagnosticsSmoke` 覆盖 info/warning/error 日志、托管异常类型/消息/栈字符串回传、不完整诊断拒绝，以及 host failure 到 `HostBridgeException` 的转换 | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Diagnostics` 通过；`scripts/dotnet10/interp-smoke.ps1 -Configuration Release -Entry "ManagedNet10.Smoke.DiagnosticsSmoke::Run"` 通过；`scripts/dotnet10/api-scan.ps1 -Configuration Release` unsupported `0` | 保留为 diagnostics regression gate；完整 debugger、符号解析和宿主异常对象跨 ABI 后置 |
+| P4.1 First-stage completion audit | 对照第一阶段完成标准复核 P0-P3 已验证切片，补齐 consolidated verification log，并确认 contract evidence、catalog evidence、runtime evidence 都有当前证据 | `check_runtime_api_signatures.py --profile coreclr-net10` 通过；`api-scan.ps1 -Configuration Release` 两组扫描 unsupported `0`；`nkg-smoke.ps1 -Configuration Release` 通过；`ManagedNet10.LegacyTests.Program::RunAll` 通过；P2/P3 host bridge 七个 scenario 与 P3 managed wrapper 四个入口全通过 | 第一阶段关闭为 minimal `net10.0` 纯逻辑 DLL + mock host bridge 基线；真实 Unity/Godot SDK 绑定、完整 sampler/Hosting、完整 ThreadPool/JIT/ALC/debugger 仍是后置边界 |
 
-下一批次：
+第一阶段完成审计结果：
 
-| 批次 | 目标 | 输出 | 验收 |
-| --- | --- | --- | --- |
-| P4.1 First-stage completion audit | 对照第一阶段完成标准和已验证切片跑全量 gate sweep，移除已完成批次中的“下一步”残留并标注后置边界 | completion checklist + consolidated verification log | contract evidence、catalog evidence、runtime evidence 均有当前证据 |
+- contract evidence：P0-P1 将 CoreLib 入口收敛到 type / handle / reflection / delegate / RuntimeHelpers / Span / IO / threading / ALC / Reflection.Emit 的 LeanCLR façade 映射；P2-P3 将 engine integration 限定在 opaque handle、dispatcher、event、value marshal、diagnostics 的 host bridge contract。
+- catalog evidence：`coreclr-net10` active profile 由 runtime pack extern gate 校验，`icalls.json`、`intrinsics.json`、`pinvokes.json` 当前全部匹配 extern 签名，Mono-era active entry 继续由 profile gate 隔离。
+- runtime evidence：legacy `RunAll`、smoke 子入口、NKG/Odin 轻量 workload、host bridge native scenario 和 managed wrapper scenario 均有独立命令可复验。
+- 第一阶段边界：当前目标是受控纯逻辑 `net10.0` DLL 与 mock host bridge，不承诺完整 `Microsoft.NETCore.App`、真实 Unity/Godot SDK binding、完整 sampler/Hosting、完整 CoreCLR ThreadPool/JIT/ALC/debugger 或复杂 Variant / engine object 语义。
 
 ## 非目标
 
@@ -440,4 +442,13 @@ API 边界 gate 已落在 `scripts/dotnet10/api-scan.ps1`：它构建 `src/tools
 
 NKG/Odin 真实 workload gate 使用 `scripts/dotnet10/nkg-smoke.ps1`。脚本默认查找仓库同级的 `NKGGameFramework`，构建 `samples/NKGGameFramework.Sampler`，再把带齐 `NKGGameFramework`、`OdinSerializer` 和 `UniTask` 的 `net10.0` 输出目录传给 `ManagedNet10.NkgSmoke`。2026-06-29 已在默认路径通过；如果本机目录不同，可显式传入 `-NkgRoot`。
 
-完整 `RunAll` 和原作者测试资产仍是最终质量线，但执行顺序后置。测试失败时先归类：contract 缺口、façade 映射缺口、LeanCLR VM 通用语义缺口、或白名单外 API。只有前两类进入本计划的 contract/model 重写循环。
+第一阶段完成审计（2026-06-29）已跑完以下 gate：
+
+- `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .`：3234 个 extern entry / 4675 个签名载入，`icalls.json`、`intrinsics.json`、`pinvokes.json` 全部匹配。
+- `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\api-scan.ps1 -Configuration Release`：`ManagedNet10.Smoke` / `ManagedNet10.NkgSmoke` 扫描 unsupported `0`；NKG core / Odin / UniTask 扫描 unsupported `0`。
+- `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-smoke.ps1 -Configuration Release`：NKG/Odin/UniTask 轻量 workload 通过。
+- `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests -Entry "ManagedNet10.LegacyTests.Program::RunAll"`：legacy regression 基线通过。
+- `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\host-bridge-smoke.ps1 -Configuration Release -Scenario <scenario>`：`AbiSkeleton`、`HandleRegistry`、`Dispatcher`、`EventCallback`、`EngineAdapter`、`ValueMarshal`、`Diagnostics` 全部通过。
+- `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke.ps1 -Configuration Release -Entry <entry>`：`ManagedNet10.Smoke.HostBridgeWrapperSmoke::Run`、`EngineBindingSmoke::Run`、`ValueMarshalSmoke::Run`、`DiagnosticsSmoke::Run` 全部通过。
+
+完整 `RunAll` 和原作者测试资产仍是长期质量线，但第一阶段不再把旧失败点作为设计入口。新增失败必须先归类：contract 缺口、façade 映射缺口、LeanCLR VM 通用语义缺口、或白名单外 API。只有前两类进入本计划的 contract/model 重写循环。
