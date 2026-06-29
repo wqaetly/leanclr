@@ -35,6 +35,7 @@
 | P1.1 CustomAttributeData metadata-only | `RuntimeCustomAttributeData` 最小路径可从 assembly / module / type / field / method / parameter / property / event target 的 metadata blob 解出 constructor arguments、property named argument 和 field named argument，不需要实例化 attribute；同时覆盖 enum、Type、int[]、Type[]、object、object[]、named enum/type/array/object 等 Odin/NKG 常见 blob 形状 | `ManagedNet10.Smoke.Program::TestCustomAttributeDataOnly` 纳入默认 smoke；`interp-smoke.ps1 -Configuration Release` 通过 | 继续接 NKG/Odin 轻量 attribute 枚举作为真实 workload gate |
 | P1.2 NKG/Odin light workload | `ManagedNet10.NkgSmoke` 使用真实 NKGGameFramework、OdinSerializer 与 UniTask `net10.0` 输出目录验证轻量反射、attribute 枚举和白名单 API 边界；默认 sampler/Hosting 完整面仍在第一阶段外 | `scripts/dotnet10/api-scan.ps1` 扫描 NKG core/Odin/UniTask：unsupported `0`；`scripts/dotnet10/nkg-smoke.ps1` 通过 | 保留为真实 workload gate；后续失败按 contract、façade、VM 通用语义或白名单外 API 归类 |
 | P1.3 Thread / Monitor / WaitHandle bounded semantics | 单线程 profile 下补齐 `CurrentManagedThreadId`、Monitor fast path / wait PInvoke、ThreadPool sizing / queue dispatch、ManualResetEvent / WaitAny 最小路径；复杂并行调度仍不承诺 | `ManagedNet10.LegacyTests.Program::RunCorlibThreading` 通过；`ManagedNet10.LegacyTests.Program::RunCorlibMonitor` 通过 | 保留为 threading regression gate；后续 Task/dispatcher 只接可控 continuation |
+| P1.4 System.IO / Kernel32 platform façade | .NET 10 `FileStream` / `File` / `Path` 触发的 Kernel32 generated PInvoke 统一落到 LeanCLR cross-platform `platform::Kernel32` / `os::File` / `os::Path`，非 Windows 走 POSIX fallback 并写回 Win32-style last error | `ManagedNet10.LegacyTests.Program::RunCorlibIO` 通过 | 保留为 file I/O regression gate；完整 watcher、ACL、reparse point、overlapped I/O 后置 |
 
 下一批次：
 
@@ -262,6 +263,30 @@ ABI 分组：
 - 托管 delegate 注册为宿主事件回调，触发后返回成功或托管异常诊断。
 - 宿主对象销毁后再次访问 wrapper，稳定输出 ObjectDisposed / MissingReference 风格诊断。
 
+### 10. System.IO / Platform PInvoke
+
+外部形状：
+
+- .NET 10 `System.IO.FileStream`、`File`、`Path` 和 `SafeFileHandle` 触发的 generated PInvoke 可在 Windows 与非 Windows profile 下链接并执行。
+- `CreateFile` / `ReadFile` / `WriteFile` / `CloseHandle` / `SetFilePointer` / file attribute / file information / temp path / full path 查询有最小语义。
+- `DeleteFile`、`CopyFile`、`CreateDirectory`、`MoveFile`、`RemoveDirectory`、`ReplaceFile`、`SetFileAttributes` 和 `SetFileInformationByHandle` 在可表达的平台能力内工作。
+- 失败时统一写入 Win32-style last error，让 CoreLib 能走自己的异常转换路径。
+
+内部映射：
+
+- CoreLib generated `Kernel32` PInvoke 先进入 `platform::Kernel32` façade，再映射到 `os::File`、`os::Path`、`os::Sys` 或 POSIX fallback。
+- 非 Windows 不暴露真实 Win32 handle 语义；file handle 只表示 LeanCLR / OS file descriptor 可管理的句柄。
+- `GetFullPathNameW` 动态读取当前工作目录后拼接相对路径，避免固定缓冲或宿主沙盒路径假设。
+- `SafeFileHandle` 只负责 runtime 文件句柄生命周期，不承诺任意 native handle、overlapped I/O 或平台 ACL。
+
+验收入口：
+
+- `Path.GetTempPath()`、`Path.GetFullPath()`。
+- `File.Exists()`、`File.Delete()`。
+- `File.OpenHandle()` 与默认 / Activator 创建的 `SafeFileHandle`。
+- `FileStream` create / write / flush / read round trip。
+- `ManagedNet10.LegacyTests.Program::RunCorlibIO`。
+
 ## 初始 Contract Inventory
 
 | Contract | 来源/触发 | LeanCLR 映射 | 当前处理 |
@@ -280,6 +305,7 @@ ABI 分组：
 | `System.RuntimeFieldHandle::<GetRVAFieldInfo>g____PInvoke|24_0` | Span/RVA initializer | `RtFieldInfo` RVA data | 已有修复需归档到 contract |
 | `System.Threading.Monitor::<Wait>g____PInvoke|24_0` | Monitor wait / pulse | `vm::Monitor::monitor_wait` -> single-thread controlled wait | 已桥接，`RunCorlibMonitor` 通过 |
 | `System.Threading.WaitHandle::<WaitOneCore>g____PInvoke|0_0` / `WaitMultipleIgnoringSyncContext` | ManualResetEvent / WaitAny | runtime `EventHandle` -> `Kernel32` façade wait helpers | 已桥接，`RunCorlibThreading` 通过 |
+| `System.IO.FileStream` / generated `Kernel32` file PInvoke | File / Path / SafeFileHandle | `platform::Kernel32` façade -> `os::File` / `os::Path` / POSIX fallback | 已桥接，`RunCorlibIO` 通过 |
 
 ## 迁移顺序
 
@@ -291,7 +317,8 @@ ABI 分组：
 6. 重写 custom attribute 最小路径，覆盖 smoke 与 NKG/Odin 会触发的读取模式。当前 metadata-only smoke 与 NKG/Odin 轻量 workload 已通过，后续只按真实失败补齐新 blob 形状或实例化路径。
 7. 固化 Span / Unsafe / RuntimeHelpers contract，确保解释路径和 AOT 路径使用同一份语义说明。
 8. 分级支持 exception / delegate / Thread / Monitor / Task；第一阶段单线程可控，复杂 ThreadPool 后置。
-9. 建立 host bridge mock，证明 Unity/Godot 接入不需要扩大 BCL 支持面。
+9. 固化 System.IO / platform PInvoke 最小 contract，让真实 workload 可做临时文件、路径解析和基础资源读取。
+10. 建立 host bridge mock，证明 Unity/Godot 接入不需要扩大 BCL 支持面。
 
 ## 验收方式
 
