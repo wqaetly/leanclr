@@ -15,6 +15,10 @@ struct MockHandleRecord
     std::string debug_name;
     uint32_t ref_count = 1;
     bool alive = true;
+    bool active = true;
+    int32_t health = 100;
+    float speed = 1.0f;
+    LeanClrHostVector3 position{0.0f, 0.0f, 0.0f};
 };
 
 struct MockDispatchTask
@@ -398,6 +402,249 @@ LeanClrHostBridgeStatus mock_trigger_event(void* user_data,
     return mock_post_to_main_thread(state, it->second.callback, it->second.callback_data, &ignored_ticket, error);
 }
 
+LeanClrHostValue make_bool_value(bool value)
+{
+    LeanClrHostValue result{};
+    result.kind = LEANCLR_HOST_VALUE_BOOL;
+    result.data.bool_value = value ? 1 : 0;
+    return result;
+}
+
+LeanClrHostValue make_int32_value(int32_t value)
+{
+    LeanClrHostValue result{};
+    result.kind = LEANCLR_HOST_VALUE_INT32;
+    result.data.int32_value = value;
+    return result;
+}
+
+LeanClrHostValue make_float32_value(float value)
+{
+    LeanClrHostValue result{};
+    result.kind = LEANCLR_HOST_VALUE_FLOAT32;
+    result.data.float32_value = value;
+    return result;
+}
+
+LeanClrHostValue make_string_value(const char* value)
+{
+    LeanClrHostValue result{};
+    result.kind = LEANCLR_HOST_VALUE_STRING;
+    result.data.string_value = value;
+    return result;
+}
+
+LeanClrHostValue make_vector3_value(float x, float y, float z)
+{
+    LeanClrHostValue result{};
+    result.kind = LEANCLR_HOST_VALUE_VECTOR3;
+    result.data.vector3_value = LeanClrHostVector3{x, y, z};
+    return result;
+}
+
+LeanClrHostBridgeStatus require_value_kind(const LeanClrHostValue* value,
+                                           LeanClrHostValueKind kind,
+                                           LeanClrHostBridgeError* error)
+{
+    if (value == nullptr || value->kind != kind)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host value kind does not match property contract");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
+LeanClrHostBridgeStatus mock_get_property(void* user_data,
+                                          LeanClrHostHandle handle,
+                                          const char* property_name,
+                                          LeanClrHostValue* out_value,
+                                          LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    auto* record = find_live_handle(state, handle, error);
+    if (record == nullptr)
+    {
+        return error == nullptr ? LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED : error->status;
+    }
+    if (property_name == nullptr || out_value == nullptr)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host property get request is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    if (std::strcmp(property_name, "active") == 0)
+    {
+        *out_value = make_bool_value(record->active);
+    }
+    else if (std::strcmp(property_name, "health") == 0)
+    {
+        *out_value = make_int32_value(record->health);
+    }
+    else if (std::strcmp(property_name, "speed") == 0)
+    {
+        *out_value = make_float32_value(record->speed);
+    }
+    else if (std::strcmp(property_name, "title") == 0)
+    {
+        *out_value = make_string_value(record->debug_name.c_str());
+    }
+    else if (std::strcmp(property_name, "position") == 0)
+    {
+        *out_value = make_vector3_value(record->position.x, record->position.y, record->position.z);
+    }
+    else
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host property is not supported");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
+LeanClrHostBridgeStatus mock_set_property(void* user_data,
+                                          LeanClrHostHandle handle,
+                                          const char* property_name,
+                                          const LeanClrHostValue* value,
+                                          LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    auto* record = find_live_handle(state, handle, error);
+    if (record == nullptr)
+    {
+        return error == nullptr ? LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED : error->status;
+    }
+    if (property_name == nullptr)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host property set request is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    if (std::strcmp(property_name, "active") == 0)
+    {
+        auto status = require_value_kind(value, LEANCLR_HOST_VALUE_BOOL, error);
+        if (status != LEANCLR_HOST_BRIDGE_OK)
+        {
+            return status;
+        }
+        record->active = value->data.bool_value != 0;
+    }
+    else if (std::strcmp(property_name, "health") == 0)
+    {
+        auto status = require_value_kind(value, LEANCLR_HOST_VALUE_INT32, error);
+        if (status != LEANCLR_HOST_BRIDGE_OK)
+        {
+            return status;
+        }
+        record->health = value->data.int32_value;
+    }
+    else if (std::strcmp(property_name, "speed") == 0)
+    {
+        auto status = require_value_kind(value, LEANCLR_HOST_VALUE_FLOAT32, error);
+        if (status != LEANCLR_HOST_BRIDGE_OK)
+        {
+            return status;
+        }
+        record->speed = value->data.float32_value;
+    }
+    else if (std::strcmp(property_name, "title") == 0)
+    {
+        auto status = require_value_kind(value, LEANCLR_HOST_VALUE_STRING, error);
+        if (status != LEANCLR_HOST_BRIDGE_OK)
+        {
+            return status;
+        }
+        record->debug_name = value->data.string_value == nullptr ? "" : value->data.string_value;
+    }
+    else if (std::strcmp(property_name, "position") == 0)
+    {
+        auto status = require_value_kind(value, LEANCLR_HOST_VALUE_VECTOR3, error);
+        if (status != LEANCLR_HOST_BRIDGE_OK)
+        {
+            return status;
+        }
+        record->position = value->data.vector3_value;
+    }
+    else
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host property is not supported");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
+LeanClrHostBridgeStatus mock_invoke_command(void* user_data,
+                                            LeanClrHostHandle handle,
+                                            const char* command_name,
+                                            const LeanClrHostValue* args,
+                                            uint32_t arg_count,
+                                            LeanClrHostValue* out_value,
+                                            LeanClrHostBridgeError* error)
+{
+    auto* state = static_cast<MockHostState*>(user_data);
+    auto* record = find_live_handle(state, handle, error);
+    if (record == nullptr)
+    {
+        return error == nullptr ? LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED : error->status;
+    }
+    if (command_name == nullptr || out_value == nullptr)
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host command request is incomplete");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    if (std::strcmp(command_name, "MoveBy") == 0)
+    {
+        if (arg_count != 1)
+        {
+            LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "MoveBy expects one argument");
+            return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+        }
+        if (require_value_kind(args, LEANCLR_HOST_VALUE_VECTOR3, error) != LEANCLR_HOST_BRIDGE_OK)
+        {
+            return error == nullptr ? LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT : error->status;
+        }
+        record->position.x += args[0].data.vector3_value.x;
+        record->position.y += args[0].data.vector3_value.y;
+        record->position.z += args[0].data.vector3_value.z;
+        *out_value = make_vector3_value(record->position.x, record->position.y, record->position.z);
+    }
+    else if (std::strcmp(command_name, "Damage") == 0)
+    {
+        if (arg_count != 1)
+        {
+            LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "Damage expects one argument");
+            return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+        }
+        if (require_value_kind(args, LEANCLR_HOST_VALUE_INT32, error) != LEANCLR_HOST_BRIDGE_OK)
+        {
+            return error == nullptr ? LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT : error->status;
+        }
+        record->health -= args[0].data.int32_value;
+        *out_value = make_int32_value(record->health);
+    }
+    else if (std::strcmp(command_name, "Describe") == 0)
+    {
+        if (arg_count != 0)
+        {
+            LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "Describe does not accept arguments");
+            return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+        }
+        *out_value = make_string_value(record->debug_name.c_str());
+    }
+    else
+    {
+        LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host command is not supported");
+        return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;
+    }
+
+    LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_OK, nullptr);
+    return LEANCLR_HOST_BRIDGE_OK;
+}
+
 bool require(bool condition, const char* message)
 {
     if (!condition)
@@ -418,7 +665,8 @@ LeanClrHostBridgeFunctions make_mock_functions(MockHostState* state)
                              LEANCLR_HOST_BRIDGE_CAP_INVOKE_MANAGED_ENTRY |
                              LEANCLR_HOST_BRIDGE_CAP_HANDLE_REGISTRY |
                              LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH |
-                             LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK;
+                             LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK |
+                             LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL;
     functions.user_data = state;
     functions.log = mock_log;
     functions.invoke_managed_entry = mock_invoke_managed_entry;
@@ -433,6 +681,9 @@ LeanClrHostBridgeFunctions make_mock_functions(MockHostState* state)
     functions.subscribe_event = mock_subscribe_event;
     functions.unsubscribe_event = mock_unsubscribe_event;
     functions.trigger_event = mock_trigger_event;
+    functions.get_property = mock_get_property;
+    functions.set_property = mock_set_property;
+    functions.invoke_command = mock_invoke_command;
     return functions;
 }
 
@@ -915,6 +1166,141 @@ bool run_engine_adapter()
 
     return true;
 }
+
+bool run_value_marshal()
+{
+    MockHostState state;
+    auto functions = make_mock_functions(&state);
+    LeanClrHostBridgeError error{};
+
+    auto status = LeanClrHostBridge_ValidateFunctions(&functions, LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "value marshal function table should be accepted"))
+    {
+        return false;
+    }
+
+    LeanClrHostHandle handle = 0;
+    status = functions.create_handle(functions.user_data, "MockEngine.Node", "Player", &handle, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK && handle != 0, "value marshal node handle should be created"))
+    {
+        return false;
+    }
+
+    LeanClrHostValue value{};
+    status = functions.get_property(functions.user_data, handle, "title", &value, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK &&
+                     value.kind == LEANCLR_HOST_VALUE_STRING &&
+                     std::strcmp(value.data.string_value, "Player") == 0,
+                 "string property get failed"))
+    {
+        return false;
+    }
+
+    auto health = make_int32_value(75);
+    status = functions.set_property(functions.user_data, handle, "health", &health, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "int property set failed"))
+    {
+        return false;
+    }
+    status = functions.get_property(functions.user_data, handle, "health", &value, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK &&
+                     value.kind == LEANCLR_HOST_VALUE_INT32 &&
+                     value.data.int32_value == 75,
+                 "int property get failed"))
+    {
+        return false;
+    }
+
+    auto active = make_bool_value(false);
+    status = functions.set_property(functions.user_data, handle, "active", &active, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "bool property set failed"))
+    {
+        return false;
+    }
+    status = functions.get_property(functions.user_data, handle, "active", &value, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK &&
+                     value.kind == LEANCLR_HOST_VALUE_BOOL &&
+                     value.data.bool_value == 0,
+                 "bool property get failed"))
+    {
+        return false;
+    }
+
+    auto speed = make_float32_value(3.5f);
+    status = functions.set_property(functions.user_data, handle, "speed", &speed, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "float property set failed"))
+    {
+        return false;
+    }
+    status = functions.get_property(functions.user_data, handle, "speed", &value, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK &&
+                     value.kind == LEANCLR_HOST_VALUE_FLOAT32 &&
+                     value.data.float32_value == 3.5f,
+                 "float property get failed"))
+    {
+        return false;
+    }
+
+    auto position = make_vector3_value(1.0f, 2.0f, 3.0f);
+    status = functions.set_property(functions.user_data, handle, "position", &position, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "vector property set failed"))
+    {
+        return false;
+    }
+
+    auto delta = make_vector3_value(2.0f, 0.5f, -1.0f);
+    status = functions.invoke_command(functions.user_data, handle, "MoveBy", &delta, 1, &value, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK &&
+                     value.kind == LEANCLR_HOST_VALUE_VECTOR3 &&
+                     value.data.vector3_value.x == 3.0f &&
+                     value.data.vector3_value.y == 2.5f &&
+                     value.data.vector3_value.z == 2.0f,
+                 "vector command marshal failed"))
+    {
+        return false;
+    }
+
+    auto damage = make_int32_value(5);
+    status = functions.invoke_command(functions.user_data, handle, "Damage", &damage, 1, &value, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK &&
+                     value.kind == LEANCLR_HOST_VALUE_INT32 &&
+                     value.data.int32_value == 70,
+                 "int command marshal failed"))
+    {
+        return false;
+    }
+
+    auto bad_value = make_string_value("wrong");
+    status = functions.set_property(functions.user_data, handle, "health", &bad_value, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT && error.message != nullptr,
+                 "wrong value kind should return a diagnostic"))
+    {
+        return false;
+    }
+
+    auto missing_value_marshal = functions;
+    missing_value_marshal.get_property = nullptr;
+    status = LeanClrHostBridge_ValidateFunctions(&missing_value_marshal, LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT && error.message != nullptr,
+                 "missing value marshal callback should return a diagnostic"))
+    {
+        return false;
+    }
+
+    status = functions.notify_handle_destroyed(functions.user_data, handle, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OK, "destroying value marshal source should succeed"))
+    {
+        return false;
+    }
+    status = functions.get_property(functions.user_data, handle, "health", &value, &error);
+    if (!require(status == LEANCLR_HOST_BRIDGE_OBJECT_DISPOSED && error.message != nullptr,
+                 "property get after destroy should return ObjectDisposed diagnostic"))
+    {
+        return false;
+    }
+
+    return true;
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -980,6 +1366,17 @@ int main(int argc, char** argv)
         }
 
         std::cout << "ok! host bridge EngineAdapter" << std::endl;
+        return 0;
+    }
+
+    if (scenario == "ValueMarshal")
+    {
+        if (!run_value_marshal())
+        {
+            return 1;
+        }
+
+        std::cout << "ok! host bridge ValueMarshal" << std::endl;
         return 0;
     }
 

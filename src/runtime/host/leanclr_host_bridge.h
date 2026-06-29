@@ -30,8 +30,43 @@ typedef enum LeanClrHostBridgeCapability
     LEANCLR_HOST_BRIDGE_CAP_INVOKE_MANAGED_ENTRY = 1ull << 1,
     LEANCLR_HOST_BRIDGE_CAP_HANDLE_REGISTRY = 1ull << 2,
     LEANCLR_HOST_BRIDGE_CAP_MAIN_THREAD_DISPATCH = 1ull << 3,
-    LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK = 1ull << 4
+    LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK = 1ull << 4,
+    LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL = 1ull << 5
 } LeanClrHostBridgeCapability;
+
+typedef enum LeanClrHostValueKind
+{
+    LEANCLR_HOST_VALUE_NULL = 0,
+    LEANCLR_HOST_VALUE_BOOL = 1,
+    LEANCLR_HOST_VALUE_INT32 = 2,
+    LEANCLR_HOST_VALUE_FLOAT32 = 3,
+    LEANCLR_HOST_VALUE_FLOAT64 = 4,
+    LEANCLR_HOST_VALUE_STRING = 5,
+    LEANCLR_HOST_VALUE_HANDLE = 6,
+    LEANCLR_HOST_VALUE_VECTOR3 = 7
+} LeanClrHostValueKind;
+
+typedef struct LeanClrHostVector3
+{
+    float x;
+    float y;
+    float z;
+} LeanClrHostVector3;
+
+typedef struct LeanClrHostValue
+{
+    LeanClrHostValueKind kind;
+    union
+    {
+        int32_t bool_value;
+        int32_t int32_value;
+        float float32_value;
+        double float64_value;
+        const char* string_value;
+        LeanClrHostHandle handle_value;
+        LeanClrHostVector3 vector3_value;
+    } data;
+} LeanClrHostValue;
 
 typedef struct LeanClrHostBridgeError
 {
@@ -105,6 +140,26 @@ typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeTriggerEventFn)(void* user_da
                                                                    LeanClrHostSubscription subscription,
                                                                    LeanClrHostBridgeError* error);
 
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeGetPropertyFn)(void* user_data,
+                                                                  LeanClrHostHandle handle,
+                                                                  const char* property_name,
+                                                                  LeanClrHostValue* out_value,
+                                                                  LeanClrHostBridgeError* error);
+
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeSetPropertyFn)(void* user_data,
+                                                                  LeanClrHostHandle handle,
+                                                                  const char* property_name,
+                                                                  const LeanClrHostValue* value,
+                                                                  LeanClrHostBridgeError* error);
+
+typedef LeanClrHostBridgeStatus (*LeanClrHostBridgeInvokeCommandFn)(void* user_data,
+                                                                    LeanClrHostHandle handle,
+                                                                    const char* command_name,
+                                                                    const LeanClrHostValue* args,
+                                                                    uint32_t arg_count,
+                                                                    LeanClrHostValue* out_value,
+                                                                    LeanClrHostBridgeError* error);
+
 typedef struct LeanClrHostBridgeFunctions
 {
     uint32_t size;
@@ -124,6 +179,9 @@ typedef struct LeanClrHostBridgeFunctions
     LeanClrHostBridgeSubscribeEventFn subscribe_event;
     LeanClrHostBridgeUnsubscribeEventFn unsubscribe_event;
     LeanClrHostBridgeTriggerEventFn trigger_event;
+    LeanClrHostBridgeGetPropertyFn get_property;
+    LeanClrHostBridgeSetPropertyFn set_property;
+    LeanClrHostBridgeInvokeCommandFn invoke_command;
 } LeanClrHostBridgeFunctions;
 
 static inline void LeanClrHostBridge_SetError(LeanClrHostBridgeError* error,
@@ -182,7 +240,11 @@ static inline LeanClrHostBridgeStatus LeanClrHostBridge_ValidateFunctions(const 
         ((functions->capabilities & LEANCLR_HOST_BRIDGE_CAP_EVENT_CALLBACK) != 0 &&
          (functions->subscribe_event == 0 ||
           functions->unsubscribe_event == 0 ||
-          functions->trigger_event == 0)))
+          functions->trigger_event == 0)) ||
+        ((functions->capabilities & LEANCLR_HOST_BRIDGE_CAP_VALUE_MARSHAL) != 0 &&
+         (functions->get_property == 0 ||
+          functions->set_property == 0 ||
+          functions->invoke_command == 0)))
     {
         LeanClrHostBridge_SetError(error, LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT, "host bridge function pointer is missing");
         return LEANCLR_HOST_BRIDGE_INVALID_ARGUMENT;

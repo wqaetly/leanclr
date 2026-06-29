@@ -139,12 +139,86 @@ public static class EngineBindingSmoke
     }
 }
 
+public static class ValueMarshalSmoke
+{
+    public static void Run()
+    {
+        var bridge = new MockHostBridge();
+        using var node = EngineNode.Create(bridge, "Player");
+
+        Require(node.Active, "bool property initial value failed");
+        node.Active = false;
+        Require(!node.Active, "bool property round trip failed");
+
+        node.Health = 75;
+        Require(node.Health == 75, "int property round trip failed");
+
+        node.Speed = 3.5f;
+        Require(node.Speed == 3.5f, "float property round trip failed");
+
+        node.Position = new HostVector3(1.0f, 2.0f, 3.0f);
+        var moved = node.MoveBy(new HostVector3(2.0f, 0.5f, -1.0f));
+        Require(moved.X == 3.0f && moved.Y == 2.5f && moved.Z == 2.0f, "vector command round trip failed");
+        Require(node.Position.X == 3.0f && node.Position.Y == 2.5f && node.Position.Z == 2.0f, "vector property after command failed");
+
+        Require(node.Damage(5) == 70, "int command return failed");
+        Require(node.Health == 70, "int property after command failed");
+
+        bridge.FailNextSetProperty(nameof(EngineNode.Health), "wrong value kind");
+        ExpectHostBridgeException(static state => ((EngineNode)state!).Health = 1, node, HostBridgeStatus.InvalidArgument);
+
+        bridge.NotifyDestroyed(node.Handle);
+        ExpectObjectDisposed(static state => _ = ((EngineNode)state!).Health, node);
+    }
+
+    private static void ExpectObjectDisposed(Action<object?> action, object? state)
+    {
+        try
+        {
+            action(state);
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException("expected ObjectDisposedException");
+    }
+
+    private static void ExpectHostBridgeException(Action<object?> action, object? state, HostBridgeStatus expectedStatus)
+    {
+        try
+        {
+            action(state);
+        }
+        catch (Exception ex)
+        {
+            if (ex is HostBridgeException hostBridgeException && hostBridgeException.Status == expectedStatus)
+            {
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("expected HostBridgeException");
+    }
+
+    private static void Require([DoesNotReturnIf(false)] bool condition, string message)
+    {
+        if (!condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+}
+
 internal sealed class EngineNode : IDisposable
 {
     private readonly HostObject _hostObject;
+    private readonly MockHostBridge _bridge;
 
-    private EngineNode(HostObject hostObject, string name)
+    private EngineNode(MockHostBridge bridge, HostObject hostObject, string name)
     {
+        _bridge = bridge;
         _hostObject = hostObject;
         Name = name;
     }
@@ -153,15 +227,55 @@ internal sealed class EngineNode : IDisposable
 
     public ulong Handle => _hostObject.Handle;
 
+    public bool Active
+    {
+        get => GetProperty(nameof(Active)).AsBool();
+        set => SetProperty(nameof(Active), HostValue.FromBool(value));
+    }
+
+    public int Health
+    {
+        get => GetProperty(nameof(Health)).AsInt32();
+        set => SetProperty(nameof(Health), HostValue.FromInt32(value));
+    }
+
+    public float Speed
+    {
+        get => GetProperty(nameof(Speed)).AsFloat32();
+        set => SetProperty(nameof(Speed), HostValue.FromFloat32(value));
+    }
+
+    public HostVector3 Position
+    {
+        get => GetProperty(nameof(Position)).AsVector3();
+        set => SetProperty(nameof(Position), HostValue.FromVector3(value));
+    }
+
     public static EngineNode Create(MockHostBridge bridge, string name)
     {
-        return new EngineNode(HostObject.Create(bridge, "MockEngine.Node", name), name);
+        return new EngineNode(bridge, HostObject.Create(bridge, "MockEngine.Node", name), name);
     }
 
     public HostEventSubscription OnReady(Action callback)
     {
         EnsureAlive();
         return _hostObject.Subscribe("Ready", callback);
+    }
+
+    public HostVector3 MoveBy(HostVector3 delta)
+    {
+        EnsureAlive();
+        var status = _bridge.InvokeCommand(Handle, "MoveBy", [HostValue.FromVector3(delta)], out var result, out var message);
+        HostBridgeStatusConverter.ThrowIfFailed(status, message, nameof(EngineNode));
+        return result.AsVector3();
+    }
+
+    public int Damage(int amount)
+    {
+        EnsureAlive();
+        var status = _bridge.InvokeCommand(Handle, "Damage", [HostValue.FromInt32(amount)], out var result, out var message);
+        HostBridgeStatusConverter.ThrowIfFailed(status, message, nameof(EngineNode));
+        return result.AsInt32();
     }
 
     public void EnsureAlive()
@@ -172,6 +286,21 @@ internal sealed class EngineNode : IDisposable
     public void Dispose()
     {
         _hostObject.Dispose();
+    }
+
+    private HostValue GetProperty(string propertyName)
+    {
+        EnsureAlive();
+        var status = _bridge.GetProperty(Handle, propertyName, out var value, out var message);
+        HostBridgeStatusConverter.ThrowIfFailed(status, message, nameof(EngineNode));
+        return value;
+    }
+
+    private void SetProperty(string propertyName, HostValue value)
+    {
+        EnsureAlive();
+        var status = _bridge.SetProperty(Handle, propertyName, value, out var message);
+        HostBridgeStatusConverter.ThrowIfFailed(status, message, nameof(EngineNode));
     }
 }
 
@@ -185,6 +314,85 @@ internal enum HostBridgeStatus
     ObjectDisposed = 5,
     ReentrantCall = 6,
     ManagedException = 7,
+}
+
+internal enum HostValueKind
+{
+    Null = 0,
+    Bool = 1,
+    Int32 = 2,
+    Float32 = 3,
+    String = 5,
+    Vector3 = 7,
+}
+
+internal readonly record struct HostVector3(float X, float Y, float Z);
+
+internal readonly struct HostValue
+{
+    private HostValue(HostValueKind kind, bool boolValue, int int32Value, float float32Value, string? stringValue, HostVector3 vector3Value)
+    {
+        Kind = kind;
+        BoolValue = boolValue;
+        Int32Value = int32Value;
+        Float32Value = float32Value;
+        StringValue = stringValue;
+        Vector3Value = vector3Value;
+    }
+
+    public HostValueKind Kind { get; }
+
+    public bool BoolValue { get; }
+
+    public int Int32Value { get; }
+
+    public float Float32Value { get; }
+
+    public string? StringValue { get; }
+
+    public HostVector3 Vector3Value { get; }
+
+    public static HostValue FromBool(bool value) => new(HostValueKind.Bool, value, 0, 0.0f, null, default);
+
+    public static HostValue FromInt32(int value) => new(HostValueKind.Int32, false, value, 0.0f, null, default);
+
+    public static HostValue FromFloat32(float value) => new(HostValueKind.Float32, false, 0, value, null, default);
+
+    public static HostValue FromString(string value) => new(HostValueKind.String, false, 0, 0.0f, value, default);
+
+    public static HostValue FromVector3(HostVector3 value) => new(HostValueKind.Vector3, false, 0, 0.0f, null, value);
+
+    public bool AsBool()
+    {
+        RequireKind(HostValueKind.Bool);
+        return BoolValue;
+    }
+
+    public int AsInt32()
+    {
+        RequireKind(HostValueKind.Int32);
+        return Int32Value;
+    }
+
+    public float AsFloat32()
+    {
+        RequireKind(HostValueKind.Float32);
+        return Float32Value;
+    }
+
+    public HostVector3 AsVector3()
+    {
+        RequireKind(HostValueKind.Vector3);
+        return Vector3Value;
+    }
+
+    private void RequireKind(HostValueKind expected)
+    {
+        if (Kind != expected)
+        {
+            throw new HostBridgeException(HostBridgeStatus.InvalidArgument, "host value kind mismatch");
+        }
+    }
 }
 
 internal sealed class HostBridgeException : InvalidOperationException
@@ -331,6 +539,8 @@ internal sealed class MockHostBridge
     private ulong _nextSubscription = 1;
     private ulong _lastSubscription;
     private string? _nextCreateFailure;
+    private string? _nextSetPropertyFailureName;
+    private string? _nextSetPropertyFailureMessage;
 
     public HostBridgeStatus CreateHandle(string typeName, string debugName, out ulong handle, out string? message)
     {
@@ -445,6 +655,152 @@ internal sealed class MockHostBridge
         return HostBridgeStatus.Ok;
     }
 
+    public HostBridgeStatus GetProperty(ulong handle, string propertyName, out HostValue value, out string? message)
+    {
+        value = default;
+        var record = FindLiveHandle(handle, out message);
+        if (record == null)
+        {
+            return HostBridgeStatus.ObjectDisposed;
+        }
+
+        if (propertyName == nameof(EngineNode.Active))
+        {
+            value = HostValue.FromBool(record.Active);
+        }
+        else if (propertyName == nameof(EngineNode.Health))
+        {
+            value = HostValue.FromInt32(record.Health);
+        }
+        else if (propertyName == nameof(EngineNode.Speed))
+        {
+            value = HostValue.FromFloat32(record.Speed);
+        }
+        else if (propertyName == nameof(EngineNode.Position))
+        {
+            value = HostValue.FromVector3(record.Position);
+        }
+        else if (propertyName == nameof(EngineNode.Name))
+        {
+            value = HostValue.FromString(record.DebugName);
+        }
+        else
+        {
+            message = "host property is not supported";
+            return HostBridgeStatus.InvalidArgument;
+        }
+
+        message = null;
+        return HostBridgeStatus.Ok;
+    }
+
+    public HostBridgeStatus SetProperty(ulong handle, string propertyName, HostValue value, out string? message)
+    {
+        var record = FindLiveHandle(handle, out message);
+        if (record == null)
+        {
+            return HostBridgeStatus.ObjectDisposed;
+        }
+
+        if (_nextSetPropertyFailureName == propertyName)
+        {
+            message = _nextSetPropertyFailureMessage;
+            _nextSetPropertyFailureName = null;
+            _nextSetPropertyFailureMessage = null;
+            return HostBridgeStatus.InvalidArgument;
+        }
+
+        if (propertyName == nameof(EngineNode.Active))
+        {
+            if (value.Kind != HostValueKind.Bool)
+            {
+                message = "active requires bool";
+                return HostBridgeStatus.InvalidArgument;
+            }
+            record.Active = value.BoolValue;
+        }
+        else if (propertyName == nameof(EngineNode.Health))
+        {
+            if (value.Kind != HostValueKind.Int32)
+            {
+                message = "health requires int";
+                return HostBridgeStatus.InvalidArgument;
+            }
+            record.Health = value.Int32Value;
+        }
+        else if (propertyName == nameof(EngineNode.Speed))
+        {
+            if (value.Kind != HostValueKind.Float32)
+            {
+                message = "speed requires float";
+                return HostBridgeStatus.InvalidArgument;
+            }
+            record.Speed = value.Float32Value;
+        }
+        else if (propertyName == nameof(EngineNode.Position))
+        {
+            if (value.Kind != HostValueKind.Vector3)
+            {
+                message = "position requires vector";
+                return HostBridgeStatus.InvalidArgument;
+            }
+            record.Position = value.Vector3Value;
+        }
+        else
+        {
+            message = "host property is not supported";
+            return HostBridgeStatus.InvalidArgument;
+        }
+
+        message = null;
+        return HostBridgeStatus.Ok;
+    }
+
+    public HostBridgeStatus InvokeCommand(ulong handle, string commandName, HostValue[] args, out HostValue value, out string? message)
+    {
+        value = default;
+        var record = FindLiveHandle(handle, out message);
+        if (record == null)
+        {
+            return HostBridgeStatus.ObjectDisposed;
+        }
+
+        if (commandName == "MoveBy")
+        {
+            if (args.Length != 1 || args[0].Kind != HostValueKind.Vector3)
+            {
+                message = "MoveBy requires one vector argument";
+                return HostBridgeStatus.InvalidArgument;
+            }
+
+            var delta = args[0].Vector3Value;
+            record.Position = new HostVector3(
+                record.Position.X + delta.X,
+                record.Position.Y + delta.Y,
+                record.Position.Z + delta.Z);
+            value = HostValue.FromVector3(record.Position);
+        }
+        else if (commandName == "Damage")
+        {
+            if (args.Length != 1 || args[0].Kind != HostValueKind.Int32)
+            {
+                message = "Damage requires one int argument";
+                return HostBridgeStatus.InvalidArgument;
+            }
+
+            record.Health -= args[0].Int32Value;
+            value = HostValue.FromInt32(record.Health);
+        }
+        else
+        {
+            message = "host command is not supported";
+            return HostBridgeStatus.InvalidArgument;
+        }
+
+        message = null;
+        return HostBridgeStatus.Ok;
+    }
+
     public void TriggerLastEvent()
     {
         TriggerEvent(_lastSubscription);
@@ -477,6 +833,12 @@ internal sealed class MockHostBridge
         _nextCreateFailure = message;
     }
 
+    public void FailNextSetProperty(string propertyName, string message)
+    {
+        _nextSetPropertyFailureName = propertyName;
+        _nextSetPropertyFailureMessage = message;
+    }
+
     private HandleRecord? FindHandle(ulong handle)
     {
         for (int i = 0; i < _handles.Count; i++)
@@ -503,6 +865,19 @@ internal sealed class MockHostBridge
         return null;
     }
 
+    private HandleRecord? FindLiveHandle(ulong handle, out string? message)
+    {
+        var record = FindHandle(handle);
+        if (record == null || !record.Alive || record.RefCount == 0)
+        {
+            message = "host handle is no longer alive";
+            return null;
+        }
+
+        message = null;
+        return record;
+    }
+
     private sealed class HandleRecord
     {
         public HandleRecord(ulong handle, string typeName, string debugName)
@@ -521,6 +896,14 @@ internal sealed class MockHostBridge
         public int RefCount { get; set; } = 1;
 
         public bool Alive { get; set; } = true;
+
+        public bool Active { get; set; } = true;
+
+        public int Health { get; set; } = 100;
+
+        public float Speed { get; set; } = 1.0f;
+
+        public HostVector3 Position { get; set; }
     }
 
     private sealed class EventSubscriptionRecord
