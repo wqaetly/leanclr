@@ -20,7 +20,7 @@
 
 ## 当前执行批次
 
-本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。下一步转向宿主桥接 ABI 与单线程调度边界。
+本轮不再把旧用例失败点当作设计入口，而是按 `.NET 10` CoreLib 真正会读取的 runtime façade 逐层收敛。当前 P0 已经从 `RuntimeType` 身份推进到 `RuntimeFieldHandle`、`RuntimeModule`、`ValueType`、delegate 相关 `MethodTable*` façade、multicast delegate allocation 和 legacy `RunAll` 基线；P1 已经覆盖 `CustomAttributeData` metadata-only、NKG/Odin 轻量 workload、单线程 threading / file I/O façade、RuntimeHelpers / Span / RVA 最小语义、AssemblyLoadContext / Reflection.Emit 受限 façade，以及 handle/reflection consolidation。P2 已经启动 Host Bridge ABI skeleton；下一步转向 opaque handle registry、主线程 dispatcher 与 event/callback bridge。
 
 已验证切片：
 
@@ -39,12 +39,12 @@
 | P1.5 RuntimeHelpers / Span / RVA | `RuntimeHelpers.RunClassConstructor` / `RunModuleConstructor`、stack check、`CompileMethod` / `PrepareMethod`、RVA `InitializeArray` / `CreateSpan`、inline array span helper 和 bitwise/reference checks 统一映射到 LeanCLR class/module/interpreter metadata；method preparation 在解释 profile 中是 no-op façade | `ManagedNet10.LegacyTests.Program::RunCorlibRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestRuntimeHelpers`、`ManagedNet10.Smoke.Program::TestSpan`、`ManagedNet10.LegacyTests.Program::RunNet10SpanBinaryPrimitives` 通过 | 保留为 RuntimeHelpers/Span regression gate；byref-like escape、任意 function pointer 和完整 JIT preparation 后置 |
 | P1.6 AssemblyLoadContext / Reflection.Emit limited façade | `AssemblyLoadContext` 初始化、已加载程序集枚举、release bookkeeping、`RuntimeAssemblyBuilder.CreateDynamicAssembly` 和 `ModuleHandle.GetDynamicMethod` 只承诺 LeanCLR metadata / interpreter 能消费的受限动态程序集与 light lambda 路径；collectible ALC、LoaderAllocator、unload 和任意动态 IL/JIT codegen 后置 | `ManagedNet10.LegacyTests.Program::RunCorlibLightLambda` 通过 | 保留为 Reflection.Emit / light lambda regression gate；后续动态方法失败先区分 metadata façade 缺口和完整 JIT codegen 非目标 |
 | P1.7 Handle / reflection consolidation | type / method / field / module / assembly handle 入口统一经 `vm::Reflection` 边界解码；`MethodTable*` 走 net10 façade registry；QCall object/slot 参数先做 GC allocated-object guard，再映射到 LeanCLR metadata；unsupported handle shape 输出明确错误，不靠宽松指针猜测前进 | `RunLegacyDiscoverySmoke`、`RunCorlibReflectionRuntimeModule`、`RunRuntimeDelegateDynamicInvoke`、`RunCorlibValueTypeEqualsStructValueTypes`、`RunCorlibValueTypeGetHashCodeStructIsStable`、`RunCorlibRuntimeHelpers`、`RunNet10SpanBinaryPrimitives`、`api-scan.ps1`、`nkg-smoke.ps1` 通过 | 保留为 reflection/handle regression gate；新增 CoreLib handle 入口必须复用同一 helper 或显式说明例外 |
+| P2.1 Host Bridge ABI skeleton | 新增 `LeanClrHostBridgeFunctions` C ABI、ABI version、capability flags、状态码、错误字符串和最小 managed entry callback；mock host 只验证初始化、函数表校验和托管静态入口回调，不加载真实 Unity/Godot 或完整 runtime hosting API | `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario AbiSkeleton` 通过 | 保留为 host bridge ABI regression gate；后续 P2.2-P2.4 在同一脚本上扩展 scenario |
 
 下一批次：
 
 | 批次 | 目标 | 输出 | 验收 |
 | --- | --- | --- | --- |
-| P2.1 Host Bridge ABI skeleton | 固定 Unity/Godot 共用 host function table、版本号、capability flags、状态码和错误字符串归属 | runtime header / C ABI + mock host 编译目标 | mock host 可初始化 runtime、注册函数表、调用托管静态入口 |
 | P2.2 Opaque handle registry | 定义宿主对象 handle 创建、retain/release、判活和销毁通知语义 | mock registry + managed wrapper contract | handle 生命周期、失效诊断和重复释放幂等 |
 | P2.3 Main-thread dispatcher | 定义主线程投递、下一帧执行、同步调用保护和托管 continuation 回传 | mock dispatcher + managed scheduling entry | 投递顺序、结果回传、异常转托管诊断 |
 | P2.4 Event / callback bridge | 定义托管 delegate 注册、取消注册、宿主事件触发和异常返回协议 | mock event source + subscription token | 回调成功、托管异常、取消订阅后不再触发 |
@@ -323,14 +323,14 @@ P2 mock host 节点拆解：
 
 | 节点 | 最小产物 | 必测场景 | 非目标 |
 | --- | --- | --- | --- |
-| P2.1 ABI skeleton | 一个 C ABI header、mock host 初始化流程、runtime 侧注册入口 | 版本 / capability 校验、初始化失败错误字符串、托管静态入口调用成功 | 不复制 CoreCLR hosting API；不加载真实 Unity/Godot |
+| P2.1 ABI skeleton | 一个 C ABI header、mock host 初始化流程、runtime 侧注册入口 | 版本 / capability 校验、初始化失败错误字符串、托管静态入口调用成功；`host-bridge-smoke.ps1 -Scenario AbiSkeleton` 已通过 | 不复制 CoreCLR hosting API；不加载真实 Unity/Godot |
 | P2.2 Opaque handle registry | 宿主侧 handle table、retain/release、destroy notification、托管 wrapper handle 字段 | 创建后查询、retain/release 平衡、宿主销毁后访问返回 ObjectDisposed / MissingReference 风格诊断 | 不暴露真实引擎指针；不承诺跨进程 handle |
 | P2.3 Main-thread dispatcher | mock 主线程队列、next-frame pump、同步 reentry guard、结果回传结构 | FIFO 投递、下一帧执行、托管异常转错误状态、阻塞 wait 明确拒绝 | 不实现完整 ThreadPool / work stealing；不允许跨线程直接访问引擎对象 |
 | P2.4 Event / callback bridge | delegate subscription token、触发入口、取消注册入口、异常返回字段 | 注册后触发托管 delegate、托管异常回传、取消后不再触发、重复取消幂等 | 不实现 UnityEvent / Godot Signal 完整语义；复杂 Variant marshal 后置 |
 
-P2 验收命令应新增独立脚本，避免混入 BCL smoke：
+P2 验收命令使用独立脚本，避免混入 BCL smoke：
 
-- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario AbiSkeleton`。
+- `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario AbiSkeleton`（已通过）。
 - `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario HandleRegistry`。
 - `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario Dispatcher`。
 - `scripts/dotnet10/host-bridge-smoke.ps1 -Configuration Release -Scenario EventCallback`。
