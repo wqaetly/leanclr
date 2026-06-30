@@ -26,6 +26,7 @@ class SystemRuntimeCompilerServicesUnsafe
                                         interp::RtStackObject* ret) noexcept;
     static RtResultVoid subtract_byte_offset(const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                              interp::RtStackObject* ret) noexcept;
+    static RtResultVoid skip_init(const interp::RtStackObject* params) noexcept;
     static RtResultVoid bit_cast(const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                  interp::RtStackObject* ret) noexcept;
 

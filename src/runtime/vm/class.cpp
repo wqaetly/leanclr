@@ -1126,6 +1126,32 @@ RtResult<std::optional<metadata::SizeAndAlignment>> get_inline_array_layout(meta
 RtResultVoid Class::setup_field_layout(metadata::RtClass* klass)
 {
     assert(has_initialized_part(klass, metadata::RtClassInitPart::Field));
+
+    if (is_enum_type(klass))
+    {
+        if (klass->element_class == nullptr || klass->element_class->by_val == nullptr)
+        {
+            RET_ASSERT_ERR(RtErr::BadImageFormat);
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::SizeAndAlignment, enum_layout,
+                                                metadata::Layout::get_field_size_and_alignment(const_cast<metadata::RtTypeSig*>(klass->element_class->by_val)));
+        klass->instance_size_without_header = std::max(enum_layout.size, static_cast<uint32_t>(1));
+        klass->alignment = static_cast<uint8_t>(enum_layout.alignment);
+        klass->static_size = 0;
+
+        for (uint16_t i = 0; i < klass->field_count; ++i)
+        {
+            metadata::RtFieldInfo* field = const_cast<metadata::RtFieldInfo*>(klass->fields + i);
+            if (Field::is_instance(field))
+            {
+                field->offset = 0;
+            }
+        }
+
+        RET_VOID_OK();
+    }
+
     utils::Vector<const metadata::RtFieldInfo*> instanceFields;
     utils::Vector<const metadata::RtFieldInfo*> staticFields;
 
@@ -1277,9 +1303,16 @@ RtResultVoid Class::setup_gc_bitmap_for_field(const metadata::RtFieldInfo* field
     case metadata::RtElementType::Ptr:
     case metadata::RtElementType::FnPtr:
     case metadata::RtElementType::TypedByRef:
+    {
+        break;
+    }
     case metadata::RtElementType::Var:
     case metadata::RtElementType::MVar:
     {
+        if ((type_sig->data.generic_param->flags & static_cast<uint16_t>(metadata::RtGenericParamAttribute::ReferenceTypeConstraint)) != 0)
+        {
+            goto handle_reference_type_field;
+        }
         break;
     }
     case metadata::RtElementType::Object:

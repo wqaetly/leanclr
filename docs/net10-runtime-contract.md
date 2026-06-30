@@ -1,6 +1,6 @@
 # LeanCLR .NET 10 Runtime Contract Plan
 
-状态：第六版执行基准（2026-06-29，原仓库测试资产与 .NET 10 gate sweep 通过）
+状态：第七版执行基准（2026-06-30，第一阶段 gate sweep 已关闭；其后由 NKG/Odin 真实 workload 驱动追加一批增量 contract，见“第一阶段基线之后的真实 workload 增量”一节，这批改动仍在工作区，需在下一轮 gate sweep 固化）
 
 本文档是 `coreclr-net10` / `minimal-net10` 的 contract-first 改造清单。它回答两个问题：
 

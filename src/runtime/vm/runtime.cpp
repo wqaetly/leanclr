@@ -362,6 +362,27 @@ static RtResult<RtObject*> invoke_without_run_cctor(const metadata::RtMethodInfo
     return convert_return_value(method->return_type, ret_buffer);
 }
 
+static RtResultVoid configure_runtime_feature_switches()
+{
+    metadata::RtModuleDef* corlib_mod = Assembly::get_corlib()->mod;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, app_context_class,
+                                            corlib_mod->get_class_by_name("System.AppContext", false, true));
+    RET_ERR_ON_FAIL(Class::initialize_methods(app_context_class));
+    const metadata::RtMethodInfo* set_switch = Class::get_method_for_name(app_context_class, "SetSwitch", 2, false);
+    if (set_switch == nullptr)
+    {
+        RET_ERR(RtErr::MissingMethod);
+    }
+
+    RtString* dynamic_code_switch =
+        String::create_string_from_utf8cstr("System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported");
+    bool is_supported = false;
+    const void* args[] = {dynamic_code_switch, &is_supported};
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, unused, invoke_without_run_cctor(set_switch, nullptr, args));
+    (void)unused;
+    RET_VOID_OK();
+}
+
 // Public Runtime functions implementation
 
 RtResultVoid Runtime::initialize()
@@ -413,6 +434,8 @@ RtResultVoid Runtime::initialize()
     {
         corlib_aot_module_data->deferred_initializer(corlib_mod);
     }
+
+    RET_ERR_ON_FAIL(configure_runtime_feature_switches());
 
     RET_VOID_OK();
 }

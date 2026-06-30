@@ -51,13 +51,13 @@ Standard 版本目前已支持以下平台：
 
 ## 生态与集成
 
-LeanCLR 已支持 Unity 引擎，正在接入 Godot 与 CoreCLR BCL，并将持续扩展更多引擎和平台。
+LeanCLR 已支持 Unity 引擎与 .NET 10 BCL，正在接入 Godot，并将持续扩展更多引擎和平台。
 
 | 平台 / 集成 | 状态 | 说明 |
 |------|------|------|
 | **Unity 及团结引擎 WebGL 和小游戏平台** | ✅ 完成 | [leanclr-unity](https://github.com/focus-creative-games/leanclr-unity) 是 LeanCLR 的 Unity 插件，发布游戏（不限于 WebGL/小游戏平台）时替换 IL2CPP 为 LeanCLR |
+| **CoreCLR .NET 10 BCL** | ✅ 基础完成 | coreclr 分支已能加载并运行 .NET 10（`net10.0`）纯逻辑程序集，覆盖核心 BCL；部分不常用底层调用与库仍在完善，详见 [.NET 10 支持](#net-10-支持coreclr-分支) |
 | **Godot 全平台** | 🚧 开发中 | [leanclr-godot](https://github.com/focus-creative-games/leanclr-godot) 正在接入 Godot 引擎 |
-| **CoreCLR .NET 10 BCL** | 🚧 开发中 | Standard 的 coreclr 分支正在支持 .NET 10 BCL |
 | **Unreal Engine 全平台** | 📋 规划中 | 发布时间待定 |
 
 ## 项目状态

@@ -107,6 +107,25 @@ RtResult<const void*> SystemRuntimeCompilerServicesRuntimeHelpers::get_method_ta
     return vm::Reflection::get_net10_method_table(vm::Class::get_by_val_type_sig(obj->klass));
 }
 
+RtResult<void*> SystemRuntimeCompilerServicesRuntimeHelpers::get_raw_data(vm::RtObject* obj) noexcept
+{
+    if (obj == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    if (vm::Class::is_array_or_szarray(obj->klass))
+    {
+        return &reinterpret_cast<vm::RtArray*>(obj)->length;
+    }
+    if (vm::Class::is_string_class(obj->klass))
+    {
+        return &reinterpret_cast<vm::RtString*>(obj)->length;
+    }
+
+    RET_OK(reinterpret_cast<uint8_t*>(obj) + sizeof(vm::RtObject));
+}
+
 RtResult<bool> SystemRuntimeCompilerServicesRuntimeHelpers::object_has_component_size(vm::RtObject* obj) noexcept
 {
     if (obj == nullptr)
@@ -283,6 +302,20 @@ static RtResultVoid get_method_table_invoker(metadata::RtManagedMethodPointer me
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::GetRawData(System.Object)
+static RtResultVoid get_raw_data_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    vm::RtObject* obj = interp::EvalStackOp::get_param<vm::RtObject*>(params, 0);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(void*, raw_data,
+                                            SystemRuntimeCompilerServicesRuntimeHelpers::get_raw_data(obj));
+    interp::EvalStackOp::set_return(ret, raw_data);
+    RET_VOID_OK();
+}
+
 /// @intrinsic: System.Runtime.CompilerServices.RuntimeHelpers::InitializeArray(System.Array,System.RuntimeFieldHandle)
 static RtResultVoid initialize_array_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                              const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -427,6 +460,10 @@ static RtResultVoid is_reference_or_contains_references_invoker(metadata::RtMana
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_runtimehelpers[] = {
     {"System.Runtime.CompilerServices.RuntimeHelpers::GetMethodTable(System.Object)",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_method_table, get_method_table_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::GetRawData(System.Object)",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_raw_data, get_raw_data_invoker},
+    {"System.Runtime.CompilerServices.RuntimeHelpers::GetRawData()",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::get_raw_data, get_raw_data_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::InitializeArray(System.Array,System.RuntimeFieldHandle)",
      (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesRuntimeHelpers::initialize_array, initialize_array_invoker},
     {"System.Runtime.CompilerServices.RuntimeHelpers::ObjectHasComponentSize(System.Object)",

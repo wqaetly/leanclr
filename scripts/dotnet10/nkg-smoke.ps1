@@ -44,9 +44,14 @@ $samplerProject = [System.IO.Path]::Combine($NkgRoot, "samples", "NKGGameFramewo
 if (-not (Test-Path $samplerProject)) {
     throw "NKG sampler project was not found: $samplerProject"
 }
+$godotPlaneProject = [System.IO.Path]::Combine($NkgRoot, "samples", "NKGGameFramework.GodotPlaneSample", "NKGGameFramework.GodotPlaneSample.csproj")
+if (-not (Test-Path $godotPlaneProject)) {
+    throw "NKG Godot plane sample project was not found: $godotPlaneProject"
+}
 
 if (-not $SkipNkgBuild) {
     Invoke-Checked dotnet build $samplerProject -c $Configuration
+    Invoke-Checked dotnet build $godotPlaneProject -c $Configuration
 }
 
 $samplerOutputDir = [System.IO.Path]::Combine($NkgRoot, "samples", "NKGGameFramework.Sampler", "bin", $Configuration, "net10.0")
@@ -59,6 +64,27 @@ if (-not (Test-Path ([System.IO.Path]::Combine($samplerOutputDir, "UniTask.dll")
 if (-not (Test-Path ([System.IO.Path]::Combine($samplerOutputDir, "OdinSerializer.dll")))) {
     throw "OdinSerializer dependency output was not found: $samplerOutputDir"
 }
+$godotPlaneOutputDir = [System.IO.Path]::Combine($NkgRoot, "samples", "NKGGameFramework.GodotPlaneSample", "bin", $Configuration, "net10.0")
+if (-not (Test-Path ([System.IO.Path]::Combine($godotPlaneOutputDir, "NKGGameFramework.GodotPlaneSample.dll")))) {
+    throw "NKG Godot plane sample output was not found: $godotPlaneOutputDir"
+}
+if (-not (Test-Path ([System.IO.Path]::Combine($godotPlaneOutputDir, "NKGGameFramework.Diagnostics.dll")))) {
+    throw "NKG Diagnostics output was not found: $godotPlaneOutputDir"
+}
+$smokeDependencyDir = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($repoRoot, "out", "dotnet", "NkgSmokeDependencies", $Configuration, "net10.0"))
+$smokeDependencyRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($repoRoot, "out", "dotnet"))
+if (-not $smokeDependencyDir.StartsWith($smokeDependencyRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Smoke dependency output path escaped repo output: $smokeDependencyDir"
+}
+[System.IO.Directory]::CreateDirectory($smokeDependencyDir) | Out-Null
+Get-ChildItem -Path $smokeDependencyDir -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -in @(".dll", ".pdb", ".json") } |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+foreach ($sourceDir in @($samplerOutputDir, $godotPlaneOutputDir)) {
+    Get-ChildItem -Path $sourceDir -File |
+        Where-Object { $_.Extension -in @(".dll", ".pdb", ".json") } |
+        ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $smokeDependencyDir -Force }
+}
 
 $interpSmokeScript = [System.IO.Path]::Combine($PSScriptRoot, "interp-smoke.ps1")
 $args = @(
@@ -69,7 +95,7 @@ $args = @(
     "-Entry",
     $Entry,
     "-AdditionalAssemblyDir",
-    $samplerOutputDir
+    $smokeDependencyDir
 )
 
 if (-not [string]::IsNullOrWhiteSpace($RuntimeDir)) {

@@ -238,6 +238,12 @@ RtResultVoid SystemRuntimeCompilerServicesUnsafe::subtract_byte_offset(const met
     RET_VOID_OK();
 }
 
+RtResultVoid SystemRuntimeCompilerServicesUnsafe::skip_init(const interp::RtStackObject*) noexcept
+{
+    // CoreCLR treats SkipInit<T>(out T) as a JIT hint. LeanCLR locals are already initialized by the interpreter.
+    RET_VOID_OK();
+}
+
 RtResultVoid SystemRuntimeCompilerServicesUnsafe::bit_cast(const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                                            interp::RtStackObject* ret) noexcept
 {
@@ -381,6 +387,13 @@ static RtResultVoid subtract_byte_offset_invoker(metadata::RtManagedMethodPointe
     RET_VOID_OK();
 }
 
+static RtResultVoid skip_init_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                      interp::RtStackObject*) noexcept
+{
+    RET_ERR_ON_FAIL(SystemRuntimeCompilerServicesUnsafe::skip_init(params));
+    RET_VOID_OK();
+}
+
 static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_unsafe[] = {
     {"System.Runtime.CompilerServices.Unsafe::AsPointer<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as_pointer, as_pointer_invoker},
     {"System.Runtime.CompilerServices.Unsafe::AsRef<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as_pointer, as_pointer_invoker},
@@ -408,6 +421,8 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_un
     {"System.Runtime.CompilerServices.Unsafe::Add<>", nullptr, add_invoker},
     {"System.Runtime.CompilerServices.Unsafe::AddByteOffset<>", nullptr, add_byte_offset_invoker},
     {"System.Runtime.CompilerServices.Unsafe::SubtractByteOffset<>", nullptr, subtract_byte_offset_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::SkipInit<>", nullptr, skip_init_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::SkipInit", nullptr, skip_init_invoker},
     {"System.Runtime.CompilerServices.Unsafe::BitCast<,>", nullptr, bit_cast_invoker},
 };
 
