@@ -197,7 +197,21 @@ namespace ManagedNet10.LegacyTests
             }
 
             if (type == typeof(CorlibTests.InternalCall.TC_System_AppDomain) &&
-                methodName == "LoadAssemblyExist_ByName")
+                (methodName == "LoadAssemblyExist_ByName" ||
+                methodName == "LoadAssemblyNotExist_ByName"))
+            {
+                return true;
+            }
+
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Threading_Monitor) &&
+                methodName == "WaitPulse_SignalWaitingThread")
+            {
+                return true;
+            }
+
+            if (type == typeof(CorlibTests.InternalCall.TC_System_Reflection_RuntimeModule) &&
+                (methodName == "GetPEKind_ReturnsValidEnums" ||
+                methodName == "GetPEKind_ReturnsConsistentValues"))
             {
                 return true;
             }
@@ -248,14 +262,49 @@ namespace ManagedNet10.LegacyTests
 
             if (type == typeof(Tests.Instruments.Converts.TC_conv_u4))
             {
-                return methodName == "float_overflow_down" ||
+                return methodName == "float_overflow_up" ||
+                    methodName == "float_overflow_down" ||
+                    methodName == "double_overflow_up" ||
                     methodName == "double_overflow_down";
             }
 
             if (type == typeof(Tests.Instruments.Converts.TC_conv_u8))
             {
                 return methodName == "float_2" ||
-                    methodName == "double_2";
+                    methodName == "float_overflow_up" ||
+                    methodName == "float_overflow_down" ||
+                    methodName == "double_2" ||
+                    methodName == "double_overflow_up" ||
+                    methodName == "double_overflow_down";
+            }
+
+            if (type == typeof(Tests.Instruments.Converts.TC_conv_i))
+            {
+                return methodName == "float_overflow_up" ||
+                    methodName == "float_overflow_down" ||
+                    methodName == "double_overflow_up" ||
+                    methodName == "double_overflow_down";
+            }
+
+            if (type == typeof(Tests.Instruments.Converts.TC_conv_i4))
+            {
+                return methodName == "float_overflow_up" ||
+                    methodName == "float_overflow_down" ||
+                    methodName == "double_overflow_up" ||
+                    methodName == "double_overflow_down";
+            }
+
+            if (type == typeof(Tests.Instruments.Converts.TC_conv_i8))
+            {
+                return methodName == "float_overflow_up" ||
+                    methodName == "float_overflow_down" ||
+                    methodName == "double_overflow_up" ||
+                    methodName == "double_overflow_down";
+            }
+
+            if (type == typeof(Tests.Instruments.Arrays.TC_ldelema))
+            {
+                return methodName == "UncheckedForStructArray2";
             }
 
             return false;

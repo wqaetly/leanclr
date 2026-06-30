@@ -18,6 +18,7 @@ struct InterpFrame
     RtStackObject* eval_stack_base;
     uint32_t eval_stack_size;
     uint32_t old_eval_stack_top;
+    int32_t vararg_count;
     const uint8_t* ip;
 
     void save(const uint8_t* next_ip)
@@ -94,7 +95,7 @@ class MachineState
     void free_frame_stack(uint32_t old_eval_stack_top);
 
     RtResult<InterpFrame*> enter_frame_from_native(const metadata::RtMethodInfo* method, const RtStackObject* args);
-    RtResult<InterpFrame*> enter_frame_from_interp(const metadata::RtMethodInfo* method, RtStackObject* frame_base);
+    RtResult<InterpFrame*> enter_frame_from_interp(const metadata::RtMethodInfo* method, RtStackObject* frame_base, int32_t vararg_count = 0);
     InterpFrame* leave_frame(const MachineStateSavePoint& sp, InterpFrame* frame);
 
     uint32_t enter_frame_from_icall_or_intrinsic(const metadata::RtMethodInfo* method);

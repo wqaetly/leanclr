@@ -14,6 +14,9 @@ class SystemRuntimeCompilerServicesUnsafe
     static RtResult<void*> as(void* source) noexcept;
     static RtResult<intptr_t> byte_offset(void* origin, void* target) noexcept;
     static RtResult<bool> are_same(void* left, void* right) noexcept;
+    static RtResult<bool> is_address_less_than(void* left, void* right) noexcept;
+    static RtResult<bool> is_address_greater_than(void* left, void* right) noexcept;
+    static RtResult<int32_t> size_of(const metadata::RtMethodInfo* method) noexcept;
     static RtResultVoid copy_block(const interp::RtStackObject* params) noexcept;
     static RtResultVoid read_unaligned(const metadata::RtMethodInfo* method, const interp::RtStackObject* params,
                                        interp::RtStackObject* ret) noexcept;

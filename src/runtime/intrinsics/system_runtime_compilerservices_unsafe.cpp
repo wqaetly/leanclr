@@ -1,6 +1,7 @@
 #include "system_runtime_compilerservices_unsafe.h"
 
 #include <cstring>
+#include <limits>
 
 #include "interp/eval_stack_op.h"
 #include "interp/interp_defs.h"
@@ -80,6 +81,26 @@ RtResult<intptr_t> SystemRuntimeCompilerServicesUnsafe::byte_offset(void* origin
 RtResult<bool> SystemRuntimeCompilerServicesUnsafe::are_same(void* left, void* right) noexcept
 {
     RET_OK(left == right);
+}
+
+RtResult<bool> SystemRuntimeCompilerServicesUnsafe::is_address_less_than(void* left, void* right) noexcept
+{
+    RET_OK(reinterpret_cast<uintptr_t>(left) < reinterpret_cast<uintptr_t>(right));
+}
+
+RtResult<bool> SystemRuntimeCompilerServicesUnsafe::is_address_greater_than(void* left, void* right) noexcept
+{
+    RET_OK(reinterpret_cast<uintptr_t>(left) > reinterpret_cast<uintptr_t>(right));
+}
+
+RtResult<int32_t> SystemRuntimeCompilerServicesUnsafe::size_of(const metadata::RtMethodInfo* method) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(size_t, value_size, get_first_generic_arg_size(method));
+    if (value_size > static_cast<size_t>(std::numeric_limits<int32_t>::max()))
+    {
+        RET_ERR(RtErr::Overflow);
+    }
+    RET_OK(static_cast<int32_t>(value_size));
 }
 
 RtResultVoid SystemRuntimeCompilerServicesUnsafe::copy_block(const interp::RtStackObject* params) noexcept
@@ -290,6 +311,34 @@ static RtResultVoid are_same_invoker(metadata::RtManagedMethodPointer, const met
     RET_VOID_OK();
 }
 
+static RtResultVoid is_address_less_than_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                 interp::RtStackObject* ret) noexcept
+{
+    void* left = interp::EvalStackOp::get_param<void*>(params, 0);
+    void* right = interp::EvalStackOp::get_param<void*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeCompilerServicesUnsafe::is_address_less_than(left, right));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
+static RtResultVoid is_address_greater_than_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                                    interp::RtStackObject* ret) noexcept
+{
+    void* left = interp::EvalStackOp::get_param<void*>(params, 0);
+    void* right = interp::EvalStackOp::get_param<void*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeCompilerServicesUnsafe::is_address_greater_than(left, right));
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
+static RtResultVoid size_of_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* method, const interp::RtStackObject*,
+                                    interp::RtStackObject* ret) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, result, SystemRuntimeCompilerServicesUnsafe::size_of(method));
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 static RtResultVoid copy_block_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                        interp::RtStackObject*) noexcept
 {
@@ -339,6 +388,11 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_runtime_compilerservices_un
     {"System.Runtime.CompilerServices.Unsafe::As<,>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::as, as_invoker},
     {"System.Runtime.CompilerServices.Unsafe::ByteOffset<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::byte_offset, byte_offset_invoker},
     {"System.Runtime.CompilerServices.Unsafe::AreSame<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::are_same, are_same_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::IsAddressLessThan<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::is_address_less_than,
+     is_address_less_than_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::IsAddressGreaterThan<>",
+     (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::is_address_greater_than, is_address_greater_than_invoker},
+    {"System.Runtime.CompilerServices.Unsafe::SizeOf<>", (vm::IntrinsicFunction)&SystemRuntimeCompilerServicesUnsafe::size_of, size_of_invoker},
     {"System.Runtime.CompilerServices.Unsafe::CopyBlock(System.Void*,System.Void*,System.UInt32)", nullptr, copy_block_invoker},
     {"System.Runtime.CompilerServices.Unsafe::CopyBlock(System.Byte&,System.Byte&,System.UInt32)", nullptr, copy_block_invoker},
     {"System.Runtime.CompilerServices.Unsafe::CopyBlock", nullptr, copy_block_invoker},

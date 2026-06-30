@@ -21,8 +21,8 @@ python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --r
 ```text
 tests/
 ├── managed-net10/         # Current net10.0 smoke and regression projects
-├── managed/               # Legacy source files linked by ManagedNet10.LegacyTests
+├── managed/               # Legacy source material; not a runnable test entry
 └── TESTING.md
 ```
 
-The old Mono-oriented `basic-tester`, `managed.sln`, and `scripts/test` entry points were removed with the Mono profile cleanup. Do not delete `managed/` wholesale yet: `managed-net10/ManagedNet10.LegacyTests` still links source files from it.
+The old Mono-oriented `basic-tester`, `managed.sln`, and `scripts/test` entry points were removed with the Mono profile cleanup. Treat `managed-net10/` plus `scripts/dotnet10/` as the only runnable managed test entry. Do not delete `managed/` wholesale yet: `managed-net10/ManagedNet10.LegacyTests` still links source files from it.

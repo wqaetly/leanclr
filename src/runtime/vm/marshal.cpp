@@ -11,6 +11,7 @@
 #include "type.h"
 #include "rt_exception.h"
 #include "method.h"
+#include "customattribute.h"
 #include "metadata/aot_module.h"
 #include "utils/string_util.h"
 #include "utils/string_builder.h"
@@ -21,6 +22,28 @@ namespace leanclr
 {
 namespace vm
 {
+namespace
+{
+
+RtResult<bool> has_mono_pinvoke_callback_attribute(const metadata::RtMethodInfo* method)
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL3(metadata::RtCustomAttributeRidRange, rid_range,
+                                             method->parent->image->get_custom_attribute_rid_range(method->token));
+    for (uint32_t i = 0; i < rid_range.count; ++i)
+    {
+        uint32_t ca_rid = rid_range.start_rid + i;
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtCustomAttributeRawData, raw_data,
+                                                method->parent->image->get_custom_attribute_raw_data(ca_rid));
+        const metadata::RtClass* attr_klass = raw_data.ctor->parent;
+        if (attr_klass != nullptr && attr_klass->name != nullptr && std::strcmp(attr_klass->name, "MonoPInvokeCallbackAttribute") == 0)
+        {
+            RET_OK(true);
+        }
+    }
+    RET_OK(false);
+}
+
+} // namespace
 
 void* leanclr::vm::Marshal::alloc_hglobal(size_t size)
 {
@@ -209,7 +232,12 @@ RtResult<intptr_t> Marshal::offset_of(vm::RtReflectionType* ref_type, const char
 
 RtResult<RtDelegate*> Marshal::marshal_function_pointer_to_delegate(metadata::RtNativeMethodPointer ptr, metadata::RtClass* delegate_class)
 {
-    RETURN_NOT_IMPLEMENTED_ERROR();
+    if (ptr == nullptr)
+    {
+        RET_OK(nullptr);
+    }
+    auto* method = reinterpret_cast<const metadata::RtMethodInfo*>(ptr);
+    return Delegate::new_delegate(delegate_class, nullptr, method).cast<RtDelegate*>();
 }
 
 RtResult<metadata::RtNativeMethodPointer> Marshal::get_function_pointer_for_delegate(RtDelegate* delegate)
@@ -226,7 +254,7 @@ RtResult<metadata::RtNativeMethodPointer> Marshal::get_function_pointer_for_dele
         const int32_t len = Array::get_array_length(invocation_array);
         if (len != 1)
         {
-            RET_ERR_WITH_MSG(RtErr::NotSupported, "Delegate has multiple methods");
+            RET_OK(nullptr);
         }
         single = *Array::get_array_data_start_as<RtDelegate*>(invocation_array);
     }
@@ -250,14 +278,19 @@ RtResult<metadata::RtNativeMethodPointer> Marshal::get_function_pointer_for_dele
     }
     const metadata::RtAotMethodMonoPInvokeCallbackData* cb =
         metadata::AotModule::find_mono_pinvoke_callback_method(target_method->parent->image, target_method->token);
-    if (cb == nullptr || cb->native_method_ptr == nullptr)
+    if (cb != nullptr && cb->native_method_ptr != nullptr)
+    {
+        RET_OK(cb->native_method_ptr);
+    }
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, has_mono_pinvoke_callback, has_mono_pinvoke_callback_attribute(target_method));
+    if (!has_mono_pinvoke_callback)
     {
         char msg[1024];
         const metadata::RtClass* klass = target_method->parent;
         snprintf(msg, sizeof(msg), "To marshal delegate method, the method should contain '[MonoPInvokeCallback]' attribute. Method: %s.%s.%s", klass->namespaze, klass->name, target_method->name);
         RET_ERR_WITH_MSG(RtErr::NotSupported, msg);
     }
-    RET_OK(cb->native_method_ptr);
+    RET_OK(reinterpret_cast<metadata::RtNativeMethodPointer>(const_cast<metadata::RtMethodInfo*>(target_method)));
 }
 
 bool read_utf8_span(utils::BinaryReader& reader, metadata::RtMarshalUtf8Span& span)

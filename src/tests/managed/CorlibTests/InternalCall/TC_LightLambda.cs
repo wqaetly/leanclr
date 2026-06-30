@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -17,8 +17,8 @@ namespace CorlibTests.InternalCall
             return a + b;
         }
 
-        // TODO, icall `System.Reflection.Emit.AssemblyBuilder::basic_init` is not implemented
-        //[UnitTest]
+         // TODO, icall `System.Reflection.Emit.AssemblyBuilder::basic_init` is not implemented
+        [UnitTest]
         public void CreateLambda()
         {
             var eventType = typeof(Func<int, int, int>);
@@ -31,8 +31,8 @@ namespace CorlibTests.InternalCall
 
         delegate int FunIn(in int a, in int b);
 
-        // TODO, icall `System.Reflection.Emit.AssemblyBuilder::basic_init` is not implemented
-        //[UnitTest]
+         // TODO, icall `System.Reflection.Emit.AssemblyBuilder::basic_init` is not implemented
+        [UnitTest]
         public void CreateLambdaInArgument()
         {
             var eventType = typeof(FunIn);

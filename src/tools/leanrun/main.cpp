@@ -19,6 +19,8 @@
 #include "vm/stacktrace.h"
 #include "vm/property.h"
 #include "metadata/metadata_name.h"
+#include "interp/eval_stack_op.h"
+#include "vm/pinvoke.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -132,6 +134,39 @@ static bool is_system_private_corelib_loaded()
 {
     auto* corlib = vm::Assembly::get_corlib();
     return corlib != nullptr && corlib->mod != nullptr && std::strcmp(corlib->mod->get_name_no_ext(), "System.Private.CoreLib") == 0;
+}
+
+static RtResultVoid runtime_api_get_int_argument_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                         const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, interp::EvalStackOp::get_param<int32_t>(params, 0));
+    RET_VOID_OK();
+}
+
+static RtResultVoid runtime_api_get_string_argument_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, interp::EvalStackOp::get_param<vm::RtString*>(params, 0));
+    RET_VOID_OK();
+}
+
+static RtResultVoid runtime_api_get_multi_argument_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                           const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    int32_t value = interp::EvalStackOp::get_param<int32_t>(params, 0);
+    float c = interp::EvalStackOp::get_param<float>(params, 1);
+    double a = interp::EvalStackOp::get_param<double>(params, 2);
+    int64_t e = interp::EvalStackOp::get_param<int64_t>(params, 3);
+    interp::EvalStackOp::set_return(ret, value + static_cast<int32_t>(c) + static_cast<int32_t>(a) + static_cast<int32_t>(e));
+    RET_VOID_OK();
+}
+
+static void register_leanrun_test_pinvokes()
+{
+    vm::PInvokes::register_pinvoke("Tests.CSharp.NativeDll::GetIntArgument", nullptr, runtime_api_get_int_argument_invoker);
+    vm::PInvokes::register_pinvoke("Tests.CSharp.NativeDll::GetStringArgument", nullptr, runtime_api_get_string_argument_invoker);
+    vm::PInvokes::register_pinvoke("Tests.CSharp.NativeDll::GetMultiArgument", nullptr, runtime_api_get_multi_argument_invoker);
+    vm::PInvokes::register_pinvoke("Tests.CSharp.NativeDll::GetIntArgumentCdecl", nullptr, runtime_api_get_int_argument_invoker);
 }
 
 static void print_error_and_exit(const std::string& err_message, RtErr err)
@@ -249,6 +284,7 @@ static int run(const std::string& dll_name, const std::vector<std::string>& dll_
         std::cerr << "Failed to initialize runtime, error: " << static_cast<int>(init_result.unwrap_err()) << std::endl;
         return -1;
     }
+    register_leanrun_test_pinvokes();
 
     // Load assembly
     auto ass_result = vm::Assembly::load_by_name(dll_name.c_str());

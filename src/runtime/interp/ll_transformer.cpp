@@ -27,6 +27,8 @@ GeneralInst::GeneralInst(const hl::GeneralInst& hl_inst)
     arg3 = hl_inst.arg3;
     dst_or_ret = hl_inst.dst_or_ret;
     extra_data = hl_inst.extra_data;
+    vararg_count = hl_inst.get_vararg_count();
+    null_check_this = hl_inst.needs_null_check_this();
 #if LEANCLR_DEBUG
     extra_data2.value = 0;
     resolved_data_idx = 0;

@@ -29,8 +29,8 @@ struct RtMarshalByRefObject : public RtObject
 // Managed array
 struct RtArray : public RtObject
 {
-    const ArrayBounds* bounds;
     int32_t length;
+    uint32_t padding;
     uint64_t first_data;
 };
 
@@ -688,7 +688,6 @@ constexpr uint32_t RT_STRING_FIRST_CHAR_OFFSET = offsetof(RtString, first_char);
 constexpr uint32_t RT_ARRAY_HEADER_SIZE = offsetof(RtArray, first_data);
 constexpr uint32_t RT_ARRAY_FIRST_DATA_OFFSET = offsetof(RtArray, first_data);
 constexpr uint32_t RT_ARRAY_LENGTH_OFFSET = offsetof(RtArray, length);
-constexpr uint32_t RT_ARRAY_BOUNDS_OFFSET = offsetof(RtArray, bounds);
 #ifdef _MSC_VER
 #pragma warning(pop)
 #else

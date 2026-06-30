@@ -93,6 +93,29 @@ struct RtSystemInfo
     uint16_t wProcessorRevision;
 };
 
+struct RtProcessorNumber
+{
+    uint16_t Group;
+    uint8_t Number;
+    uint8_t Reserved;
+};
+
+struct RtArgIteratorSigPointer
+{
+    intptr_t ptr;
+    uint32_t len;
+    uint32_t padding;
+};
+
+struct RtArgIterator
+{
+    intptr_t arg_cookie;
+    RtArgIteratorSigPointer sig_ptr;
+    intptr_t arg_ptr;
+    int32_t remaining_args;
+    int32_t padding;
+};
+
 class RtObjectSlotRootGuard
 {
   public:
@@ -532,6 +555,17 @@ RtResult<vm::RtString*> get_assembly_image_runtime_version(void* qcall_assembly,
     }
 
     RET_OK(vm::String::create_string_from_utf8cstr("v4.0.30319"));
+}
+
+RtResult<vm::RtString*> get_assembly_location(void* qcall_assembly, void* native_handle) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtAssembly*, assembly, vm::Reflection::get_assembly_from_qcall_assembly(qcall_assembly, native_handle));
+    if (assembly->mod == nullptr)
+    {
+        RET_ERR(RtErr::BadImageFormat);
+    }
+
+    RET_OK(vm::String::create_string_from_utf8cstr(assembly->mod->get_name()));
 }
 
 RtResult<vm::RtReflectionMethod*> get_assembly_entry_point(void* qcall_assembly, void* native_handle) noexcept
@@ -2060,6 +2094,129 @@ void set_instance_bool_field_if_present(vm::RtObject* obj, const char* field_nam
     *reinterpret_cast<bool*>(data) = value;
 }
 
+RtResult<vm::RtObject*> get_static_object_field(metadata::RtClass* klass, const char* field_name) noexcept
+{
+    const metadata::RtFieldInfo* field = vm::Class::get_field_for_name(klass, field_name, false);
+    if (field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+
+    vm::RtObject* value = nullptr;
+    RET_ERR_ON_FAIL(vm::Field::get_static_value(field, &value));
+    RET_OK(value);
+}
+
+RtResult<bool> finish_portable_thread_pool_worker_iteration(vm::RtObject* thread_pool_instance) noexcept
+{
+    if (thread_pool_instance == nullptr || thread_pool_instance->klass == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    RET_ERR_ON_FAIL(vm::Class::initialize_fields(const_cast<metadata::RtClass*>(thread_pool_instance->klass)));
+    const metadata::RtFieldInfo* separated_field = vm::Class::get_field_for_name(thread_pool_instance->klass, "_separated", true);
+    if (separated_field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+
+    uint8_t* separated_data =
+        reinterpret_cast<uint8_t*>(thread_pool_instance) + vm::Field::get_instance_field_offset_includes_object_header_for_all_type(separated_field);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, separated_klass, vm::Class::get_class_from_typesig(separated_field->type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_fields(separated_klass));
+    const metadata::RtFieldInfo* counts_field = vm::Class::get_field_for_name(separated_klass, "counts", false);
+    if (counts_field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+
+    uint8_t* counts_data = separated_data + vm::Field::get_field_offset_excludes_object_header_for_all_type(counts_field);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, counts_klass, vm::Class::get_class_from_typesig(counts_field->type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_fields(counts_klass));
+    const metadata::RtFieldInfo* data_field = vm::Class::get_field_for_name(counts_klass, "_data", false);
+    if (data_field == nullptr)
+    {
+        RET_ERR(RtErr::MissingField);
+    }
+
+    auto* counts_bits = reinterpret_cast<uint64_t*>(counts_data + vm::Field::get_field_offset_excludes_object_header_for_all_type(data_field));
+    uint64_t data = *counts_bits;
+    uint16_t processing_work = static_cast<uint16_t>(data & 0xffffu);
+    if (processing_work > 0)
+    {
+        RET_OK(true);
+    }
+
+    uint16_t existing_threads = static_cast<uint16_t>((data >> 16) & 0xffffu);
+    if (existing_threads > 0)
+    {
+        existing_threads--;
+        data = (data & ~(0xffffULL << 16)) | (static_cast<uint64_t>(existing_threads) << 16);
+        *counts_bits = data;
+    }
+
+    RET_OK(false);
+}
+
+RtResultVoid dispatch_thread_pool_work_queue(metadata::RtModuleDef* image, const metadata::RtMethodInfo* dispatch_method) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, portable_thread_pool_klass,
+                                            image->get_class_by_name("System.Threading.PortableThreadPool", false, true));
+    RET_ERR_ON_FAIL(vm::Runtime::run_class_static_constructor(portable_thread_pool_klass));
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, thread_pool_instance,
+                                            get_static_object_field(portable_thread_pool_klass, "ThreadPoolInstance"));
+    if (thread_pool_instance == nullptr)
+    {
+        RET_ERR(RtErr::ExecutionEngine);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, worker_thread_klass,
+                                            image->get_class_by_nested_full_name("System.Threading.PortableThreadPool+WorkerThread", false, true));
+    const metadata::RtMethodInfo* take_active_request_method = vm::Class::get_method_for_name(worker_thread_klass, "TakeActiveRequest", 1, false);
+    const metadata::RtMethodInfo* remove_working_worker_method = vm::Class::get_method_for_name(worker_thread_klass, "RemoveWorkingWorker", 1, false);
+    if (take_active_request_method == nullptr || remove_working_worker_method == nullptr)
+    {
+        RET_ERR(RtErr::MissingMethod);
+    }
+
+    vm::RtObject* args[1] = {thread_pool_instance};
+    while (true)
+    {
+        RET_ERR_ON_FAIL(vm::Runtime::invoke_object_arguments_with_run_cctor(take_active_request_method, nullptr, args, 1));
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, dispatch_result_obj,
+                                                vm::Runtime::invoke_object_arguments_with_run_cctor(dispatch_method, nullptr, nullptr, 0));
+        bool removed_by_dispatch = false;
+        if (dispatch_result_obj != nullptr)
+        {
+            const metadata::RtFieldInfo* value_field = vm::Class::get_field_for_name(dispatch_result_obj->klass, "m_value", true);
+            if (value_field == nullptr)
+            {
+                value_field = vm::Class::get_field_for_name(dispatch_result_obj->klass, "value", true);
+            }
+            if (value_field != nullptr)
+            {
+                uint8_t value = 0;
+                RET_ERR_ON_FAIL(vm::Field::get_instance_value(value_field, dispatch_result_obj, &value));
+                removed_by_dispatch = value == 0;
+            }
+        }
+
+        if (!removed_by_dispatch)
+        {
+            RET_ERR_ON_FAIL(vm::Runtime::invoke_object_arguments_with_run_cctor(remove_working_worker_method, nullptr, args, 1));
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, should_continue, finish_portable_thread_pool_worker_iteration(thread_pool_instance));
+        if (!should_continue)
+        {
+            break;
+        }
+    }
+    RET_VOID_OK();
+}
+
 RtResultVoid ensure_coreclr_thread_initialized(vm::RtObject* thread, bool current_thread) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(uint8_t*, internal_thread_data, get_instance_field_data(thread, "_DONT_USE_InternalThread"));
@@ -2270,7 +2427,14 @@ RtResultVoid thread_start_internal_invoker(metadata::RtManagedMethodPointer, con
         RET_VOID_OK();
     }
 
-    RET_ERR_ON_FAIL(vm::Runtime::invoke_object_arguments_with_run_cctor(start_method, start_target, nullptr, 0));
+    if (is_thread_pool != 0)
+    {
+        RET_ERR_ON_FAIL(dispatch_thread_pool_work_queue(managed_thread->klass->image, start_method));
+    }
+    else
+    {
+        RET_ERR_ON_FAIL(vm::Runtime::invoke_object_arguments_with_run_cctor(start_method, start_target, nullptr, 0));
+    }
     state = static_cast<int32_t>(thread->state);
     state &= ~static_cast<int32_t>(vm::RtThreadState::Running);
     state |= static_cast<int32_t>(vm::RtThreadState::Stopped);
@@ -2470,6 +2634,20 @@ RtResultVoid kernel32_get_current_thread_id_invoker(metadata::RtManagedMethodPoi
                                                     interp::RtStackObject* ret) noexcept
 {
     interp::EvalStackOp::set_return(ret, platform::Kernel32::get_current_thread_id());
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_current_processor_number_ex_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                              const interp::RtStackObject* params,
+                                                              interp::RtStackObject*) noexcept
+{
+    auto processor_number = interp::EvalStackOp::get_param<RtProcessorNumber*>(params, 0);
+    if (processor_number != nullptr)
+    {
+        processor_number->Group = 0;
+        processor_number->Number = 0;
+        processor_number->Reserved = 0;
+    }
     RET_VOID_OK();
 }
 
@@ -3546,6 +3724,22 @@ RtResultVoid runtime_helpers_compile_method_invoker(metadata::RtManagedMethodPoi
     RET_VOID_OK();
 }
 
+RtResultVoid arg_iterator_init_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                       interp::RtStackObject*) noexcept
+{
+    auto arg_iterator = interp::EvalStackOp::get_param<RtArgIterator*>(params, 0);
+    auto cookie = interp::EvalStackOp::get_param<intptr_t>(params, 1);
+    if (arg_iterator == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+
+    std::memset(arg_iterator, 0, sizeof(RtArgIterator));
+    arg_iterator->arg_cookie = cookie;
+    arg_iterator->remaining_args = cookie != 0 ? *reinterpret_cast<int32_t*>(cookie) : 0;
+    RET_VOID_OK();
+}
+
 RtResultVoid runtime_helpers_allocate_uninitialized_clone_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                                   const interp::RtStackObject* params, interp::RtStackObject*) noexcept
 {
@@ -3749,6 +3943,64 @@ RtResultVoid marshal_size_of_helper_invoker(metadata::RtManagedMethodPointer, co
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
     RET_ERR_ON_FAIL(vm::Class::initialize_fields(klass));
     interp::EvalStackOp::set_return(ret, static_cast<int32_t>(vm::Class::get_instance_size_without_object_header(klass)));
+    RET_VOID_OK();
+}
+
+RtResultVoid marshal_get_delegate_for_function_pointer_internal_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                        const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto ptr = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto ref_type = interp::EvalStackOp::get_param<vm::RtReflectionType*>(params, 1);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(ref_type));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtDelegate*, delegate,
+                                            vm::Marshal::marshal_function_pointer_to_delegate(reinterpret_cast<metadata::RtNativeMethodPointer>(ptr),
+                                                                                              klass));
+    interp::EvalStackOp::set_return(ret, delegate);
+    RET_VOID_OK();
+}
+
+RtResultVoid marshal_get_delegate_for_function_pointer_qcall_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                     const interp::RtStackObject* params, interp::RtStackObject*) noexcept
+{
+    auto ptr = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto qcall_type_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 2);
+    auto result_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 3);
+    if (result_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_qcall_type_handle(qcall_type_handle, native_handle));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtDelegate*, delegate,
+                                            vm::Marshal::marshal_function_pointer_to_delegate(reinterpret_cast<metadata::RtNativeMethodPointer>(ptr),
+                                                                                              klass));
+    *result_slot = reinterpret_cast<vm::RtObject*>(delegate);
+    RET_VOID_OK();
+}
+
+RtResultVoid marshal_get_function_pointer_for_delegate_internal_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                        const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto delegate = interp::EvalStackOp::get_param<vm::RtDelegate*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtNativeMethodPointer, ptr,
+                                            vm::Marshal::get_function_pointer_for_delegate(delegate));
+    interp::EvalStackOp::set_return(ret, reinterpret_cast<void*>(ptr));
+    RET_VOID_OK();
+}
+
+RtResultVoid marshal_get_function_pointer_for_delegate_qcall_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                                                     const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto delegate_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 0);
+    vm::RtDelegate* delegate = delegate_slot != nullptr ? reinterpret_cast<vm::RtDelegate*>(*delegate_slot) : nullptr;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtNativeMethodPointer, ptr,
+                                            vm::Marshal::get_function_pointer_for_delegate(delegate));
+    interp::EvalStackOp::set_return(ret, reinterpret_cast<void*>(ptr));
     RET_VOID_OK();
 }
 
@@ -4455,6 +4707,22 @@ RtResultVoid assembly_get_image_runtime_version_invoker(metadata::RtManagedMetho
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtString*, runtime_version,
                                             get_assembly_image_runtime_version(qcall_assembly, native_handle));
     *ret_string = runtime_version;
+    RET_VOID_OK();
+}
+
+RtResultVoid assembly_get_location_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                           interp::RtStackObject*) noexcept
+{
+    auto qcall_assembly = interp::EvalStackOp::get_param<void*>(params, 0);
+    auto native_handle = interp::EvalStackOp::get_param<void*>(params, 1);
+    auto ret_string = interp::EvalStackOp::get_param<vm::RtString**>(params, 2);
+    if (ret_string == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtString*, location, get_assembly_location(qcall_assembly, native_handle));
+    *ret_string = location;
     RET_VOID_OK();
 }
 
@@ -5381,6 +5649,13 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Threading.Thread::Join(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)", nullptr,
                                    thread_join_invoker);
     vm::PInvokes::register_pinvoke("System.Threading.Thread::Join", nullptr, thread_join_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Threading.Thread::<Join>g____PInvoke|59_0(System.Threading.ThreadHandle,System.Int32)", nullptr,
+        thread_join_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Threading.Thread::<Join>g____PInvoke|59_0(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)",
+        nullptr, thread_join_invoker);
+    vm::PInvokes::register_pinvoke("System.Threading.Thread::<Join>g____PInvoke|59_0", nullptr, thread_join_invoker);
     vm::PInvokes::register_pinvoke("ThreadNative_Join(System.Runtime.CompilerServices.ObjectHandleOnStack,System.Int32)", nullptr, thread_join_invoker);
     vm::PInvokes::register_pinvoke("ThreadNative_Join", nullptr, thread_join_invoker);
     vm::PInvokes::register_pinvoke(
@@ -5459,6 +5734,18 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Kernel32::GetCurrentThreadId", nullptr, kernel32_get_current_thread_id_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetCurrentThreadId()", nullptr, kernel32_get_current_thread_id_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetCurrentThreadId", nullptr, kernel32_get_current_thread_id_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetCurrentProcessorNumberEx>g____PInvoke|275_0(Interop/Kernel32/PROCESSOR_NUMBER*)",
+                                   nullptr, kernel32_get_current_processor_number_ex_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetCurrentProcessorNumberEx>g____PInvoke|275_0", nullptr,
+                                   kernel32_get_current_processor_number_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetCurrentProcessorNumberEx>g____PInvoke|275_0(Interop/Kernel32/PROCESSOR_NUMBER*)",
+                                   nullptr, kernel32_get_current_processor_number_ex_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::<GetCurrentProcessorNumberEx>g____PInvoke|275_0", nullptr,
+                                   kernel32_get_current_processor_number_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetCurrentProcessorNumberEx>g____PInvoke|275_0(Interop/Kernel32/PROCESSOR_NUMBER*)",
+                                   nullptr, kernel32_get_current_processor_number_ex_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::<GetCurrentProcessorNumberEx>g____PInvoke|275_0", nullptr,
+                                   kernel32_get_current_processor_number_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetThreadIOPendingFlag>g____PInvoke|252_0(System.IntPtr,Interop/BOOL*)", nullptr,
                                    kernel32_get_thread_io_pending_flag_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<GetThreadIOPendingFlag>g____PInvoke|252_0", nullptr,
@@ -6293,6 +6580,13 @@ void register_coreclr_qcall_pinvokes() noexcept
         runtime_helpers_compile_method_invoker);
     vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.RuntimeHelpers::PrepareMethod", nullptr,
                                    runtime_helpers_compile_method_invoker);
+    vm::PInvokes::register_pinvoke("ArgIterator_Init", nullptr, arg_iterator_init_invoker);
+    vm::PInvokes::register_pinvoke("System.ArgIterator::Init(System.ArgIterator*,System.IntPtr)", nullptr,
+                                   arg_iterator_init_invoker);
+    vm::PInvokes::register_pinvoke("System.ArgIterator::Init", nullptr, arg_iterator_init_invoker);
+    vm::PInvokes::register_pinvoke("System.ArgIterator::<Init>g____PInvoke|0_0(System.ArgIterator*,System.IntPtr)", nullptr,
+                                   arg_iterator_init_invoker);
+    vm::PInvokes::register_pinvoke("System.ArgIterator::<Init>g____PInvoke|0_0", nullptr, arg_iterator_init_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Runtime.CompilerServices.RuntimeHelpers::AllocateUninitializedClone(System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, runtime_helpers_allocate_uninitialized_clone_invoker);
@@ -6363,6 +6657,21 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, marshal_size_of_helper_invoker);
     vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.Marshal::<SizeOfHelper>g____PInvoke|3_0", nullptr,
                                    marshal_size_of_helper_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.InteropServices.Marshal::GetDelegateForFunctionPointerInternal(System.IntPtr,System.RuntimeType)", nullptr,
+        marshal_get_delegate_for_function_pointer_internal_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.InteropServices.Marshal::GetDelegateForFunctionPointerInternal(System.IntPtr,System.Type)", nullptr,
+        marshal_get_delegate_for_function_pointer_internal_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.InteropServices.Marshal::GetDelegateForFunctionPointerInternal(System.IntPtr,System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, marshal_get_delegate_for_function_pointer_qcall_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.InteropServices.Marshal::GetFunctionPointerForDelegateInternal(System.Delegate)", nullptr,
+        marshal_get_function_pointer_for_delegate_internal_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Runtime.InteropServices.Marshal::GetFunctionPointerForDelegateInternal(System.Runtime.CompilerServices.ObjectHandleOnStack)", nullptr,
+        marshal_get_function_pointer_for_delegate_qcall_invoker);
     vm::PInvokes::register_pinvoke(
         "System.MdUtf8String::<EqualsCaseInsensitive>g____PInvoke|0_0(System.Void*,System.Void*,System.Int32)", nullptr,
         md_utf8_string_equals_case_insensitive_invoker);
@@ -6615,6 +6924,12 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    assembly_get_image_runtime_version_invoker);
     vm::PInvokes::register_pinvoke("AssemblyNative_GetImageRuntimeVersion", nullptr,
                                    assembly_get_image_runtime_version_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.Reflection.RuntimeAssembly::GetLocation(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.StringHandleOnStack)",
+        nullptr, assembly_get_location_invoker);
+    vm::PInvokes::register_pinvoke("System.Reflection.RuntimeAssembly::GetLocation", nullptr,
+                                   assembly_get_location_invoker);
+    vm::PInvokes::register_pinvoke("AssemblyNative_GetLocation", nullptr, assembly_get_location_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Reflection.RuntimeAssembly::GetEntryPoint(System.Runtime.CompilerServices.QCallAssembly,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, assembly_get_entry_point_invoker);

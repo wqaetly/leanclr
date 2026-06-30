@@ -56,10 +56,16 @@ static RtResult<const RtInterpMethodInfo*> transform(const metadata::RtMethodInf
     alloc::MemPool pool(guessSize, pageSize, utils::MemOp::align_up(guessSize, pageSize));
     hl::Transformer hl_transformer(mod, method, methodBody, pool);
     auto hl_ret = hl_transformer.transform();
-    RET_ERR_ON_FAIL(hl_ret);
+    if (hl_ret.is_err())
+    {
+        RET_ERR(hl_ret.unwrap_err());
+    }
     ll::Transformer ll_transformer(hl_transformer, pool);
     auto ll_ret = ll_transformer.transform();
-    RET_ERR_ON_FAIL(ll_ret);
+    if (ll_ret.is_err())
+    {
+        RET_ERR(ll_ret.unwrap_err());
+    }
     return ll_transformer.build_interp_method_info();
 }
 
@@ -461,10 +467,10 @@ vm::RtException* get_exception_in_last_throw_flow(InterpFrame* frame, uint32_t i
         }                                                                                      \
     }
 
-#define ENTER_INTERP_FRAME(_method, _frame_base_idx, _next_ip)                                                    \
-    frame->save(_next_ip);                                                                                        \
-    HANDLE_RAISE_RUNTIME_ERROR2(frame, ms.enter_frame_from_interp(_method, eval_stack_base + (_frame_base_idx))); \
-    ip = frame->ip;                                                                                               \
+#define ENTER_INTERP_FRAME(_method, _frame_base_idx, _next_ip, _vararg_count)                                                    \
+    frame->save(_next_ip);                                                                                                       \
+    HANDLE_RAISE_RUNTIME_ERROR2(frame, ms.enter_frame_from_interp(_method, eval_stack_base + (_frame_base_idx), _vararg_count)); \
+    ip = frame->ip;                                                                                                              \
     goto method_start;
 
 #define LEAVE_FRAME()                  \
@@ -1800,7 +1806,7 @@ method_start:
                 }
                 if (divisor == -1 && dividend == INT32_MIN)
                 {
-                    RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
+                    RAISE_RUNTIME_ERROR(RtErr::Overflow);
                 }
                 dst->i32 = dividend / divisor;
             }
@@ -1818,7 +1824,7 @@ method_start:
                 }
                 if (divisor == -1 && dividend == INT64_MIN)
                 {
-                    RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
+                    RAISE_RUNTIME_ERROR(RtErr::Overflow);
                 }
                 dst->i64 = dividend / divisor;
             }
@@ -1880,7 +1886,7 @@ method_start:
                 }
                 if (divisor == -1 && dividend == INT32_MIN)
                 {
-                    RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
+                    RAISE_RUNTIME_ERROR(RtErr::Overflow);
                 }
                 else
                 {
@@ -1901,7 +1907,7 @@ method_start:
                 }
                 if (divisor == -1 && dividend == INT64_MIN)
                 {
-                    RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
+                    RAISE_RUNTIME_ERROR(RtErr::Overflow);
                 }
                 else
                 {
@@ -3361,7 +3367,13 @@ method_start:
                     TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                 }
                 const uint8_t* next_ip = reinterpret_cast<const uint8_t*>(ir + 1);
-                ENTER_INTERP_FRAME(target_method, ir->frame_base, next_ip);
+                RtStackObject* frame_base = eval_stack_base + ir->frame_base;
+                if ((ir->vararg_count & 0x80u) != 0 && !vm::Method::is_static(target_method) && !vm::Class::is_value_type(target_method->parent) &&
+                    frame_base->obj == nullptr)
+                {
+                    RAISE_RUNTIME_ERROR(RtErr::NullReference);
+                }
+                ENTER_INTERP_FRAME(target_method, ir->frame_base, next_ip, static_cast<int32_t>(ir->vararg_count & 0x7Fu));
             }
             LEANCLR_CASE_END_LITE0()
             LEANCLR_CASE_BEGIN_LITE0(CallVirtInterpShort)
@@ -3381,7 +3393,7 @@ method_start:
                     {
                         set_stack_value_at(eval_stack_base, ir->frame_base, obj + 1);
                     }
-                    ENTER_INTERP_FRAME(actual_method, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1));
+                    ENTER_INTERP_FRAME(actual_method, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1), 0);
                 }
                 else
                 {
@@ -3441,6 +3453,11 @@ method_start:
                 }
                 ip = reinterpret_cast<const uint8_t*>(ir + 1);
                 RtStackObject* frame_base = eval_stack_base + ir->frame_base;
+                if (ir->null_check_this && !vm::Method::is_static(target_method) && !vm::Class::is_value_type(target_method->parent) &&
+                    frame_base->obj == nullptr)
+                {
+                    RAISE_RUNTIME_ERROR(RtErr::NullReference);
+                }
                 HANDLE_RAISE_RUNTIME_ERROR_VOID(target_method->invoke_method_ptr(target_method->method_ptr, target_method, frame_base, frame_base));
             }
             LEANCLR_CASE_END_LITE0()
@@ -3469,7 +3486,7 @@ method_start:
                 }
                 if (target_method->invoker_type == metadata::RtInvokerType::Interpreter)
                 {
-                    ENTER_INTERP_FRAME(target_method, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1));
+                    ENTER_INTERP_FRAME(target_method, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1), 0);
                 }
                 else
                 {
@@ -3497,7 +3514,7 @@ method_start:
                 RtStackObject* frame_base = eval_stack_base + ir->frame_base;
                 std::memmove(frame_base + 1, frame_base, static_cast<size_t>(ir->total_params_stack_object_size) * sizeof(RtStackObject));
                 frame_base->obj = obj;
-                ENTER_INTERP_FRAME(ctor, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1));
+                ENTER_INTERP_FRAME(ctor, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1), 0);
             }
             LEANCLR_CASE_END_LITE0()
             LEANCLR_CASE_BEGIN_LITE0(NewValueTypeInterpShort)
@@ -3511,7 +3528,7 @@ method_start:
                 std::memmove(final_frame_base + 1, original_frame_base, static_cast<size_t>(ir->total_params_stack_object_size) * sizeof(RtStackObject));
                 final_frame_base->ptr = original_frame_base;
                 std::memset(original_frame_base, 0, value_stack_objects * sizeof(RtStackObject));
-                ENTER_INTERP_FRAME(ctor, ir->frame_base + value_stack_objects, reinterpret_cast<const uint8_t*>(ir + 1));
+                ENTER_INTERP_FRAME(ctor, ir->frame_base + value_stack_objects, reinterpret_cast<const uint8_t*>(ir + 1), 0);
             }
             LEANCLR_CASE_END_LITE0()
             LEANCLR_CASE_BEGIN0(NewObjInternalCallShort)
@@ -4697,7 +4714,7 @@ method_start:
                         }
                         if (divisor == -1 && dividend == INT32_MIN)
                         {
-                            RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
+                            RAISE_RUNTIME_ERROR(RtErr::Overflow);
                         }
                         dst->i32 = dividend / divisor;
                     }
@@ -4715,7 +4732,7 @@ method_start:
                         }
                         if (divisor == -1 && dividend == INT64_MIN)
                         {
-                            RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
+                            RAISE_RUNTIME_ERROR(RtErr::Overflow);
                         }
                         dst->i64 = dividend / divisor;
                     }
@@ -4777,7 +4794,7 @@ method_start:
                         }
                         if (divisor == -1 && dividend == INT32_MIN)
                         {
-                            RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
+                            RAISE_RUNTIME_ERROR(RtErr::Overflow);
                         }
                         else
                         {
@@ -4798,7 +4815,7 @@ method_start:
                         }
                         if (divisor == -1 && dividend == INT64_MIN)
                         {
-                            RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
+                            RAISE_RUNTIME_ERROR(RtErr::Overflow);
                         }
                         else
                         {
@@ -5798,7 +5815,7 @@ method_start:
                         float value = get_stack_value_at<float>(eval_stack_base, ir->src);
                         if (!std::isfinite(value))
                         {
-                            RAISE_RUNTIME_ERROR(RtErr::Overflow);
+                            RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
                         }
                     }
                     LEANCLR_CASE_END1()
@@ -5807,17 +5824,26 @@ method_start:
                         double value = get_stack_value_at<double>(eval_stack_base, ir->src);
                         if (!std::isfinite(value))
                         {
-                            RAISE_RUNTIME_ERROR(RtErr::Overflow);
+                            RAISE_RUNTIME_ERROR(RtErr::Arithmetic);
                         }
                     }
                     LEANCLR_CASE_END1()
                     LEANCLR_CASE_BEGIN1(LocAlloc)
                     {
-                        uint32_t size = get_stack_value_at<uint32_t>(eval_stack_base, ir->size);
+                        uintptr_t native_size = get_stack_value_at<uintptr_t>(eval_stack_base, ir->size);
+                        if (native_size > std::numeric_limits<uint32_t>::max())
+                        {
+                            RAISE_RUNTIME_ERROR(RtErr::Overflow);
+                        }
+                        uint32_t size = static_cast<uint32_t>(native_size);
                         void* data;
                         if (size > 0)
                         {
                             data = imi->init_locals ? alloc::GeneralAllocation::malloc_zeroed(size) : alloc::GeneralAllocation::malloc(size);
+                            if (!data)
+                            {
+                                RAISE_RUNTIME_ERROR(RtErr::OutOfMemory);
+                            }
                         }
                         else
                         {
@@ -6216,7 +6242,13 @@ method_start:
                             TRY_RUN_CLASS_STATIC_CCTOR_FOR_METHOD(target_method->parent);
                         }
                         const uint8_t* next_ip = reinterpret_cast<const uint8_t*>(ir + 1);
-                        ENTER_INTERP_FRAME(target_method, ir->frame_base, next_ip);
+                        RtStackObject* frame_base = eval_stack_base + ir->frame_base;
+                        if ((ir->vararg_count & 0x8000u) != 0 && !vm::Method::is_static(target_method) && !vm::Class::is_value_type(target_method->parent) &&
+                            frame_base->obj == nullptr)
+                        {
+                            RAISE_RUNTIME_ERROR(RtErr::NullReference);
+                        }
+                        ENTER_INTERP_FRAME(target_method, ir->frame_base, next_ip, static_cast<int32_t>(ir->vararg_count & 0x7FFFu));
                     }
                     LEANCLR_CASE_END_LITE1()
                     LEANCLR_CASE_BEGIN_LITE1(CallVirtInterp)
@@ -6242,7 +6274,7 @@ method_start:
                             {
                                 set_stack_value_at(eval_stack_base, ir->frame_base, obj + 1);
                             }
-                            ENTER_INTERP_FRAME(actual_method, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1));
+                            ENTER_INTERP_FRAME(actual_method, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1), 0);
                         }
                         else
                         {
@@ -6302,6 +6334,11 @@ method_start:
                         }
                         ip = reinterpret_cast<const uint8_t*>(ir + 1);
                         RtStackObject* frame_base = eval_stack_base + ir->frame_base;
+                        if (ir->null_check_this && !vm::Method::is_static(target_method) && !vm::Class::is_value_type(target_method->parent) &&
+                            frame_base->obj == nullptr)
+                        {
+                            RAISE_RUNTIME_ERROR(RtErr::NullReference);
+                        }
                         HANDLE_RAISE_RUNTIME_ERROR_VOID(target_method->invoke_method_ptr(target_method->method_ptr, target_method, frame_base, frame_base));
                     }
                     LEANCLR_CASE_END_LITE1()
@@ -6331,7 +6368,7 @@ method_start:
 
                         if (target_method->invoker_type == metadata::RtInvokerType::Interpreter)
                         {
-                            ENTER_INTERP_FRAME(target_method, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1));
+                            ENTER_INTERP_FRAME(target_method, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1), 0);
                         }
                         else
                         {
@@ -6359,7 +6396,7 @@ method_start:
                         RtStackObject* frame_base = eval_stack_base + ir->frame_base;
                         std::memmove(frame_base + 1, frame_base, static_cast<size_t>(ir->total_params_stack_object_size) * sizeof(RtStackObject));
                         frame_base->obj = obj;
-                        ENTER_INTERP_FRAME(ctor, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1));
+                        ENTER_INTERP_FRAME(ctor, ir->frame_base, reinterpret_cast<const uint8_t*>(ir + 1), 0);
                     }
                     LEANCLR_CASE_END_LITE1()
                     LEANCLR_CASE_BEGIN_LITE1(NewValueTypeInterp)
@@ -6374,7 +6411,7 @@ method_start:
                                      static_cast<size_t>(ir->total_params_stack_object_size) * sizeof(RtStackObject));
                         final_frame_base->ptr = original_frame_base;
                         std::memset(original_frame_base, 0, value_stack_objects * sizeof(RtStackObject));
-                        ENTER_INTERP_FRAME(ctor, ir->frame_base + value_stack_objects, reinterpret_cast<const uint8_t*>(ir + 1));
+                        ENTER_INTERP_FRAME(ctor, ir->frame_base + value_stack_objects, reinterpret_cast<const uint8_t*>(ir + 1), 0);
                     }
                     LEANCLR_CASE_END_LITE1()
                     LEANCLR_CASE_BEGIN1(NewObjInternalCall)
@@ -8064,8 +8101,7 @@ method_start:
                     LEANCLR_CASE_END4()
                     LEANCLR_CASE_BEGIN4(Arglist)
                     {
-                        assert(false && "Not implemented");
-                        RAISE_RUNTIME_ERROR(RtErr::ExecutionEngine);
+                        set_stack_value_at<intptr_t>(eval_stack_base, ir->dst, reinterpret_cast<intptr_t>(&frame->vararg_count));
                     }
                     LEANCLR_CASE_END4()
 #if !LEANCLR_USE_COMPUTED_GOTO_DISPATCHER

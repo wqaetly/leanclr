@@ -116,6 +116,7 @@ RtResult<InterpFrame*> MachineState::enter_frame_from_native(const metadata::RtM
         std::memcpy(frame->eval_stack_base, args, method->total_arg_stack_object_size * sizeof(RtStackObject));
     }
     frame->eval_stack_size = method_max_stack;
+    frame->vararg_count = 0;
     frame->ip = imi->codes;
 #if LEANCLR_PGO_PROFILE
     profile::Profile::inc_call_count(method);
@@ -123,7 +124,8 @@ RtResult<InterpFrame*> MachineState::enter_frame_from_native(const metadata::RtM
     RET_OK(frame);
 }
 
-RtResult<InterpFrame*> MachineState::enter_frame_from_interp(const metadata::RtMethodInfo* method, RtStackObject* frame_base)
+RtResult<InterpFrame*> MachineState::enter_frame_from_interp(const metadata::RtMethodInfo* method, RtStackObject* frame_base,
+                                                             int32_t vararg_count)
 {
 #if LEANCLR_ENABLE_FRAME_TRACE
     std::printf("enter_frame_from_interp: token:0x%0x method:%s.%s::%s\n", method->token, method->parent->namespaze, method->parent->name, method->name);
@@ -147,6 +149,7 @@ RtResult<InterpFrame*> MachineState::enter_frame_from_interp(const metadata::RtM
     _eval_stack_top = new_eval_stack_top;
     frame->eval_stack_base = frame_base;
     frame->eval_stack_size = method_max_stack;
+    frame->vararg_count = vararg_count;
 #if LEANCLR_DEBUG
     const size_t arg_size = method->total_arg_stack_object_size;
     std::memset(frame->eval_stack_base + arg_size, 0, (static_cast<size_t>(method_max_stack) - arg_size) * sizeof(RtStackObject));

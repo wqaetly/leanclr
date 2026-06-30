@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 #include <limits>
+#include <type_traits>
 
 #include "core/rt_base.h"
 
@@ -17,13 +18,23 @@ inline int32_t cast_float_to_small_int(Src value)
 template <typename Src, typename Dst>
 inline int32_t cast_float_to_i32(Src value)
 {
-    if (value >= 0.0)
+    if (std::is_same<Dst, int32_t>::value)
     {
-        return (int32_t)(Dst)(value);
+        constexpr Src lower_bound = static_cast<Src>(std::numeric_limits<int32_t>::min());
+        constexpr Src upper_bound = static_cast<Src>(static_cast<double>(std::numeric_limits<int32_t>::max()) + 1.0);
+        if (std::isnan(value) || value < lower_bound || value >= upper_bound)
+        {
+            return std::numeric_limits<int32_t>::min();
+        }
+        return static_cast<int32_t>(value);
+    }
+    else if (value >= 0.0)
+    {
+        return static_cast<int32_t>(static_cast<Dst>(value));
     }
     else
     {
-        return (int32_t)(Dst)(int64_t)value;
+        return static_cast<int32_t>(static_cast<Dst>(static_cast<int64_t>(value)));
     }
 }
 
@@ -200,18 +211,18 @@ inline bool check_sub_overflow_uintptr(uintptr_t a, uintptr_t b, uintptr_t* resu
 
 inline bool check_mul_overflow_i32(int32_t a, int32_t b, int32_t* result)
 {
-    if (b != 0 && (a > INT32_MAX / b || a < INT32_MIN / b))
-        return true;
     if (a == INT32_MIN && b == -1) // Special case: overflow
+        return true;
+    if (b != 0 && (a > INT32_MAX / b || a < INT32_MIN / b))
         return true;
     *result = a * b;
     return false;
 }
 inline bool check_mul_overflow_i64(int64_t a, int64_t b, int64_t* result)
 {
-    if (b != 0 && (a > INT64_MAX / b || a < INT64_MIN / b))
-        return true;
     if (a == INT64_MIN && b == -1) // Special case: overflow
+        return true;
+    if (b != 0 && (a > INT64_MAX / b || a < INT64_MIN / b))
         return true;
     *result = a * b;
     return false;

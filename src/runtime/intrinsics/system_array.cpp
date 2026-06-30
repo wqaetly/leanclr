@@ -38,7 +38,7 @@ RtResultVoid SystemArray::set_generic_value_impl(vm::RtArray* arr, int32_t index
         RET_ERR(RtErr::IndexOutOfRange);
     }
     size_t ele_size = vm::Array::get_array_element_size(arr);
-    uint8_t* dest_ptr = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(&arr->first_data)) + ele_size * static_cast<size_t>(index);
+    uint8_t* dest_ptr = static_cast<uint8_t*>(vm::Array::get_array_data_start_as_ptr_void(arr)) + ele_size * static_cast<size_t>(index);
     const uint8_t* src_ptr = static_cast<const uint8_t*>(value);
     std::memcpy(dest_ptr, src_ptr, ele_size);
     RET_VOID_OK();

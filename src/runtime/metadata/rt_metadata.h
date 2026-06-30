@@ -378,6 +378,7 @@ struct RtMethodSig
 {
     uint8_t flags;
     uint8_t generic_param_count;
+    uint16_t fixed_param_count;
     const RtTypeSig* return_type;
     utils::Vector<const RtTypeSig*> params;
 };

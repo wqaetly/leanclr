@@ -24,7 +24,12 @@ size_t Array::get_array_allocation_size(const metadata::RtClass* klass, int32_t 
 {
     assert(klass && klass->element_class);
     size_t element_size = Class::get_stack_location_size(klass->element_class);
-    return sizeof(RtArray) - 8 + static_cast<size_t>(length) * element_size;
+    size_t bounds_size = 0;
+    if (klass->by_val->ele_type == metadata::RtElementType::Array)
+    {
+        bounds_size = static_cast<size_t>(Class::get_rank(klass)) * sizeof(ArrayBounds);
+    }
+    return sizeof(RtArray) - 8 + bounds_size + static_cast<size_t>(length) * element_size;
 }
 
 // Array creation methods
@@ -32,6 +37,10 @@ size_t Array::get_array_allocation_size(const metadata::RtClass* klass, int32_t 
 RtResult<RtArray*> Array::__new_szarray_from_array_klass(const metadata::RtClass* klass, int32_t length LEANCLR_GC_DECLARE_CALL_SITE_PARAM)
 {
     assert(klass);
+    if (length < 0)
+    {
+        RET_ERR(RtErr::Overflow);
+    }
 
     RET_ERR_ON_FAIL(Class::initialize_all(const_cast<metadata::RtClass*>(klass)));
 
@@ -104,18 +113,12 @@ RtResult<RtArray*> Array::__new_mdarray_from_array_klass(const metadata::RtClass
         RET_ERR(RtErr::Overflow);
     }
 
-    int32_t total_data_bytes = total_length * ele_size;
-
-    // Calculate layout: array header + data + bounds array
-    size_t arr_total_bytes_without_bounds = get_array_allocation_size(arr_klass, 0) + static_cast<size_t>(total_data_bytes);
-    size_t bounds_start_index = utils::MemOp::align_up(arr_total_bytes_without_bounds, 8);
-    size_t total_array_bytes = bounds_start_index + sizeof(ArrayBounds) * rank;
+    size_t total_array_bytes = get_array_allocation_size(arr_klass, total_length);
 
     RtArray* arr_obj = reinterpret_cast<RtArray*>(gc::GarbageCollector::allocate_array(arr_klass, total_array_bytes LEANCLR_GC_CALL_SITE_PARAM));
 
     // Set up bounds
-    ArrayBounds* bounds = reinterpret_cast<ArrayBounds*>(reinterpret_cast<uint8_t*>(arr_obj) + bounds_start_index);
-    arr_obj->bounds = bounds;
+    ArrayBounds* bounds = Array::get_array_bounds(arr_obj);
 
     for (uint8_t i = 0; i < rank; ++i)
     {
@@ -145,7 +148,8 @@ void Array::copy_array_data_to_no_eval_stack(const RtArray* arr, int32_t start_i
     assert(arr && dest);
     assert(start_index >= 0 && start_index < get_array_length(arr));
     size_t ele_size = get_array_element_size(arr);
-    const uint8_t* src_ptr = reinterpret_cast<const uint8_t*>(&arr->first_data) + ele_size * static_cast<size_t>(start_index);
+    const uint8_t* src_ptr = reinterpret_cast<const uint8_t*>(&arr->first_data) + get_array_bounds_byte_size(arr) +
+                             ele_size * static_cast<size_t>(start_index);
     std::memcpy(dest, src_ptr, ele_size);
 }
 
@@ -175,7 +179,8 @@ RtResult<int32_t> Array::get_array_length_at_dimension(const RtArray* array, siz
         {
             RET_ERR(RtErr::IndexOutOfRange);
         }
-        RET_OK(array->bounds[dimension].length);
+        const ArrayBounds* bounds = get_array_bounds(array);
+        RET_OK(bounds[dimension].length);
     }
 
     default:
@@ -207,7 +212,8 @@ RtResult<int32_t> Array::get_array_lower_bound_at_dimension(const RtArray* array
         {
             RET_ERR(RtErr::IndexOutOfRange);
         }
-        RET_OK(array->bounds[dimension].lower_bound);
+        const ArrayBounds* bounds = get_array_bounds(array);
+        RET_OK(bounds[dimension].lower_bound);
     }
 
     default:
@@ -247,7 +253,7 @@ RtResult<int32_t> Array::get_global_index_from_indices(const RtArray* arr, RtArr
         }
 
         int32_t offset = 0;
-        const ArrayBounds* bounds = arr->bounds;
+        const ArrayBounds* bounds = get_array_bounds(arr);
 
         for (int32_t i = 0; i < indice_length; ++i)
         {
@@ -286,7 +292,7 @@ RtResult<int32_t> Array::get_mdarray_global_index_from_indices2(const RtArray* a
     uint8_t rank = arr_type->rank;
 
     int32_t offset = 0;
-    const ArrayBounds* bounds = arr->bounds;
+    const ArrayBounds* bounds = get_array_bounds(arr);
 
     for (uint8_t i = 0; i < rank; ++i)
     {
@@ -318,7 +324,7 @@ RtResult<int32_t> Array::get_mdarray_global_index_from_indices3(const RtArray* a
     uint8_t rank = arr_type->rank;
 
     int32_t offset = 0;
-    const ArrayBounds* bounds = arr->bounds;
+    const ArrayBounds* bounds = get_array_bounds(arr);
 
     for (uint8_t i = 0; i < rank; ++i)
     {
@@ -388,7 +394,7 @@ RtResultVoid Array::szarray_set_invoker(metadata::RtManagedMethodPointer method_
     size_t element_size = get_array_element_size(arr);
     const uint8_t* value_ptr = reinterpret_cast<const uint8_t*>(params + 2);
 
-    uint8_t* data_ptr = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(&arr->first_data)) + element_size * static_cast<size_t>(index);
+    uint8_t* data_ptr = static_cast<uint8_t*>(get_array_data_start_as_ptr_void(arr)) + element_size * static_cast<size_t>(index);
     std::memcpy(data_ptr, value_ptr, element_size);
 
     RET_VOID_OK();
@@ -533,6 +539,10 @@ RtResultVoid Array::mdarray_get_invoker(metadata::RtManagedMethodPointer method_
     assert(params && ret);
 
     RtArray* arr = interp::EvalStackOp::get_param<RtArray*>(params, 0);
+    if (arr == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, index, get_mdarray_global_index_from_indices2(arr, params + 1));
 
     const void* data_ptr = get_array_element_address_as_ptr_void(arr, index);
@@ -549,12 +559,16 @@ RtResultVoid Array::mdarray_set_invoker(metadata::RtManagedMethodPointer method_
     assert(method && params);
 
     RtArray* arr = interp::EvalStackOp::get_param<RtArray*>(params, 0);
+    if (arr == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, index, get_mdarray_global_index_from_indices2(arr, params + 1));
 
     size_t element_size = get_array_element_size(arr);
     const uint8_t* value_ptr = reinterpret_cast<const uint8_t*>(params + method->parameter_count);
 
-    uint8_t* data_ptr = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(&arr->first_data)) + element_size * static_cast<size_t>(index);
+    uint8_t* data_ptr = static_cast<uint8_t*>(get_array_data_start_as_ptr_void(arr)) + element_size * static_cast<size_t>(index);
     std::memcpy(data_ptr, value_ptr, element_size);
 
     RET_VOID_OK();
@@ -566,6 +580,10 @@ RtResultVoid Array::mdarray_address_invoker(metadata::RtManagedMethodPointer met
     assert(params && ret);
 
     RtArray* arr = interp::EvalStackOp::get_param<RtArray*>(params, 0);
+    if (arr == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(int32_t, index, get_mdarray_global_index_from_indices2(arr, params + 1));
 
     const void* data_ptr = get_array_element_address_as_ptr_void(arr, index);

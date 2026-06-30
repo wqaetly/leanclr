@@ -57,7 +57,8 @@ namespace ManagedNet10.LegacyTests
 
         public static void RunConvertI()
         {
-            LegacyTestRunner.RunType(typeof(Tests.Instruments.Converts.TC_conv_i));
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(Tests.Instruments.Converts.TC_conv_i));
+            LegacyTestRunner.RunType(typeof(ConvertNativeIntNet10Semantics));
         }
 
         public static void RunConvertI1()
@@ -72,12 +73,14 @@ namespace ManagedNet10.LegacyTests
 
         public static void RunConvertI4()
         {
-            LegacyTestRunner.RunType(typeof(Tests.Instruments.Converts.TC_conv_i4));
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(Tests.Instruments.Converts.TC_conv_i4));
+            LegacyTestRunner.RunType(typeof(ConvertInt32Net10Semantics));
         }
 
         public static void RunConvertI8()
         {
-            LegacyTestRunner.RunType(typeof(Tests.Instruments.Converts.TC_conv_i8));
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(Tests.Instruments.Converts.TC_conv_i8));
+            LegacyTestRunner.RunType(typeof(ConvertInt64Net10Semantics));
         }
 
         public static void RunConvertFloatingPoint()
@@ -170,6 +173,22 @@ namespace ManagedNet10.LegacyTests
     internal sealed class ConvertUnsignedNet10Semantics
     {
         [UnitTest]
+        public void ConvU4OverflowFloatReturnsMaxValue()
+        {
+            float value = 0x100000001;
+            uint converted = (uint)value;
+            Assert.Equal(uint.MaxValue, converted);
+        }
+
+        [UnitTest]
+        public void ConvU4OverflowDoubleReturnsMaxValue()
+        {
+            double value = 0x1_00000001;
+            uint converted = (uint)value;
+            Assert.Equal(uint.MaxValue, converted);
+        }
+
+        [UnitTest]
         public void ConvU4NegativeFloatReturnsZero()
         {
             float value = -1;
@@ -199,6 +218,143 @@ namespace ManagedNet10.LegacyTests
             double value = -1;
             ulong converted = (ulong)value;
             Assert.Equal(0ul, converted);
+        }
+
+        [UnitTest]
+        public void ConvU8OverflowFloatKeepsUInt64Value()
+        {
+            float value = 0x100000001;
+            ulong converted = (ulong)value;
+            Assert.Equal(4294967296ul, converted);
+        }
+
+        [UnitTest]
+        public void ConvU8OverflowDoubleKeepsUInt64Value()
+        {
+            double value = 0x1_00000001;
+            ulong converted = (ulong)value;
+            Assert.Equal(4294967297ul, converted);
+        }
+
+        [UnitTest]
+        public void ConvU8OverflowNegativeFloatReturnsZero()
+        {
+            float value = -0x100000001;
+            ulong converted = (ulong)value;
+            Assert.Equal(0ul, converted);
+        }
+
+        [UnitTest]
+        public void ConvU8OverflowNegativeDoubleReturnsZero()
+        {
+            double value = -0x1_00000001;
+            ulong converted = (ulong)value;
+            Assert.Equal(0ul, converted);
+        }
+    }
+
+    internal sealed class ConvertNativeIntNet10Semantics
+    {
+        [UnitTest]
+        public void ConvINativeFloatOverflowUpKeepsNativeWidth()
+        {
+            float value = 0x100000001;
+            nint converted = (nint)(long)value;
+            Assert.Equal(4294967296L, (long)converted);
+        }
+
+        [UnitTest]
+        public void ConvINativeFloatOverflowDownKeepsNativeWidth()
+        {
+            float value = -0x100000001;
+            nint converted = (nint)(long)value;
+            Assert.Equal(-4294967296L, (long)converted);
+        }
+
+        [UnitTest]
+        public void ConvINativeDoubleOverflowUpKeepsNativeWidth()
+        {
+            double value = 0x1_00000001;
+            nint converted = (nint)(long)value;
+            Assert.Equal(4294967297L, (long)converted);
+        }
+
+        [UnitTest]
+        public void ConvINativeDoubleOverflowDownKeepsNativeWidth()
+        {
+            double value = -0x1_00000001;
+            nint converted = (nint)(long)value;
+            Assert.Equal(-4294967297L, (long)converted);
+        }
+    }
+
+    internal sealed class ConvertInt32Net10Semantics
+    {
+        [UnitTest]
+        public void ConvI4FloatOverflowUpReturnsMinValue()
+        {
+            float value = 0x100000001;
+            int converted = (int)value;
+            Assert.Equal(int.MinValue, converted);
+        }
+
+        [UnitTest]
+        public void ConvI4FloatOverflowDownReturnsMinValue()
+        {
+            float value = -0x100000001;
+            int converted = (int)value;
+            Assert.Equal(int.MinValue, converted);
+        }
+
+        [UnitTest]
+        public void ConvI4DoubleOverflowUpReturnsMinValue()
+        {
+            double value = 0x1_00000001;
+            int converted = (int)value;
+            Assert.Equal(int.MinValue, converted);
+        }
+
+        [UnitTest]
+        public void ConvI4DoubleOverflowDownReturnsMinValue()
+        {
+            double value = -0x1_00000001;
+            int converted = (int)value;
+            Assert.Equal(int.MinValue, converted);
+        }
+    }
+
+    internal sealed class ConvertInt64Net10Semantics
+    {
+        [UnitTest]
+        public void ConvI8FloatOverflowUpKeepsInt64Value()
+        {
+            float value = 0x100000001;
+            long converted = (long)value;
+            Assert.Equal(4294967296L, converted);
+        }
+
+        [UnitTest]
+        public void ConvI8FloatOverflowDownKeepsInt64Value()
+        {
+            float value = -0x100000001;
+            long converted = (long)value;
+            Assert.Equal(-4294967296L, converted);
+        }
+
+        [UnitTest]
+        public void ConvI8DoubleOverflowUpKeepsInt64Value()
+        {
+            double value = 0x1_00000001;
+            long converted = (long)value;
+            Assert.Equal(4294967297L, converted);
+        }
+
+        [UnitTest]
+        public void ConvI8DoubleOverflowDownKeepsInt64Value()
+        {
+            double value = -0x1_00000001;
+            long converted = (long)value;
+            Assert.Equal(-4294967297L, converted);
         }
     }
 }

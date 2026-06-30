@@ -21,6 +21,7 @@
     <Compile Include="ExceptionTestEntries.cs" />
     <Compile Include="FieldTestEntries.cs" />
     <Compile Include="FunctionTestEntries.cs" />
+    <Compile Include="LegacyCompatibilityShims.cs" />
     <Compile Include="LegacyTestRunner.cs" />
     <Compile Include="MemoryTestEntries.cs" />
     <Compile Include="ObjectMiscTestEntries.cs" />
@@ -73,6 +74,7 @@
     <Compile Include="..\..\managed\Common\TestCaseBase.cs" Link="Common\TestCaseBase.cs" />
     <Compile Include="..\..\managed\Common\UnitTestAttribute.cs" Link="Common\UnitTestAttribute.cs" />
     <Compile Include="GcTestEntries.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\AOTExplicitStruct.cs" Link="Fixtures\AOTExplicitStruct.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTActivator.cs" Link="Fixtures\AOTActivator.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTEnums.cs" Link="Fixtures\AOTEnums.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\AOTValueTypes.cs" Link="Fixtures\AOTValueTypes.cs" />
@@ -83,11 +85,16 @@
     <Compile Include="..\..\managed\SharedTests\Fixtures\CustomAttributes.cs" Link="Fixtures\CustomAttributes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\FullGenericClass.cs" Link="Fixtures\FullGenericClass.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\FunctionPointers.cs" Link="Fixtures\FunctionPointers.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\HierarchyGeneric.cs" Link="Fixtures\HierarchyGeneric.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\InnerTypes.cs" Link="Fixtures\InnerTypes.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\InterfaceExplicitImplements.cs" Link="Fixtures\InterfaceExplicitImplements.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdftnDefs.cs" Link="Fixtures\LdftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\LdvirftnDefs.cs" Link="Fixtures\LdvirftnDefs.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\MethodRefs.cs" Link="Fixtures\MethodRefs.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\NativeArrayParam.cs" Link="Fixtures\NativeArrayParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\NullableTypeUtil.cs" Link="Fixtures\NullableTypeUtil.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\PreserveMethodBridges.cs" Link="Fixtures\PreserveMethodBridges.cs" />
+    <Compile Include="..\..\managed\SharedTests\Fixtures\RefTypes.cs" Link="Fixtures\RefTypes.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\Test.cs" Link="Fixtures\Test.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTCtorParam.cs" Link="Fixtures\TestAOTCtorParam.cs" />
     <Compile Include="..\..\managed\SharedTests\Fixtures\TestAOTParam.cs" Link="Fixtures\TestAOTParam.cs" />
@@ -114,6 +121,8 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_add.cs" Link="Instructions\Arithmetic\TC_add.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_and.cs" Link="Instructions\Arithmetic\TC_and.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_mul.cs" Link="Instructions\Arithmetic\TC_mul.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_add_ovf.cs" Link="Instructions\Arithmetic\TC_add_ovf.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_mul_ovf.cs" Link="Instructions\Arithmetic\TC_mul_ovf.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_neg.cs" Link="Instructions\Arithmetic\TC_neg.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_not.cs" Link="Instructions\Arithmetic\TC_not.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_or.cs" Link="Instructions\Arithmetic\TC_or.cs" />
@@ -121,7 +130,9 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_shr.cs" Link="Instructions\Arithmetic\TC_shr.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_shr_un.cs" Link="Instructions\Arithmetic\TC_shr_un.cs" />
     <Compile Include="Instructions\Arithmetic\TC_sub.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_sub_ovf.cs" Link="Instructions\Arithmetic\TC_sub_ovf.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Arithmetic\TC_xor.cs" Link="Instructions\Arithmetic\TC_xor.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_ckfinite.cs" Link="Instructions\Ariths\TC_ckfinite.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_div.cs" Link="Instructions\Ariths\TC_div.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_div_un.cs" Link="Instructions\Ariths\TC_div_un.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Ariths\TC_rem.cs" Link="Instructions\Ariths\TC_rem.cs" />
@@ -164,6 +175,7 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_aot.cs" Link="Instructions\Funcs\TC_call_aot.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_aot_param.cs" Link="Instructions\Funcs\TC_call_aot_param.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_aot_return.cs" Link="Instructions\Funcs\TC_call_aot_return.cs" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_calli.cs" Link="Instructions\Funcs\TC_calli.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_call_interp.cs" Link="Instructions\Funcs\TC_call_interp.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_callvir_aot.cs" Link="Instructions\Funcs\TC_callvir_aot.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_callvir_interp.cs" Link="Instructions\Funcs\TC_callvir_interp.cs" />
@@ -173,6 +185,7 @@
     <Compile Include="..\..\managed\SharedTests\Instructions\Funcs\TC_newobj_interp.cs" Link="Instructions\Funcs\TC_newobj_interp.cs" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Memory\*.cs" LinkBase="Instructions\Memory" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Misc\*.cs" LinkBase="Instructions\Misc" />
+    <Compile Include="..\..\managed\SharedTests\Instructions\NotImpls\*.cs" LinkBase="Instructions\NotImpls" />
     <Compile Include="..\..\managed\SharedTests\Instructions\Objects\*.cs" LinkBase="Instructions\Objects" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\IcallReflection.cs" Link="CorlibTests\InternalCall\IcallReflection.cs" />
     <Compile Include="..\..\managed\CorlibTests\InternalCall\TC_Interop_Sys.cs" Link="CorlibTests\InternalCall\TC_Interop_Sys.cs" />
@@ -265,7 +278,27 @@
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_Reflection.cs" Link="Runtime\TC_Reflection.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_String.cs" Link="Runtime\TC_String.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\TC_using.cs" Link="Runtime\TC_using.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\MonoPInvokeWrapperPreserves.cs" Link="Runtime\MonoPInvokeWrapperPreserves.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_AOTGeneric.cs" Link="Runtime\TC_AOTGeneric.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_AOTStructLayout.cs" Link="Runtime\TC_AOTStructLayout.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_async.cs" Link="Runtime\TC_async.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_CrashReport.cs" Link="Runtime\TC_CrashReport.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_Delegate_BeginEndInvoke.cs" Link="Runtime\TC_Delegate_BeginEndInvoke.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_explicit_implement.cs" Link="Runtime\TC_explicit_implement.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_ExternalCall.cs" Link="Runtime\TC_ExternalCall.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_FunctionPointer.cs" Link="Runtime\TC_FunctionPointer.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_Instinct.cs" Link="Runtime\TC_Instinct.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_InterpStructLayout.cs" Link="Runtime\TC_InterpStructLayout.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_MonoPInvokeWrapper.cs" Link="Runtime\TC_MonoPInvokeWrapper.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\TC_MultiCastDelegate.cs" Link="Runtime\TC_MultiCastDelegate.cs" />
     <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_InnerType.cs" Link="Runtime\Misc\TC_InnerType.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_MethodBridge.cs" Link="Runtime\Misc\TC_MethodBridge.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_MethodBridgeAOTStruct.cs" Link="Runtime\Misc\TC_MethodBridgeAOTStruct.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_MethodBridgeInterpStruct.cs" Link="Runtime\Misc\TC_MethodBridgeInterpStruct.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_PreJit.cs" Link="Runtime\Misc\TC_PreJit.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_RefOtherAssembly.cs" Link="Runtime\Misc\TC_RefOtherAssembly.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_RuntimeApi.cs" Link="Runtime\Misc\TC_RuntimeApi.cs" />
+    <Compile Include="..\..\managed\SharedTests\Runtime\Misc\TC_Thread.cs" Link="Runtime\Misc\TC_Thread.cs" />
   </ItemGroup>
 
   <ItemGroup>

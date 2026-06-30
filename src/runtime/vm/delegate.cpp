@@ -5,12 +5,64 @@
 #include "rt_array.h"
 #include "class.h"
 #include "reflection.h"
+#include "runtime.h"
+#include "type.h"
+#include "assembly.h"
+#include "generic_class.h"
 #include "interp/eval_stack_op.h"
+#include "metadata/metadata_cache.h"
+#include "metadata/module_def.h"
+#include "utils/hashmap.h"
 
 namespace leanclr
 {
 namespace vm
 {
+constexpr size_t MAX_DELEGATE_RESULT_OBJECT_SIZE = 1024;
+
+namespace
+{
+
+struct AsyncDelegateResult
+{
+    uint16_t stack_object_size = 0;
+    interp::RtStackObject ret_buffer[MAX_DELEGATE_RESULT_OBJECT_SIZE];
+};
+
+utils::HashMap<RtObject*, AsyncDelegateResult> s_asyncDelegateResults;
+
+RtResult<metadata::RtClass*> get_completed_task_class_for_result(const metadata::RtTypeSig* result_type)
+{
+    metadata::RtModuleDef* corlib = Assembly::get_corlib()->mod;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, task_def,
+                                            corlib->get_class_by_name("System.Threading.Tasks.Task`1", false, true));
+    const metadata::RtTypeSig* generic_args[1] = {result_type};
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtGenericInst*, task_inst,
+                                            metadata::MetadataCache::get_pooled_generic_inst(generic_args, 1));
+    return GenericClass::get_class(Class::get_type_def_gid(task_def), task_inst);
+}
+
+RtResult<RtObject*> create_completed_task_for_result(const metadata::RtMethodInfo* invoke_method, interp::RtStackObject* result_buffer)
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, task_klass,
+                                            get_completed_task_class_for_result(invoke_method->return_type));
+    RET_ERR_ON_FAIL(Class::initialize_all(task_klass));
+    const metadata::RtMethodInfo* ctor = Class::get_method_for_name(task_klass, ".ctor", 1, false);
+    if (ctor == nullptr)
+    {
+        RET_ERR(RtErr::MissingMethod);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, task_obj, LEANCLR_NEWOBJ_INTERNAL(task_klass, "Delegate::create_completed_task_for_result"));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, is_value_type, Type::is_value_type(invoke_method->return_type));
+    const void* ctor_args[1] = {is_value_type ? static_cast<const void*>(result_buffer)
+                                              : static_cast<const void*>(interp::EvalStackOp::get_param<RtObject*>(result_buffer, 0))};
+    RET_ERR_ON_FAIL(Runtime::invoke_with_run_cctor(ctor, task_obj, ctor_args));
+    RET_OK(task_obj);
+}
+
+} // namespace
+
 RtResultVoid Delegate::initialize()
 {
     RET_VOID_OK();
@@ -93,7 +145,6 @@ RtResultVoid Delegate::newobj_delegate_invoker(metadata::RtManagedMethodPointer 
     RET_VOID_OK();
 }
 
-constexpr size_t MAX_DELEGATE_RESULT_OBJECT_SIZE = 1024;
 static interp::RtStackObject s_tempReturnValueBuffer[MAX_DELEGATE_RESULT_OBJECT_SIZE];
 
 RtResultVoid Delegate::invoke_delegate_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
@@ -201,13 +252,58 @@ RtResultVoid Delegate::invoke_delegate_invoker(metadata::RtManagedMethodPointer 
 RtResultVoid Delegate::begin_invoke_delegate_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
                                                      const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    RETURN_NOT_IMPLEMENTED_ERROR();
+    (void)method_pointer;
+    RET_ERR_ON_FAIL(Class::initialize_methods(const_cast<metadata::RtClass*>(method->parent)));
+    const metadata::RtMethodInfo* invoke_method = Class::get_method_for_name(method->parent, "Invoke", -1, false);
+    if (invoke_method == nullptr)
+    {
+        RET_ERR(RtErr::MissingMethod);
+    }
+    if (invoke_method->ret_stack_object_size > MAX_DELEGATE_RESULT_OBJECT_SIZE)
+    {
+        RET_ERR(RtErr::NotSupported);
+    }
+
+    interp::RtStackObject result_buffer[MAX_DELEGATE_RESULT_OBJECT_SIZE];
+    std::memset(result_buffer, 0, sizeof(result_buffer));
+    RET_ERR_ON_FAIL(invoke_delegate_invoker(nullptr, invoke_method, params, result_buffer));
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, task_obj, create_completed_task_for_result(invoke_method, result_buffer));
+    AsyncDelegateResult stored_result{};
+    stored_result.stack_object_size = invoke_method->ret_stack_object_size;
+    if (invoke_method->ret_stack_object_size > 0)
+    {
+        std::memcpy(stored_result.ret_buffer, result_buffer, invoke_method->ret_stack_object_size * sizeof(interp::RtStackObject));
+    }
+    s_asyncDelegateResults[task_obj] = stored_result;
+    interp::EvalStackOp::set_return(ret, task_obj);
+    RET_VOID_OK();
 }
 
 RtResultVoid Delegate::end_invoke_delegate_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
                                                    const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
-    RETURN_NOT_IMPLEMENTED_ERROR();
+    (void)method_pointer;
+    if (method->parameter_count <= 0)
+    {
+        RET_ERR(RtErr::Argument);
+    }
+    RtObject* async_result = interp::EvalStackOp::get_param<RtObject*>(params, method->parameter_count);
+    auto it = s_asyncDelegateResults.find(async_result);
+    if (it == s_asyncDelegateResults.end())
+    {
+        RET_ERR(RtErr::Argument);
+    }
+    const AsyncDelegateResult& result = it->second;
+    if (method->ret_stack_object_size > 0)
+    {
+        if (result.stack_object_size < method->ret_stack_object_size)
+        {
+            RET_ERR(RtErr::ExecutionEngine);
+        }
+        std::memcpy(ret, result.ret_buffer, method->ret_stack_object_size * sizeof(interp::RtStackObject));
+    }
+    RET_VOID_OK();
 }
 } // namespace vm
 } // namespace leanclr

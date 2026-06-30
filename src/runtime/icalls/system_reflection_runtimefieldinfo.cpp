@@ -50,7 +50,7 @@ RtResult<uint32_t> SystemReflectionRuntimeFieldInfo::get_metadata_token(vm::RtRe
 RtResult<int32_t> SystemReflectionRuntimeFieldInfo::get_field_offset(vm::RtReflectionField* field) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, field_info, vm::Reflection::get_field_info_from_reflection_object(field));
-    RET_OK(static_cast<int32_t>(vm::Field::get_field_offset_excludes_object_header_for_all_type(field_info)));
+    RET_OK(static_cast<int32_t>(vm::Field::get_field_offset_includes_object_header_for_reference_type(field_info)));
 }
 
 RtResult<vm::RtObject*> SystemReflectionRuntimeFieldInfo::get_raw_const_value(vm::RtReflectionField* field) noexcept

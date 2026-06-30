@@ -31,6 +31,41 @@ namespace ManagedNet10.LegacyTests
                 typeof(Tests.CSharp.Delegates.TC_Delegate_DynamicInvoke));
         }
 
+        public static void RunRuntimeAsync()
+        {
+            LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_async));
+        }
+
+        public static void RunRuntimeAsyncTestString()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_async), "TestString");
+        }
+
+        public static void RunRuntimeAsyncTestInt()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_async), "TestInt");
+        }
+
+        public static void RunRuntimeAsyncTestEnum()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_async), "TestEnum");
+        }
+
+        public static void RunRuntimeAsyncTestStruct()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.CSharp.TC_async), "TestStruct");
+        }
+
+        public static void RunRuntimeInnerTypeTest2()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.Mics.TC_InnerType), "Test2");
+        }
+
+        public static void RunRuntimeMethodBridgeDelegateMissing()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.Mics.TC_MethodBridge), "DelegateMissing");
+        }
+
         public static void RunRuntimeReflection()
         {
             LegacyTestRunner.RunType(typeof(Tests.CSharp.TC_Reflection));

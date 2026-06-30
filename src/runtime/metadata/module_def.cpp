@@ -1537,9 +1537,24 @@ RtResult<RtMethodSig> RtModuleDef::read_method_sig_skip_prologue(uint8_t sigType
 
     RtMethodSig methodSig;
 
+    methodSig.fixed_param_count = static_cast<uint16_t>(paramCount);
     methodSig.params.resize(paramCount);
     for (uint32_t i = 0; i < paramCount; i++)
     {
+        uint8_t nextByte;
+        if (!reader.try_peek_byte(nextByte))
+        {
+            RET_ASSERT_ERR(RtErr::BadImageFormat);
+        }
+        if (static_cast<RtElementType>(nextByte) == RtElementType::Sentinel)
+        {
+            uint8_t sentinel;
+            if (!reader.try_read_byte(sentinel))
+            {
+                RET_ASSERT_ERR(RtErr::BadImageFormat);
+            }
+            methodSig.fixed_param_count = static_cast<uint16_t>(i);
+        }
         UNWRAP_OR_RET_ERR_ON_FAIL(methodSig.params[i], read_typesig(reader, gcc, gc));
     }
     methodSig.flags = sigType;
@@ -2034,8 +2049,13 @@ RtResult<const RtFieldInfo*> RtModuleDef::get_field_by_token(const RtToken& toke
     }
 }
 
-RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefRid, const RtGenericContainerContext& gcc, const RtGenericContext* gc)
+RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefRid, const RtGenericContainerContext& gcc, const RtGenericContext* gc,
+                                                             uint16_t* outVarargCount)
 {
+    if (outVarargCount != nullptr)
+    {
+        *outVarargCount = 0;
+    }
     auto opt_row = _cliImage.read_member_ref(memberRefRid);
     if (!opt_row)
     {
@@ -2109,6 +2129,12 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
     {
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtMethodSig, methodSig,
                                                 read_method_sig_skip_prologue(byteType, reader, declaring_gcc, memberParentGenericContextPtr));
+        uint16_t fixedParamCount = methodSig.fixed_param_count;
+        if (fixedParamCount > methodSig.params.size())
+        {
+            RET_ASSERT_ERR(RtErr::BadImageFormat);
+        }
+        uint16_t varargCount = static_cast<uint16_t>(methodSig.params.size() - fixedParamCount);
         RET_ERR_ON_FAIL(vm::Class::initialize_methods(memberLookupClass));
         for (uint32_t i = 0; i < memberLookupClass->method_count; ++i)
         {
@@ -2117,7 +2143,7 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
             {
                 continue;
             }
-            if (method->parameter_count != methodSig.params.size())
+            if (method->parameter_count != fixedParamCount)
             {
                 continue;
             }
@@ -2130,9 +2156,13 @@ RtResult<RtRuntimeHandle> RtModuleDef::get_member_ref_by_rid(uint32_t memberRefR
             {
                 continue;
             }
-            if (!MetadataCompare::is_typesigs_equal_ignore_attrs(methodSig.params.begin(), method->parameters, methodSig.params.size(), true))
+            if (!MetadataCompare::is_typesigs_equal_ignore_attrs(methodSig.params.begin(), method->parameters, fixedParamCount, true))
             {
                 continue;
+            }
+            if (outVarargCount != nullptr)
+            {
+                *outVarargCount = varargCount;
             }
             RET_OK(RtRuntimeHandle{method});
         }

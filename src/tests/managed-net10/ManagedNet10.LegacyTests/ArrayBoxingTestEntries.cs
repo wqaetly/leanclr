@@ -47,7 +47,8 @@ namespace ManagedNet10.LegacyTests
 
         public static void RunArrayLoadElementAddress()
         {
-            LegacyTestRunner.RunType(typeof(Tests.Instruments.Arrays.TC_ldelema));
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(Tests.Instruments.Arrays.TC_ldelema));
+            LegacyTestRunner.RunType(typeof(ArrayAddressNet10Semantics));
         }
 
         public static void RunArrayStoreElements()
@@ -189,6 +190,31 @@ namespace ManagedNet10.LegacyTests
         public static void RunUnboxAny()
         {
             LegacyTestRunner.RunType(typeof(Tests.Instruments.Boxs.TC_unbox_any));
+        }
+    }
+
+    internal sealed class ArrayAddressNet10Semantics
+    {
+        private struct StructA
+        {
+            public int Value;
+        }
+
+        private struct StructB
+        {
+            public int Value;
+        }
+
+        [UnitTest]
+        public void LdelemaReinterpretedStructArrayThrowsArrayTypeMismatch()
+        {
+            StructA[] source = new StructA[] { new StructA { Value = 1 } };
+            StructB[] reinterpreted = UnsafeUtility.As<StructA[], StructB[]>(ref source);
+            Assert.ExpectException<System.ArrayTypeMismatchException>(() =>
+            {
+                ref StructB value = ref reinterpreted[0];
+                value.Value = 2;
+            });
         }
     }
 }
