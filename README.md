@@ -83,7 +83,37 @@ LeanCLR 已支持 Unity 引擎与 .NET 10 BCL，正在接入 Godot，并将持�
 
 - **unity 分支**：与 Unity 2019.4.x – 6000.3.x LTS IL2CPP 的 BCL **完全兼容**，通过全部（数千个）测试用例
 - **mono 分支**：与 Mono 4.8 的 BCL **99.95% 兼容**，仅一个测试用例失败
-- **coreclr 分支**：正在支持 .NET 10 BCL，持续完善中
+- **coreclr 分支**：已支持 .NET 10（`net10.0`）BCL 并可稳定运行纯逻辑程序集，原有运行时测试资产已在 .NET 10 下全量回归通过；部分不常用底层调用与库仍在持续完善
+
+### .NET 10 支持（coreclr 分支）
+
+`coreclr` 分支已能加载 `net10.0` 程序集并在 `System.Private.CoreLib` 世界下通过解释器执行，覆盖游戏与工具项目最常用的核心 BCL 能力：
+
+- 基础对象模型、字符串、数组、值类型、枚举、装箱/拆箱
+- 泛型、异常、委托，以及 `isinst` / `castclass` 等核心 IL 语义
+- 反射、自定义特性读取、`RuntimeType` / `RuntimeHandle` 句柄
+- `Span<T>` / `Unsafe` / `RuntimeHelpers`、RVA 数据、内联数组
+- 单线程同步原语（`Monitor` / `lock` / 受控的 `Task` 续延）
+- 基础 `System.IO`（文件、路径，带跨平台回退）
+- 受限的 `AssemblyLoadContext` / `Reflection.Emit`（轻量 lambda、动态程序集元数据）
+- 基于反射的序列化（已用真实的 OdinSerializer 序列化/反序列化往返验证）
+
+#### 暂未支持或受限
+
+当前目标是运行受控的、纯逻辑的 `net10.0` 程序集，而非托管完整的 `Microsoft.NETCore.App`。以下不常用调用与底层库尚未支持，触发时会输出明确的诊断信息而非静默失败：
+
+- 完整的 `Microsoft.NETCore.App`（仅按需提供白名单内的 BCL 子集）
+- 多线程运行时：`ThreadPool`、`Timer`、后台工作线程、跨线程 `Monitor`、复杂 `WaitHandle`
+- 网络 / 套接字 / HTTP 等平台 IO，以及文件监视、ACL、重叠 I/O 等高级 IO
+- 动态原生代码生成：完整的 `Reflection.Emit` IL 发射、`DynamicMethod` 原生 codegen
+- 完整 CoreCLR `AssemblyLoadContext`（可回收 / 卸载）以及调试器协议
+- COM 互操作与复杂 marshaling
+
+> LeanCLR 是单线程 runtime，不规划多线程运行时支持；async/await 通过单线程帧调度器或宿主分发器表达。
+
+#### 完整测试用例
+
+[NKGGameFramework](https://github.com/wqaetly/NKGGameFramework) 提供了一个运行在 LeanCLR `.NET 10` 上的真实工程级完整测试套件，覆盖框架核心逻辑、反射、特性枚举、序列化（OdinSerializer）与异步（UniTask）等场景，可作为 .NET 10 支持范围的参考基线。
 
 ## 版本说明
 
@@ -101,7 +131,7 @@ Standard 版本按 BCL 来源分为三个分支：
 |------|----------|------|
 | **mono** | Mono BCL | 通用跨平台集成，兼容 Mono 4.8 BCL |
 | **unity** | Unity IL2CPP BCL | 面向 Unity / 团结引擎集成 |
-| **coreclr** | CoreCLR BCL | 正在支持 .NET 10 BCL |
+| **coreclr** | CoreCLR BCL | 已支持 .NET 10（`net10.0`）BCL，可运行纯逻辑程序集 |
 
 ### Standard 与 Core 对比
 
