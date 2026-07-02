@@ -505,7 +505,7 @@ flowchart LR
 
 ## BCL 兼容和引擎 bridge 是两件事
 
-`.NET 10` BCL 兼容解决的是 `System.*`、`System.Private.CoreLib` 和 `Microsoft.NETCore.App` 能不能在 LeanCLR 上运行。Unity/Godot 接入解决的是引擎对象、资源、场景、主线程 API 和异步结果如何暴露给托管业务代码。
+`.NET 10` BCL 兼容解决的是 `System.*`、`System.Private.CoreLib` 和 `Microsoft.NETCore.App` 能不能在 LeanCLR 上运行。Unity/Godot/UE 接入解决的是引擎对象、资源、场景、主线程 API 和异步结果如何暴露给托管业务代码。
 
 这两件事不应该混在一起。
 
@@ -515,20 +515,182 @@ flowchart LR
     A --> C["引擎抽象接口: asset / scene / game-loop / audio / ui"]
     C --> D["LeanCLR host bridge ABI"]
     D --> E["宿主侧 handle registry"]
-    E --> F["Unity/Godot 主线程 dispatcher"]
-    F --> G["真实 UnityEngine / Godot API"]
+    E --> F["Unity/Godot/UE 主线程 dispatcher"]
+    F --> G["真实 UnityEngine / Godot / Unreal API"]
 ```
 
 比较稳的引擎接入方式是：
 
 - LeanCLR 只运行引擎无关核心逻辑、业务程序集和必要 `.NET 10` BCL 子集。
-- Unity/Godot 进程作为宿主，负责创建 LeanCLR runtime、装载程序集、驱动 frame pump。
+- Unity/Godot/UE 进程作为宿主，负责创建 LeanCLR runtime、装载程序集、驱动 frame pump。
 - 引擎对象不直接跨 runtime 边界传递，而是用 `int`、`long`、`IntPtr` 或 opaque handle 表示。
-- 宿主维护 handle registry，把 handle 映射到真实 Unity `Object`、Godot `Object`、Node、Resource 等。
+- 宿主维护 handle registry，把 handle 映射到真实 Unity `Object`、Godot `Object`、Unreal `UObject`、Node、Resource、Actor、Component 等。
 - 所有必须主线程调用的引擎 API 都进入宿主主线程 dispatcher。
 - 异步加载、场景切换、资源请求等结果通过 bridge 回填到 LeanCLR 的 continuation 或等价调度结构。
 
-这种模型把 LeanCLR 放在“native CLR-like runtime”的位置，把 Unity/Godot 放在外部 service provider 的位置。业务代码看到的是抽象服务和 handle，不需要 LeanCLR 直接理解整套引擎对象模型。
+这种模型把 LeanCLR 放在“native CLR-like runtime”的位置，把 Unity/Godot/UE 放在外部 service provider 的位置。业务代码看到的是抽象服务和 handle，不需要 LeanCLR 直接理解整套引擎对象模型。
+
+## 三类引擎接入的共同骨架
+
+NKGGameFramework 的 Godot 样例已经验证了一条可复用路径：业务程序集面向 `net10.0` 编译，LeanCLR 在引擎进程内加载业务 DLL 和 staged BCL，托管侧每帧输出 host command buffer，宿主侧把命令落到真实引擎对象。这个路径不要求 LeanCLR 引用 GodotSharp、UnityEngine 或 Unreal Engine 的 managed runtime。
+
+通用流程可以抽象成：
+
+```mermaid
+flowchart TD
+    A["业务 / 框架 C# 源码"] --> B["dotnet build: net10.0 managed assemblies"]
+    B --> C["计算 AssemblyRef 闭包"]
+    C --> D["stage minimal net10 BCL / adapter assemblies"]
+    E["引擎插件 / native module"] --> F["启动 LeanCLR Runtime"]
+    F --> G["注册 assembly loader"]
+    G --> H["加载业务程序集和 adapter assembly"]
+    H --> I["绑定 managed entry: Reset / Tick / Debug / Host callbacks"]
+    J["引擎主循环"] --> K["主线程 dispatcher / frame pump"]
+    K --> I
+    I --> L["RuntimeContext.Update / ECS / gameplay logic"]
+    L --> M["host command buffer 或 host service call"]
+    M --> N["native bridge 解码"]
+    N --> O["handle registry"]
+    O --> P["真实引擎对象 / 资源 / 场景"]
+    Q["debug transport"] --> K
+    K --> R["managed Diagnostics command endpoint"]
+```
+
+这里的关键不是三个引擎共用同一份 native 代码，而是共用同一条边界：
+
+| 层次 | 放什么 | 不放什么 |
+| --- | --- | --- |
+| LeanCLR core | `.NET 10` BCL profile、metadata、IL、GC、反射、icall catalog | 引擎对象模型 |
+| managed game assemblies | RuntimeContext、ECS、玩法、debug domain、引擎抽象 contract | UnityEngine/GodotSharp/Unreal managed 全量 API |
+| adapter assembly | handle、Variant、command buffer、少量 service interface | 真实引擎对象生命周期 |
+| native engine plugin | runtime loader、assembly loader、主线程 pump、object/resource registry、transport | BCL 兼容逻辑 |
+
+### Godot 接入流程
+
+Godot 路径最接近当前 NKGGameFramework 的实际接入过程。`NKGGameFramework.Adapter.Godot` 承载 managed contract 和 `GodotHostCommandBuffer`；GDExtension native 层负责启动 LeanCLR、注册文件加载器、加载 `NKGGameFramework.GodotPlaneSample.dll`，并把 `_process` 转成 managed tick。托管侧返回 `byte[]` command buffer，native 层解码 `CreateNode`、`SetProperty`、`LoadResource`、`InstantiateScene` 等命令，落到 Godot `Object` / `Node` / `Resource` registry。
+
+```mermaid
+flowchart TD
+    A["dotnet build Godot sample: net10.0"] --> B["NKGGameFramework.GodotPlaneSample.dll"]
+    A --> C["NKGGameFramework.dll / Adapter.Godot.dll / Diagnostics.dll"]
+    B --> D["stage-leanclr-bcl: 复制 System.Private.CoreLib 和引用闭包"]
+    C --> D
+    E["Godot project.godot"] --> F["GDExtension: nkg_leanclr_bridge"]
+    F --> G["NkgLeanClrRuntimeBridge.configure(managedDir + bclDir)"]
+    G --> H["Runtime::initialize + Settings::set_file_loader"]
+    H --> I["Assembly::load_by_name(sample assembly)"]
+    I --> J["绑定 PlaneGameBridge 静态入口"]
+    K["NkgLeanClrPlaneHost._process(delta)"] --> L["ClearInput / Press* / StepSessionCommandBytes"]
+    L --> M["RuntimeContext.Update + World.Update"]
+    M --> N["GodotHostCommandBuffer byte[]"]
+    N --> O["NkgGodotHostCommandReader"]
+    O --> P["NkgGodotObjectRegistry / ResourceRegistry"]
+    P --> Q["Godot ClassDB / Object::set / Object::callv / ResourceLoader"]
+    R["native HTTP/SSE debug transport"] --> S["主线程安全点"]
+    S --> T["PlaneGameBridge.HandleDebugRequest"]
+    T --> U["Diagnostics GameDebugEndpointDispatcher"]
+```
+
+Godot 的经验给 LeanCLR 接入定了几个很实用的约束：
+
+- `leanclr_bcl/net10.0` 是随工程 staged 的 runtime assembly 目录，运行时不启动 CoreCLR host。
+- Godot 官方 C# / GodotSharp 不在主路径里，避免把 Godot 的 .NET 支持状态变成 LeanCLR 的平台限制。
+- GDScript 只做 autoload、配置和可选 facade，不承载 ECS、Gameplay、Serialization、Debug domain。
+- debug transport 在 native/Godot 层，managed 侧只处理 command endpoint 和 payload，不要求 LeanCLR 实现 `System.Net` server。
+- 所有 snapshot、mutation、pause/step 都通过主线程安全点执行，避免 transport 线程直接读写 ECS。
+
+### Unity 接入流程
+
+Unity 路径可以复用同一个模型，但宿主胶水会不同。Unity 自身已经有 C# 域，但 LeanCLR 不应该把 Unity 的 managed runtime 当成自己的 BCL，也不应该在 LeanCLR 里直接加载 `UnityEngine.dll` 作为业务依赖。更稳妥的做法是：Unity C# 侧保留一个薄 `MonoBehaviour` host，加载 LeanCLR native plugin，传入 managed/BCL 路径，之后每帧只做输入采集、主线程调度和 command buffer 应用。
+
+```mermaid
+flowchart TD
+    A["NKG / game logic: net10.0"] --> B["NKGGameFramework.dll"]
+    A --> C["NKGGameFramework.Adapter.Unity.dll"]
+    B --> D["Unity StreamingAssets 或 package 内 managed 目录"]
+    C --> D
+    E["Unity Editor / Player"] --> F["LeanCLR native plugin"]
+    G["LeanClrUnityHost MonoBehaviour"] --> F
+    G --> H["传入 managedDir / bclDir / entry assembly"]
+    F --> I["Runtime::initialize + assembly loader"]
+    I --> J["绑定 managed Reset / Tick / Debug 方法"]
+    K["Update / FixedUpdate / LateUpdate"] --> G
+    G --> L["采集 Input / Time / scene context"]
+    L --> J
+    J --> M["RuntimeContext.Update / gameplay logic"]
+    M --> N["UnityHostCommandBuffer"]
+    N --> O["Unity native/C# host command reader"]
+    O --> P["handle registry: GameObject / Component / Asset"]
+    P --> Q["Instantiate / Destroy / SetProperty / CallMethod / LoadAsset"]
+    R["Editor debug window / loopback transport"] --> G
+    G --> S["managed Diagnostics command endpoint"]
+```
+
+Unity 首版不需要追求“在 LeanCLR 里完整写 Unity 脚本”。更合理的分期是：
+
+1. `Adapter.Unity` 先定义 `IUnityGameLoopDriver`、asset、scene、audio、UI 等 host service contract。
+2. Unity host 把 `Update` / `FixedUpdate` 映射成 LeanCLR 的 frame pump。
+3. 托管业务输出对象命令，Unity host 维护 `int`/`long` handle 到 `GameObject`、`Component`、`ScriptableObject`、asset 的映射。
+4. Editor/desktop debug transport 可以由 Unity C# 或 native plugin 承载，再转成 Diagnostics command。
+5. 后续如果要暴露更多 Unity API，优先做生成式 adapter 和受控 facade，而不是把 `UnityEngine` 全量塞进 LeanCLR BCL profile。
+
+### Unreal Engine 接入流程
+
+UE 接入要额外处理反射、UObject 生命周期、GC、蓝图和热重载边界。这里可以参考 UnrealSharp 的方向：它面向 UE5，把 C# 放在 `.NET 10` 上，支持从 `UClass` 派生、用特性标注 `UProperty` / `UFunction`，并从 Unreal 反射出来的 C++ 类型生成 C# binding。LeanCLR 的接入可以借鉴这套“生成 binding + native module 承载 UObject 边界”的结构，但运行时仍然是 LeanCLR，而不是把 UnrealSharp 的 .NET host 直接搬进来。
+
+```mermaid
+flowchart TD
+    A["Unreal C++ project / plugin"] --> B["UHT 生成反射数据"]
+    B --> C["LeanCLR Unreal binding generator"]
+    C --> D["Leanclr.Unreal.Adapter.dll: UObjectHandle / Actor facade / generated thunks"]
+    E["Gameplay C# net10.0"] --> F["managed game assemblies"]
+    D --> F
+    G["Unreal plugin module"] --> H["StartupModule / GameInstanceSubsystem"]
+    H --> I["启动 LeanCLR Runtime"]
+    I --> J["加载 BCL / adapter / gameplay assemblies"]
+    J --> K["绑定 Tick / BeginPlay / EndPlay / Debug / event dispatch"]
+    L["UE game thread Tick"] --> K
+    K --> M["managed gameplay / ECS / state machine"]
+    M --> N["UnrealHostCommandBuffer 或 host service call"]
+    N --> O["native bridge thunks"]
+    O --> P["UObject registry: handle -> TWeakObjectPtr<UObject>"]
+    P --> Q["SpawnActor / SetProperty / Call UFunction / LoadObject"]
+    R["Blueprint / UFunction event"] --> S["native event thunk"]
+    S --> K
+```
+
+UE 建议拆成两个阶段：
+
+| 阶段 | 目标 | 边界 |
+| --- | --- | --- |
+| Phase 1 | LeanCLR 托管逻辑驱动 UE 对象命令 | C# 业务不直接继承 `AActor`，只通过 handle facade 控制 Actor、Component、Asset |
+| Phase 2 | 生成式 UClass/UFunction 代理 | 参考 UnrealSharp 的 generated binding 思路，为 C# partial 类型生成 native proxy、UFunction thunk 和属性 marshal |
+
+Phase 1 更适合验证 LeanCLR 的 runtime contract，因为它只要求：
+
+- UE plugin module 在 game thread 初始化 LeanCLR，并在 Tick 安全点调用 managed entry。
+- adapter assembly 提供 `UObjectHandle`、`ActorHandle`、`ComponentHandle`、`UnrealVariant`、command buffer 和 host service interface。
+- native bridge 用 `TWeakObjectPtr<UObject>` 或等价结构维护 handle registry，避免 LeanCLR 持有裸 UObject 指针。
+- 蓝图事件、input、timer、asset load 先进入 UE game thread，再通过 dispatch queue 进入 LeanCLR。
+- UE GC 与 LeanCLR GC 不互相扫描对象图，只通过 handle 的 pin/release/weak validity contract 协作。
+
+Phase 2 才引入更接近 UnrealSharp 的体验：C# 类型用特性描述 `UClass`、`UProperty`、`UFunction`，生成器根据 UHT/reflection 数据生成 C# facade 和 C++ thunk。这里仍然要保持一个原则：Unreal 的反射系统属于 UE adapter，不属于 `.NET 10` BCL profile；LeanCLR 看到的是 adapter DLL、metadata 和受控 native bridge，不直接承担整个 UObject runtime。
+
+## 接入验证矩阵
+
+三类引擎都应该先用同一组最小验收来收敛边界，而不是一开始追求完整引擎 API：
+
+| 场景 | Godot | Unity | UE |
+| --- | --- | --- | --- |
+| Runtime 启动 | GDExtension 初始化 LeanCLR | native plugin 初始化 LeanCLR | plugin module / subsystem 初始化 LeanCLR |
+| Assembly 加载 | managed dir + `leanclr_bcl/net10.0` | StreamingAssets/package staged BCL | plugin content staged BCL |
+| Frame pump | `_process` / `_physics_process` | `Update` / `FixedUpdate` | game thread Tick |
+| 对象输出 | `GodotHostCommandBuffer` | `UnityHostCommandBuffer` | `UnrealHostCommandBuffer` |
+| 对象 registry | `Object` / `Node` / `Resource` | `GameObject` / `Component` / asset | `UObject` / `AActor` / `UActorComponent` |
+| Debug transport | native HTTP/SSE 或 JS bridge | Editor window / loopback / player bridge | Editor tool / loopback / console command |
+| 首个 smoke | managed sampler 每帧驱动可见对象 | managed sampler 创建/移动 GameObject | managed sampler SpawnActor/SetProperty |
+
+只要这张矩阵跑通，后续扩展资源、UI、动画、物理、蓝图、热重载时，就能继续围绕 adapter 和 host bridge 演进，而不是把每个引擎的复杂度反向压进 LeanCLR core。
 
 ## 单线程 runtime 的同步边界
 
