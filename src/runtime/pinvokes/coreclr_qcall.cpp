@@ -1,5 +1,7 @@
 #include "coreclr_qcall.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 
@@ -98,6 +100,13 @@ struct RtProcessorNumber
     uint16_t Group;
     uint8_t Number;
     uint8_t Reserved;
+};
+
+struct RtCpInfo
+{
+    uint32_t max_char_size;
+    uint8_t default_char[2];
+    uint8_t lead_byte[12];
 };
 
 struct RtArgIteratorSigPointer
@@ -1923,8 +1932,22 @@ RtResult<vm::RtReflectionRuntimeType*> resolve_module_type(void* qcall_module, v
 bool is_diagnostics_stack_frame(const interp::InterpFrame* frame) noexcept
 {
     const metadata::RtMethodInfo* method = frame->method;
-    return method != nullptr && method->parent != nullptr && method->parent->namespaze != nullptr &&
-           std::strcmp(method->parent->namespaze, "System.Diagnostics") == 0;
+    if (method == nullptr || method->parent == nullptr || method->parent->namespaze == nullptr)
+    {
+        return false;
+    }
+
+    if (std::strcmp(method->parent->namespaze, "System.Diagnostics") == 0)
+    {
+        return true;
+    }
+
+    if (!method->parent->image->is_corlib() || method->parent->name == nullptr || method->name == nullptr)
+    {
+        return false;
+    }
+
+    return std::strcmp(method->parent->namespaze, "System.Reflection") == 0 && std::strcmp(method->name, "Invoke") == 0;
 }
 
 bool is_method_base_get_current_method_frame(const interp::InterpFrame* frame) noexcept
@@ -1948,6 +1971,17 @@ bool is_assembly_stack_walk_helper_frame(const interp::InterpFrame* frame) noexc
            (std::strcmp(method->name, "GetExecutingAssembly") == 0 || std::strcmp(method->name, "GetCallingAssembly") == 0);
 }
 
+bool is_runtime_native_call_frame(const interp::InterpFrame* frame) noexcept
+{
+    const metadata::RtMethodInfo* method = frame->method;
+    if (frame->ip != nullptr || method == nullptr)
+    {
+        return false;
+    }
+
+    return method->invoker_type != metadata::RtInvokerType::Aot && method->invoker_type != metadata::RtInvokerType::AotVirtualAdjustThunk;
+}
+
 RtResult<const metadata::RtMethodInfo*> get_method_for_stack_mark(vm::RtStackCrawlMark* stack_mark, bool skip_method_base_helpers,
                                                                   bool skip_assembly_helpers) noexcept
 {
@@ -1958,7 +1992,8 @@ RtResult<const metadata::RtMethodInfo*> get_method_for_stack_mark(vm::RtStackCra
     for (size_t i = frames.size(); i > 0; --i)
     {
         const interp::InterpFrame* frame = &frames[i - 1];
-        if (frame->method == nullptr || (skip_method_base_helpers && is_method_base_get_current_method_frame(frame)) ||
+        if (frame->method == nullptr || is_runtime_native_call_frame(frame) ||
+            (skip_method_base_helpers && is_method_base_get_current_method_frame(frame)) ||
             (skip_assembly_helpers && is_assembly_stack_walk_helper_frame(frame)))
         {
             continue;
@@ -3386,6 +3421,24 @@ RtResultVoid kernel32_set_environment_variable_ptr_invoker(metadata::RtManagedMe
 
     int32_t result = platform::RtSys::set_environment_variable(variable_name, value);
     interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
+RtResultVoid kernel32_get_cp_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    uint32_t code_page = interp::EvalStackOp::get_param<uint32_t>(params, 0);
+    RtCpInfo* cp_info = interp::EvalStackOp::get_param<RtCpInfo*>(params, 1);
+    if (cp_info == nullptr)
+    {
+        interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
+        RET_VOID_OK();
+    }
+
+    std::memset(cp_info, 0, sizeof(RtCpInfo));
+    cp_info->max_char_size = code_page == 65001 ? 4u : 2u;
+    cp_info->default_char[0] = static_cast<uint8_t>('?');
+    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(1));
     RET_VOID_OK();
 }
 
@@ -5430,7 +5483,13 @@ RtResult<const metadata::RtMethodInfo*> try_get_target_method_from_dynamic_resol
         }
 
         DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, token_obj, get_dynamic_scope_token_object(scope, token));
-        return get_method_from_dynamic_scope_token_object(token_obj);
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, method, get_method_from_dynamic_scope_token_object(token_obj));
+        if (std::getenv("LEANCLR_DYNAMIC_TRACE") != nullptr)
+        {
+            std::fprintf(stderr, "leanclr-dynamic: op=0x%02x token=0x%08x method=%s.%s::%s param_count=%u\n",
+                         op, token, method->parent->namespaze, method->parent->name, method->name, method->parameter_count);
+        }
+        RET_OK(method);
     }
 
     RET_ERR(RtErr::MissingMethod);
@@ -5659,6 +5718,13 @@ RtResultVoid runtime_type_handle_internal_alloc_invoker(metadata::RtManagedMetho
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
                                             vm::Reflection::get_type_sig_from_qcall_type_handle(method_table, method_table));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, klass, vm::Class::get_class_from_typesig(type_sig));
+    if (klass == vm::Class::get_corlib_types().cls_runtimetype)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, runtime_type,
+                                                vm::Reflection::get_runtime_type_from_type_sig(type_sig));
+        *result_slot = reinterpret_cast<vm::RtObject*>(runtime_type);
+        RET_VOID_OK();
+    }
     RET_ERR_ON_FAIL(vm::Class::initialize_all(klass));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtObject*, obj,
                                             LEANCLR_NEWOBJ_INTERNAL(klass, "RuntimeTypeHandle_InternalAlloc"));
@@ -6609,6 +6675,15 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    kernel32_set_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::SetEnvironmentVariable", nullptr,
                                    kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetCPInfo(System.UInt32,Interop/Kernel32/CPINFO*)", nullptr,
+                                   kernel32_get_cp_info_invoker);
+    vm::PInvokes::register_pinvoke("Interop/Kernel32::GetCPInfo", nullptr, kernel32_get_cp_info_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetCPInfo(System.UInt32,Interop/Kernel32/CPINFO*)", nullptr,
+                                   kernel32_get_cp_info_invoker);
+    vm::PInvokes::register_pinvoke("Kernel32::GetCPInfo", nullptr, kernel32_get_cp_info_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetCPInfo(System.UInt32,Interop/Kernel32/CPINFO*)", nullptr,
+                                   kernel32_get_cp_info_invoker);
+    vm::PInvokes::register_pinvoke(".Kernel32::GetCPInfo", nullptr, kernel32_get_cp_info_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
                                    kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx", nullptr, kernel32_get_locale_info_ex_invoker);
@@ -6914,6 +6989,10 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    method_base_get_current_method_invoker);
     vm::PInvokes::register_pinvoke("System.Reflection.MethodBase::GetCurrentMethod", nullptr, method_base_get_current_method_invoker);
     vm::PInvokes::register_pinvoke("AssemblyNative_GetExecutingAssembly", nullptr, assembly_get_executing_assembly_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.Marshal::<IsBuiltInComSupportedInternal>g____PInvoke|30_0()", nullptr,
+                                   eventpipe_bool_false_invoker);
+    vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.Marshal::<IsBuiltInComSupportedInternal>g____PInvoke|30_0", nullptr,
+                                   eventpipe_bool_false_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Reflection.Assembly::GetExecutingAssemblyNative(System.Runtime.CompilerServices.StackCrawlMarkHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, assembly_get_executing_assembly_invoker);

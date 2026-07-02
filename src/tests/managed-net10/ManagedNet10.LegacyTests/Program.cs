@@ -12,6 +12,47 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunAssembly(typeof(Program).Assembly);
         }
 
+        public static void RunAllPrefixThenRuntimeType()
+        {
+            string prefixCountText = System.Environment.GetEnvironmentVariable("LEANCLR_PREFIX_TYPE_COUNT");
+            int prefixCount = prefixCountText == null ? 0 : int.Parse(prefixCountText);
+            LegacyTestRunner.RunAssemblyPrefix(typeof(Program).Assembly, prefixCount);
+            RunCorlibRuntimeTypeLegacy();
+        }
+
+        public static void RunAllPrefixThenRuntimeTypeMethod()
+        {
+            string prefixCountText = System.Environment.GetEnvironmentVariable("LEANCLR_PREFIX_TYPE_COUNT");
+            int prefixCount = prefixCountText == null ? 0 : int.Parse(prefixCountText);
+            string methodName = System.Environment.GetEnvironmentVariable("LEANCLR_RUNTIME_TYPE_METHOD");
+            LegacyTestRunner.RunAssemblyPrefix(typeof(Program).Assembly, prefixCount);
+            if (System.Environment.GetEnvironmentVariable("LEANCLR_LEGACY_TRACE") == "1")
+            {
+                System.Console.WriteLine("legacy-diagnostic: after-prefix method=" + methodName);
+            }
+            LegacyTestRunner.RunMethod(typeof(CorlibTests.InternalCall.TC_System_RuntimeType), methodName);
+        }
+
+        public static void RunGcFinalizerMethodThenRuntimeType()
+        {
+            string methodName = System.Environment.GetEnvironmentVariable("LEANCLR_FINALIZER_METHOD");
+            LegacyTestRunner.RunMethod(typeof(GcTests.Finalizer.TC_GC_Finalizer), methodName);
+            RunCorlibRuntimeTypeLegacy();
+        }
+
+        public static void RunCollectThenRuntimeType()
+        {
+            System.GC.Collect();
+            RunCorlibRuntimeTypeLegacy();
+        }
+
+        public static void RunCollectThenSimpleTypeEquality()
+        {
+            System.GC.Collect();
+            Assert.Equal(typeof(string), typeof(string));
+            Assert.Equal(typeof(string), typeof(string).MakeArrayType().GetElementType());
+        }
+
         public static void RunLegacyDiscoverySmoke()
         {
             System.Type targetType = typeof(Tests.Instruments.Ariths.TC_sub);

@@ -22,6 +22,17 @@ enum class FinalizerRegState : uint8_t
 static utils::HashMap<vm::RtObject*, FinalizerRegState> s_registry;
 static utils::Vector<vm::RtObject*> s_freachable;
 
+static void visit_finalizer_roots(GcVisitObjectRoot visit, void* userdata)
+{
+    for (vm::RtObject* obj : s_freachable)
+    {
+        if (obj != nullptr)
+        {
+            visit(obj, userdata);
+        }
+    }
+}
+
 struct PromoteScanContext
 {
     GCAliveObjectBitmap* alive_bitmap;
@@ -78,9 +89,11 @@ void GcFinalizer::run_pending_finalizers()
 
     for (vm::RtObject* obj : pending)
     {
+        GcRoots::register_slot(&obj);
         auto it = s_registry.find(obj);
         if (it == s_registry.end() || it->second != FinalizerRegState::Active)
         {
+            GcRoots::unregister_slot(&obj);
             continue;
         }
 
@@ -94,6 +107,7 @@ void GcFinalizer::run_pending_finalizers()
         {
             printf("Failed to invoke finalizer, klass: %s.%s\n", obj->klass->namespaze, obj->klass->name);
         }
+        GcRoots::unregister_slot(&obj);
     }
 }
 
@@ -147,6 +161,11 @@ void GcFinalizer::on_object_freed(vm::RtObject* obj)
         return;
     }
     s_registry.erase(obj);
+}
+
+void GcFinalizer::register_gc_roots()
+{
+    GcRoots::register_visit_object_roots(visit_finalizer_roots);
 }
 
 } // namespace gc

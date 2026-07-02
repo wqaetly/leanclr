@@ -29,6 +29,8 @@
 #include "utils/rt_vector.h"
 
 #include <cstring>
+#include <cstdio>
+#include <cstdlib>
 
 namespace leanclr
 {
@@ -268,7 +270,14 @@ struct ScopeBufferGuard
         for (size_t i = 0; i < method_param_count; ++i)
         {
             const metadata::RtTypeSig* param_type_sig = method->parameters[i];
-            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, param_klass, Class::get_class_from_typesig(param_type_sig));
+            metadata::RtTypeSig byval_param_type_sig{};
+            const metadata::RtTypeSig* value_type_sig = param_type_sig;
+            if (param_type_sig->by_ref)
+            {
+                byval_param_type_sig = param_type_sig->to_canonized_without_byref();
+                value_type_sig = &byval_param_type_sig;
+            }
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, param_klass, Class::get_class_from_typesig(value_type_sig));
             RET_ERR_ON_FAIL(Class::initialize_all(param_klass));
             DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(interp::ReduceTypeAndSize, reduceTypeAndSize,
                                                     interp::InterpDefs::get_reduce_type_and_size_by_typesig(param_type_sig));
@@ -284,10 +293,23 @@ struct ScopeBufferGuard
                     void* buffer = alloc_zeroed_temp_value_type_buffer(param_klass->instance_size_without_header);
                     RET_ERR_ON_FAIL(Object::unbox_any(param, param_klass, buffer, false));
                     dst.ptr = buffer;
+                    if (std::getenv("LEANCLR_REFLECTION_INVOKE_TRACE") != nullptr)
+                    {
+                        std::fprintf(stderr, "leanclr-invoke: %s.%s::%s byref value param[%zu] klass=%s obj=%s dst=%p i32=%d\n",
+                                     method->parent->namespaze, method->parent->name, method->name, i, param_klass->name,
+                                     param != nullptr && param->klass != nullptr ? param->klass->name : "<null>", dst.ptr,
+                                     *reinterpret_cast<int32_t*>(buffer));
+                    }
                 }
                 else
                 {
                     dst.ptr = &params[i];
+                    if (std::getenv("LEANCLR_REFLECTION_INVOKE_TRACE") != nullptr)
+                    {
+                        std::fprintf(stderr, "leanclr-invoke: %s.%s::%s byref ref param[%zu] klass=%s obj=%s dst=%p slot=%p\n",
+                                     method->parent->namespaze, method->parent->name, method->name, i, param_klass->name,
+                                     param != nullptr && param->klass != nullptr ? param->klass->name : "<null>", dst.ptr, params[i]);
+                    }
                 }
             }
             else

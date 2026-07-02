@@ -14,6 +14,8 @@
 #include "utils/safegptrarray.h"
 #include "utils/string_builder.h"
 #include "metadata/module_def.h"
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <algorithm>
 
@@ -71,11 +73,21 @@ static bool matches_member_name(const char* member_name, const char* search_name
 
 RtResult<vm::RtReflectionType*> SystemRuntimeType::make_array_type(vm::RtReflectionRuntimeType* runtime_type, int32_t rank) noexcept
 {
+    bool trace = std::getenv("LEANCLR_RUNTIMETYPE_TRACE") != nullptr;
+    if (trace)
+    {
+        std::fprintf(stderr, "make_array_type: enter runtime_type=%p rank=%d\n", runtime_type, rank);
+    }
     if (rank < 0 || rank > static_cast<int32_t>(metadata::RT_MAX_ARRAY_RANK))
         RET_ERR(RtErr::TypeLoad);
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, ele_type_sig,
                                             vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
+    if (trace)
+    {
+        std::fprintf(stderr, "make_array_type: element_sig=%p ele_type=%d byref=%d\n", ele_type_sig,
+                     static_cast<int>(ele_type_sig->ele_type), ele_type_sig->by_ref ? 1 : 0);
+    }
 
     // Cannot create array of ByRef types
     if (ele_type_sig->by_ref)
@@ -97,8 +109,19 @@ RtResult<vm::RtReflectionType*> SystemRuntimeType::make_array_type(vm::RtReflect
         // when rank > 1, it is a multi-dimensional array
         UNWRAP_OR_RET_ERR_ON_FAIL(arr_class, vm::ArrayClass::get_array_class_from_element_type(ele_type_sig, static_cast<uint8_t>(rank)));
     }
+    if (trace)
+    {
+        std::fprintf(stderr, "make_array_type: arr_class=%p %s.%s\n", arr_class,
+                     arr_class != nullptr && arr_class->namespaze != nullptr ? arr_class->namespaze : "",
+                     arr_class != nullptr && arr_class->name != nullptr ? arr_class->name : "");
+    }
 
-    return vm::Reflection::get_klass_reflection_object(arr_class);
+    auto result = vm::Reflection::get_klass_reflection_object(arr_class);
+    if (trace)
+    {
+        std::fprintf(stderr, "make_array_type: get_klass_reflection_object done ok=%d\n", result.is_ok() ? 1 : 0);
+    }
+    return result;
 }
 
 RtResult<vm::RtReflectionType*> SystemRuntimeType::make_byref_type(vm::RtReflectionRuntimeType* runtime_type) noexcept

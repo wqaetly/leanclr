@@ -8,6 +8,18 @@ namespace ManagedNet10.LegacyTests
             LegacyTestRunner.RunType(typeof(CorlibRuntimeTypeNet10Semantics));
         }
 
+        public static void RunCorlibRuntimeTypeAfterReflectionCaches()
+        {
+            RunCorlibReflectionRuntimeMethodInfo();
+            RunCorlibReflectionRuntimeParameterInfo();
+            RunCorlibReflectionRuntimePropertyInfo();
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(CorlibTests.InternalCall.TC_System_Reflection_RuntimeModule));
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(CorlibTests.InternalCall.TC_System_Runtime_CompilerServices_RuntimeHelper));
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(CorlibTests.InternalCall.TC_System_Runtime_InteropServices_GCHandle));
+            LegacyTestRunner.RunTypeWithNet10Replacements(typeof(CorlibTests.InternalCall.TC_System_Runtime_InteropServices_RuntimeInformation));
+            RunCorlibRuntimeType();
+        }
+
         public static void RunCorlibRuntimeTypeLegacy()
         {
             LegacyTestRunner.RunTypeWithNet10Replacements(typeof(CorlibTests.InternalCall.TC_System_RuntimeType));

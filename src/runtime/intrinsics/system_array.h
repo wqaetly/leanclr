@@ -28,6 +28,9 @@ class SystemArray
     static RtResultVoid copy(vm::RtArray* source_array, int32_t source_index, vm::RtArray* destination_array, int32_t destination_index,
                              int32_t length) noexcept;
     static RtResultVoid copy(vm::RtArray* source_array, vm::RtArray* destination_array, int32_t length) noexcept;
+    static RtResultVoid copy_indexed(vm::RtArray* source_array, int32_t source_index, vm::RtArray* destination_array,
+                                     int32_t destination_index, int32_t length) noexcept;
+    static RtResultVoid copy_simple(vm::RtArray* source_array, vm::RtArray* destination_array, int32_t length) noexcept;
 
     // Clears an array range using LeanCLR's runtime array layout.
     static RtResultVoid clear(vm::RtArray* array, int32_t index, int32_t length) noexcept;

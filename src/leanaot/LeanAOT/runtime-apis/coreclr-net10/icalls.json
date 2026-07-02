@@ -540,6 +540,21 @@
     "header": "icalls/system_runtimetypehandle.h"
   },
   {
+    "name": "System.RuntimeTypeHandle::IsPrimitive(System.RuntimeType)",
+    "func": "SystemRuntimeTypeHandle::is_primitive",
+    "header": "icalls/system_runtimetypehandle.h"
+  },
+  {
+    "name": "System.RuntimeTypeHandle::IsByRef(System.RuntimeType)",
+    "func": "SystemRuntimeTypeHandle::is_by_ref",
+    "header": "icalls/system_runtimetypehandle.h"
+  },
+  {
+    "name": "System.RuntimeTypeHandle::IsPointer(System.RuntimeType)",
+    "func": "SystemRuntimeTypeHandle::is_pointer",
+    "header": "icalls/system_runtimetypehandle.h"
+  },
+  {
     "name": "System.RuntimeTypeHandle::IsGenericVariable",
     "func": "SystemRuntimeTypeHandle::is_generic_variable",
     "header": "icalls/system_runtimetypehandle.h"

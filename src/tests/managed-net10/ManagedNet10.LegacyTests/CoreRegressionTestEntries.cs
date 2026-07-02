@@ -54,5 +54,10 @@ namespace ManagedNet10.LegacyTests
                 throw new InvalidOperationException("No CoreTests Regression UnitTest methods executed.");
             }
         }
+
+        public static void RunCoreRegressionGenericMemberRef()
+        {
+            LegacyTestRunner.RunMethod(typeof(Tests.Bugs.ReadRuntimeHandleFromMemberRef), "GenericMemberRef");
+        }
     }
 }

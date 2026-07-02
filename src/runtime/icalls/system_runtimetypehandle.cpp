@@ -89,6 +89,51 @@ RtResult<bool> SystemRuntimeTypeHandle::is_com_object(const vm::RtReflectionRunt
     RET_OK(false);
 }
 
+RtResult<bool> SystemRuntimeTypeHandle::is_primitive(const vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
+    if (type_sig->is_by_ref())
+    {
+        RET_OK(false);
+    }
+
+    switch (type_sig->ele_type)
+    {
+    case metadata::RtElementType::Boolean:
+    case metadata::RtElementType::Char:
+    case metadata::RtElementType::I1:
+    case metadata::RtElementType::U1:
+    case metadata::RtElementType::I2:
+    case metadata::RtElementType::U2:
+    case metadata::RtElementType::I4:
+    case metadata::RtElementType::U4:
+    case metadata::RtElementType::I8:
+    case metadata::RtElementType::U8:
+    case metadata::RtElementType::R4:
+    case metadata::RtElementType::R8:
+    case metadata::RtElementType::I:
+    case metadata::RtElementType::U:
+        RET_OK(true);
+    default:
+        RET_OK(false);
+    }
+}
+
+RtResult<bool> SystemRuntimeTypeHandle::is_by_ref(const vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
+    RET_OK(type_sig->is_by_ref());
+}
+
+RtResult<bool> SystemRuntimeTypeHandle::is_pointer(const vm::RtReflectionRuntimeType* runtime_type) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_sig,
+                                            vm::Reflection::get_type_sig_from_runtime_type_object(runtime_type));
+    RET_OK(!type_sig->is_by_ref() && type_sig->ele_type == metadata::RtElementType::Ptr);
+}
+
 RtResult<bool> SystemRuntimeTypeHandle::has_references(metadata::RtClass* klass) noexcept
 {
     RET_OK(vm::Class::get_has_references(klass));
@@ -504,6 +549,12 @@ RtResult<vm::RtObject*> SystemRuntimeTypeHandle::internal_alloc_no_checks_fast_p
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass,
                                             vm::Reflection::get_class_from_net10_method_table(method_table));
+    if (klass == vm::Class::get_corlib_types().cls_runtimetype)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, runtime_type,
+                                                vm::Reflection::get_runtime_type_from_handle_arg(method_table));
+        RET_OK(reinterpret_cast<vm::RtObject*>(runtime_type));
+    }
     RET_ERR_ON_FAIL(vm::Class::initialize_all(const_cast<metadata::RtClass*>(klass)));
     return LEANCLR_NEWOBJ_INTERNAL(klass, "RuntimeTypeHandle_InternalAllocNoChecks_FastPath");
 }
@@ -566,6 +617,33 @@ static RtResultVoid is_com_object_invoker(metadata::RtManagedMethodPointer metho
 {
     auto runtime_type = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 0);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeTypeHandle::is_com_object(runtime_type));
+    EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
+static RtResultVoid is_primitive_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                         interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeTypeHandle::is_primitive(runtime_type));
+    EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
+static RtResultVoid is_by_ref_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                      interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeTypeHandle::is_by_ref(runtime_type));
+    EvalStackOp::set_return(ret, static_cast<int32_t>(result));
+    RET_VOID_OK();
+}
+
+static RtResultVoid is_pointer_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
+                                       interp::RtStackObject* ret) noexcept
+{
+    auto runtime_type = EvalStackOp::get_param<const vm::RtReflectionRuntimeType*>(params, 0);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemRuntimeTypeHandle::is_pointer(runtime_type));
     EvalStackOp::set_return(ret, static_cast<int32_t>(result));
     RET_VOID_OK();
 }
@@ -836,6 +914,13 @@ static vm::InternalCallEntry s_internal_call_entries_system_runtimetypehandle[] 
     {"System.RuntimeTypeHandle::GetCorElementType", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_cor_element_type, get_cor_element_type_invoker},
     {"System.RuntimeTypeHandle::HasInstantiation", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::has_instantiation, has_instantiation_invoker},
     {"System.RuntimeTypeHandle::IsComObject(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_com_object, is_com_object_invoker},
+    {"System.RuntimeTypeHandle::IsPrimitive(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_primitive,
+     is_primitive_invoker},
+    {"System.RuntimeTypeHandle::IsPrimitive", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_primitive, is_primitive_invoker},
+    {"System.RuntimeTypeHandle::IsByRef(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_by_ref, is_by_ref_invoker},
+    {"System.RuntimeTypeHandle::IsByRef", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_by_ref, is_by_ref_invoker},
+    {"System.RuntimeTypeHandle::IsPointer(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_pointer, is_pointer_invoker},
+    {"System.RuntimeTypeHandle::IsPointer", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_pointer, is_pointer_invoker},
     {"System.RuntimeTypeHandle::HasReferences", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::has_references, has_references_invoker},
     {"System.RuntimeTypeHandle::CompareCanonicalHandles(System.RuntimeType,System.RuntimeType)",
      (vm::InternalCallFunction)&SystemRuntimeTypeHandle::compare_canonical_handles, compare_canonical_handles_invoker},
@@ -905,6 +990,13 @@ static vm::InternalCallEntry s_net10_internal_call_entries_system_runtimetypehan
     {"System.RuntimeTypeHandle::GetUtf8NameInternal(System.Runtime.CompilerServices.MethodTable*)",
      (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_utf8_name, get_utf8_name_invoker},
     {"System.RuntimeTypeHandle::GetUtf8NameInternal", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_utf8_name, get_utf8_name_invoker},
+    {"System.RuntimeTypeHandle::IsPrimitive(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_primitive,
+     is_primitive_invoker},
+    {"System.RuntimeTypeHandle::IsPrimitive", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_primitive, is_primitive_invoker},
+    {"System.RuntimeTypeHandle::IsByRef(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_by_ref, is_by_ref_invoker},
+    {"System.RuntimeTypeHandle::IsByRef", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_by_ref, is_by_ref_invoker},
+    {"System.RuntimeTypeHandle::IsPointer(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_pointer, is_pointer_invoker},
+    {"System.RuntimeTypeHandle::IsPointer", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::is_pointer, is_pointer_invoker},
     {"System.RuntimeTypeHandle::GetArrayRank(System.RuntimeType)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_array_rank, get_array_rank_invoker},
     {"System.RuntimeTypeHandle::GetElementTypeHandle(System.IntPtr)", (vm::InternalCallFunction)&SystemRuntimeTypeHandle::get_element_type_handle,
      get_element_type_handle_invoker},

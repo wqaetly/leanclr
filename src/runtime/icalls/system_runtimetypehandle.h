@@ -31,6 +31,11 @@ class SystemRuntimeTypeHandle
     // Check if type is COM object
     static RtResult<bool> is_com_object(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
 
+    // Check basic type-shape predicates used by RuntimeType.
+    static RtResult<bool> is_primitive(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
+    static RtResult<bool> is_by_ref(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
+    static RtResult<bool> is_pointer(const vm::RtReflectionRuntimeType* runtime_type) noexcept;
+
     // Check if type has references
     static RtResult<bool> has_references(metadata::RtClass* klass) noexcept;
 

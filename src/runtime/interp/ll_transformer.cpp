@@ -1570,9 +1570,9 @@ RtResultVoid Transformer::transform_instructions()
                 const void* token_data = handle.value;
                 if (handle.is_type())
                 {
-                    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionType*, ref_type,
-                                                            vm::Reflection::get_type_reflection_object(handle.typeSig));
-                    token_data = ref_type;
+                    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, type_handle,
+                                                            vm::Reflection::get_net10_type_handle(handle.typeSig));
+                    token_data = type_handle;
                 }
                 setup_inst_resolved_data(ll_inst, token_data);
                 break;

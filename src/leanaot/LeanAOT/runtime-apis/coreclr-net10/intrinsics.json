@@ -1,12 +1,12 @@
 [
   {
     "name": "System.Array::Copy(System.Array,System.Array,System.Int32)",
-    "func": "SystemArray::copy",
+    "func": "SystemArray::copy_simple",
     "header": "intrinsics/system_array.h"
   },
   {
     "name": "System.Array::Copy(System.Array,System.Int32,System.Array,System.Int32,System.Int32)",
-    "func": "SystemArray::copy",
+    "func": "SystemArray::copy_indexed",
     "header": "intrinsics/system_array.h"
   },
   {
@@ -56,7 +56,7 @@
   },
   {
     "name": "System.Type::op_Inequality(System.Type,System.Type)",
-    "func": "SystemType::equals",
+    "func": "SystemType::not_equals",
     "header": "intrinsics/system_type.h"
   },
   {

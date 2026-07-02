@@ -18,6 +18,9 @@ MEMBER_SIG_RE = re.compile(
 # Extra LeanCLR implementations not listed in externs.txt (exact `name` field match).
 ICALLS_WHITELIST: frozenset[str] = frozenset(
     {
+        "System.RuntimeTypeHandle::IsByRef(System.RuntimeType)",
+        "System.RuntimeTypeHandle::IsPointer(System.RuntimeType)",
+        "System.RuntimeTypeHandle::IsPrimitive(System.RuntimeType)",
         "System.Threading.Interlocked::CompareExchange(System.Object&,System.Object,System.Object)",
     }
 )

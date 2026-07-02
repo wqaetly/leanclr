@@ -23,6 +23,8 @@
 #include "metadata/module_def.h"
 #include "interp/interp_defs.h"
 #include "interp/execution_helper.h"
+#include "interp/interpreter.h"
+#include "interp/machine_state.h"
 #include "profile/profile.h"
 #include "utils/string_builder.h"
 
@@ -455,6 +457,32 @@ inline bool is_aot_method(const metadata::RtMethodInfo* method) noexcept
     return method->invoker_type == metadata::RtInvokerType::Aot;
 }
 
+class AotFrameScope
+{
+  public:
+    explicit AotFrameScope(const metadata::RtMethodInfo* method) noexcept
+        : _old_frame_top(interp::MachineState::get_global_machine_state().enter_frame_from_icall_or_intrinsic(method))
+    {
+    }
+
+    AotFrameScope(const metadata::RtMethodInfo* method, interp::RtStackObject* roots, uint32_t root_count) noexcept
+        : _old_frame_top(interp::MachineState::get_global_machine_state().enter_frame_from_icall_or_intrinsic(
+              method, roots, root_count, interp::InterpFrameRootScanMode::ExplicitObjectRoots))
+    {
+    }
+
+    ~AotFrameScope() noexcept
+    {
+        interp::MachineState::get_global_machine_state().leave_frame_from_icall_or_intrinsic(_old_frame_top);
+    }
+
+    AotFrameScope(const AotFrameScope&) = delete;
+    AotFrameScope& operator=(const AotFrameScope&) = delete;
+
+  private:
+    uint32_t _old_frame_top;
+};
+
 inline RtResultVoid invoke_with_run_class_static_constructor(const metadata::RtMethodInfo* method, interp::RtStackObject* arg_buff,
                                                              interp::RtStackObject* ret_buff) noexcept
 {
@@ -475,6 +503,54 @@ inline RtResultVoid virtual_invoke_without_run_class_static_constructor(const me
                                                                         interp::RtStackObject* ret_buff) noexcept
 {
     return vm::Runtime::virtual_invoke_stackobject_arguments_without_run_cctor(method, arg_buff, ret_buff);
+}
+
+inline RtResultVoid invoke_interpreter_with_varargs(const metadata::RtMethodInfo* method, const interp::RtStackObject* arg_buff,
+                                                    interp::RtStackObject* ret_buff, uint16_t vararg_count) noexcept
+{
+    auto execute_ret = interp::Interpreter::execute(method, arg_buff, vararg_count);
+    if (execute_ret.is_err())
+    {
+        LEANCLR_CODEGEN_RETURN_ERR(execute_ret.unwrap_err());
+    }
+    const interp::RtStackObject* result = execute_ret.unwrap();
+    if (method->ret_stack_object_size > 0)
+    {
+        std::memcpy(ret_buff, result, method->ret_stack_object_size * sizeof(interp::RtStackObject));
+    }
+    LEANCLR_CODEGEN_RETURN_VOID();
+}
+
+inline RtResultVoid invoke_with_run_class_static_constructor_with_varargs(const metadata::RtMethodInfo* method, interp::RtStackObject* arg_buff,
+                                                                          interp::RtStackObject* ret_buff, uint16_t vararg_count) noexcept
+{
+    if (vararg_count == 0)
+    {
+        return invoke_with_run_class_static_constructor(method, arg_buff, ret_buff);
+    }
+    if (vm::Method::is_static(method) && vm::Class::is_cctor_not_finished(method->parent))
+    {
+        RET_ERR_ON_FAIL(vm::Runtime::run_class_static_constructor(method->parent));
+    }
+    return invoke_interpreter_with_varargs(method, arg_buff, ret_buff, vararg_count);
+}
+
+inline RtResultVoid virtual_invoke_without_run_class_static_constructor_with_varargs(const metadata::RtMethodInfo* method,
+                                                                                     interp::RtStackObject* arg_buff,
+                                                                                     interp::RtStackObject* ret_buff,
+                                                                                     uint16_t vararg_count) noexcept
+{
+    if (vararg_count == 0)
+    {
+        return virtual_invoke_without_run_class_static_constructor(method, arg_buff, ret_buff);
+    }
+    if (arg_buff == nullptr || arg_buff[0].obj == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, actual_method,
+                                            vm::Method::get_virtual_method_impl(arg_buff[0].obj, method));
+    return invoke_interpreter_with_varargs(actual_method, arg_buff, ret_buff, vararg_count);
 }
 
 inline RtResult<const metadata::RtMethodInfo*> get_virtual_method_impl(vm::RtObject* obj, const metadata::RtMethodInfo* virtual_method) noexcept
@@ -630,10 +706,22 @@ inline int32_t cast_float_to_i32(Src value) noexcept
     return interp::cast_float_to_i32<Src, Dst>(value);
 }
 
+template <typename Src>
+inline uint32_t cast_float_to_u32(Src value) noexcept
+{
+    return interp::cast_float_to_u32(value);
+}
+
 template <typename Src, typename Dst>
 inline int64_t cast_float_to_i64(Src value) noexcept
 {
     return interp::cast_float_to_i64<Src, Dst>(value);
+}
+
+template <typename Src>
+inline uint64_t cast_float_to_u64(Src value) noexcept
+{
+    return interp::cast_float_to_u64(value);
 }
 
 template <typename Src, typename Dst>

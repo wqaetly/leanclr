@@ -258,6 +258,16 @@ namespace LeanAOT.ToCpp
             case "System.Void System.String::.ctor(System.SByte*,System.Int32,System.Int32,System.Text.Encoding)":
             {
                 icallsFuncName = "SystemString::newobj_utf8chars_range_encoding";
+                if (args.Count != 4)
+                {
+                    throw new Exception($"Unexpected String sbyte range encoding constructor argument count: {methodDef.FullName}");
+                }
+                int paramIndexOffset = methodDetail.IsStatic ? 0 : 1;
+                argsStr =
+                    $"{GetVariableMayCast(args[0], methodDetail.ParamsIncludeThis[paramIndexOffset].Type)}, " +
+                    $"{GetVariableMayCast(args[1], methodDetail.ParamsIncludeThis[paramIndexOffset + 1].Type)}, " +
+                    $"{GetVariableMayCast(args[2], methodDetail.ParamsIncludeThis[paramIndexOffset + 2].Type)}, " +
+                    $"(leanclr::vm::RtObject*)({GetEvalVariableName(args[3])})";
                 break;
             }
             case "System.Void System.String::.ctor(System.Char,System.Int32)":

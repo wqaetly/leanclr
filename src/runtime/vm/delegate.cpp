@@ -10,9 +10,13 @@
 #include "assembly.h"
 #include "generic_class.h"
 #include "interp/eval_stack_op.h"
+#include "interp/machine_state.h"
 #include "metadata/metadata_cache.h"
 #include "metadata/module_def.h"
 #include "utils/hashmap.h"
+
+#include <cstdio>
+#include <cstdlib>
 
 namespace leanclr
 {
@@ -30,6 +34,117 @@ struct AsyncDelegateResult
 };
 
 utils::HashMap<RtObject*, AsyncDelegateResult> s_asyncDelegateResults;
+static interp::RtStackObject s_tempReturnValueBuffer[MAX_DELEGATE_RESULT_OBJECT_SIZE];
+
+static RtResultVoid invoke_delegate_target_with_roots(const metadata::RtMethodInfo* target_method,
+                                                      interp::RtStackObject* args) noexcept
+{
+    interp::MachineState& machine_state = interp::MachineState::get_global_machine_state();
+    uint32_t old_frame_top = machine_state.enter_frame_from_icall_or_intrinsic(
+        target_method, args, static_cast<uint32_t>(target_method->total_arg_stack_object_size),
+        interp::InterpFrameRootScanMode::MethodArguments);
+    RtResultVoid result = CAST_AS_NOEXCEP_INVOKE_METHOD_POINTER(target_method->invoke_method_ptr)(
+        target_method->method_ptr, target_method, args, s_tempReturnValueBuffer);
+    machine_state.leave_frame_from_icall_or_intrinsic(old_frame_top);
+    return result;
+}
+
+static bool is_object_array_func_invoke_target(const metadata::RtMethodInfo* method) noexcept
+{
+    if (method == nullptr || method->parent == nullptr || method->parameter_count != 1 || std::strcmp(method->name, "Invoke") != 0)
+    {
+        return false;
+    }
+    if (std::strcmp(method->parent->namespaze, "System") != 0 || std::strcmp(method->parent->name, "Func`2") != 0)
+    {
+        return false;
+    }
+
+    auto param_class_ret = Class::get_class_from_typesig(method->parameters[0]);
+    if (param_class_ret.is_err())
+    {
+        return false;
+    }
+    metadata::RtClass* param_class = param_class_ret.unwrap();
+    return Class::is_szarray_class(param_class) && param_class->element_class == Class::get_corlib_types().cls_object;
+}
+
+static RtResult<RtArray*> create_object_array_for_delegate_args(const metadata::RtMethodInfo* delegate_invoke_method,
+                                                               const interp::RtStackObject* args) noexcept
+{
+    const int32_t arg_count = static_cast<int32_t>(delegate_invoke_method->parameter_count);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(
+        RtArray*, arg_array,
+        LEANCLR_NEW_SZARRAY_FROM_ELE_KLASS_INTERNAL(Class::get_corlib_types().cls_object, arg_count, "Delegate::create_object_array_for_delegate_args"));
+
+    for (int32_t i = 0; i < arg_count; ++i)
+    {
+        const metadata::RtTypeSig* param_type_sig = delegate_invoke_method->parameters[i];
+        metadata::RtTypeSig byval_type_sig;
+        if (param_type_sig->by_ref)
+        {
+            byval_type_sig = param_type_sig->to_canonized_without_byref();
+            param_type_sig = &byval_type_sig;
+        }
+
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, param_class, Class::get_class_from_typesig(param_type_sig));
+
+        RtObject* boxed_arg = nullptr;
+        if (Class::is_value_type(param_class))
+        {
+            const void* value_ptr = delegate_invoke_method->parameters[i]->by_ref ? args[i + 1].ptr : static_cast<const void*>(&args[i + 1]);
+            if (value_ptr == nullptr)
+            {
+                RET_ERR(RtErr::NullReference);
+            }
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, boxed_value,
+                                                    LEANCLR_BOX_OBJECT_INTERNAL(param_class, value_ptr, "Delegate::create_object_array_for_delegate_args"));
+            boxed_arg = boxed_value;
+        }
+        else
+        {
+            if (delegate_invoke_method->parameters[i]->by_ref)
+            {
+                void* value_ptr = args[i + 1].ptr;
+                boxed_arg = value_ptr != nullptr ? *reinterpret_cast<RtObject**>(value_ptr) : nullptr;
+            }
+            else
+            {
+                boxed_arg = args[i + 1].obj;
+            }
+        }
+
+        Array::set_array_data_at<RtObject*>(arg_array, i, boxed_arg);
+    }
+
+    RET_OK(arg_array);
+}
+
+static RtResultVoid unbox_object_array_thunk_return(const metadata::RtMethodInfo* delegate_invoke_method) noexcept
+{
+    if (delegate_invoke_method->ret_stack_object_size == 0)
+    {
+        RET_VOID_OK();
+    }
+
+    const metadata::RtTypeSig* return_type_sig = delegate_invoke_method->return_type;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, return_class, Class::get_class_from_typesig(return_type_sig));
+    RtObject* result_obj = s_tempReturnValueBuffer[0].obj;
+    if (Class::is_value_type(return_class))
+    {
+        if (result_obj == nullptr)
+        {
+            RET_ERR(RtErr::NullReference);
+        }
+        RET_ERR_ON_FAIL(Object::unbox_any(result_obj, return_class, s_tempReturnValueBuffer, true));
+    }
+    else
+    {
+        s_tempReturnValueBuffer[0].obj = result_obj;
+    }
+
+    RET_VOID_OK();
+}
 
 RtResult<metadata::RtClass*> get_completed_task_class_for_result(const metadata::RtTypeSig* result_type)
 {
@@ -145,8 +260,6 @@ RtResultVoid Delegate::newobj_delegate_invoker(metadata::RtManagedMethodPointer 
     RET_VOID_OK();
 }
 
-static interp::RtStackObject s_tempReturnValueBuffer[MAX_DELEGATE_RESULT_OBJECT_SIZE];
-
 RtResultVoid Delegate::invoke_delegate_invoker(metadata::RtManagedMethodPointer method_pointer, const metadata::RtMethodInfo* method,
                                                const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -192,6 +305,24 @@ RtResultVoid Delegate::invoke_delegate_invoker(metadata::RtManagedMethodPointer 
             RET_ERR(RtErr::ExecutionEngine);
         }
         RtObject* target_obj = curr_del->target;
+        if (target_obj != nullptr && delegate_param_count > target_method->parameter_count && is_object_array_func_invoke_target(target_method))
+        {
+            DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtArray*, arg_array, create_object_array_for_delegate_args(method, args));
+            interp::RtStackObject thunk_args[2] = {};
+            interp::EvalStackOp::set_param(thunk_args, 0, target_obj);
+            interp::EvalStackOp::set_param(thunk_args, 1, reinterpret_cast<RtObject*>(arg_array));
+            if (std::getenv("LEANCLR_DYNAMIC_TRACE") != nullptr)
+            {
+                std::fprintf(stderr,
+                             "leanclr-delegate: object-array-thunk invoke=%s.%s::%s delegate_params=%d target=%s.%s::%s args=%p array=%p\n",
+                             method->parent->namespaze, method->parent->name, method->name, delegate_param_count,
+                             target_method->parent->namespaze, target_method->parent->name, target_method->name, static_cast<void*>(thunk_args),
+                             static_cast<void*>(arg_array));
+            }
+            RET_ERR_ON_FAIL(invoke_delegate_target_with_roots(target_method, thunk_args));
+            RET_ERR_ON_FAIL(unbox_object_array_thunk_return(method));
+            continue;
+        }
         interp::RtStackObject* final_args;
         switch (delegate_param_count - (int32_t)target_method->parameter_count)
         {
@@ -238,8 +369,18 @@ RtResultVoid Delegate::invoke_delegate_invoker(metadata::RtManagedMethodPointer 
         default:
             RET_ASSERT_ERR(RtErr::ExecutionEngine);
         }
-        RET_ERR_ON_FAIL(CAST_AS_NOEXCEP_INVOKE_METHOD_POINTER(target_method->invoke_method_ptr)(target_method->method_ptr, target_method, final_args,
-                                                                                                s_tempReturnValueBuffer));
+        if (std::getenv("LEANCLR_DYNAMIC_TRACE") != nullptr)
+        {
+            std::fprintf(stderr,
+                         "leanclr-delegate: invoke=%s.%s::%s delegate_params=%d target=%s.%s::%s target_params=%u final_args=%p arg0=%p arg1=%p arg2=%p\n",
+                         method->parent->namespaze, method->parent->name, method->name, delegate_param_count,
+                         target_method->parent->namespaze, target_method->parent->name, target_method->name, target_method->parameter_count,
+                         static_cast<void*>(final_args),
+                         final_args != nullptr ? final_args[0].ptr : nullptr,
+                         final_args != nullptr ? final_args[1].ptr : nullptr,
+                         final_args != nullptr ? final_args[2].ptr : nullptr);
+        }
+        RET_ERR_ON_FAIL(invoke_delegate_target_with_roots(target_method, final_args));
     }
     // If there is a return value, set it to the ret buffer
     if (method->ret_stack_object_size > 0)

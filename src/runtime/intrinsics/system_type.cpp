@@ -1,5 +1,8 @@
 #include "system_type.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 #include "metadata/metadata_compare.h"
 #include "vm/class.h"
 #include "vm/reflection.h"
@@ -9,6 +12,23 @@ namespace leanclr
 {
 namespace intrinsics
 {
+namespace
+{
+void trace_type_sig_name(const char* side, const metadata::RtTypeSig* type_sig) noexcept
+{
+    auto klass_ret = vm::Class::get_class_from_typesig(type_sig);
+    if (!klass_ret.is_ok())
+    {
+        std::fprintf(stderr, " %s=<class-error>", side);
+        return;
+    }
+
+    metadata::RtClass* klass = klass_ret.unwrap();
+    std::fprintf(stderr, " %s=%s.%s", side,
+                 klass->namespaze != nullptr ? klass->namespaze : "",
+                 klass->name != nullptr ? klass->name : "");
+}
+} // namespace
 
 RtResult<vm::RtReflectionRuntimeType*> SystemType::get_type_from_handle(const void* type_handle) noexcept
 {
@@ -42,7 +62,23 @@ RtResult<bool> SystemType::equals(vm::RtReflectionRuntimeType* left, vm::RtRefle
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, right_type_sig,
                                             vm::Reflection::get_type_sig_from_reflection_type_object(&right->reflection_type));
 
-    RET_OK(metadata::MetadataCompare::is_typesig_equal_ignore_attrs(left_type_sig, right_type_sig, false));
+    bool result = metadata::MetadataCompare::is_typesig_equal_ignore_attrs(left_type_sig, right_type_sig, false);
+    if (std::getenv("LEANCLR_REFLECTION_TRACE") != nullptr)
+    {
+        std::fprintf(stderr, "leanclr-type-equals: left=%p right=%p left_sig=%p right_sig=%p result=%d\n",
+                     left, right, left_type_sig, right_type_sig, result ? 1 : 0);
+        std::fprintf(stderr, "leanclr-type-equals-names:");
+        trace_type_sig_name("left", left_type_sig);
+        trace_type_sig_name("right", right_type_sig);
+        std::fprintf(stderr, "\n");
+    }
+    RET_OK(result);
+}
+
+RtResult<bool> SystemType::not_equals(vm::RtReflectionRuntimeType* left, vm::RtReflectionRuntimeType* right) noexcept
+{
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, equals(left, right));
+    RET_OK(!result);
 }
 
 /// @intrinsic: System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)
@@ -94,8 +130,8 @@ static RtResultVoid not_equals_invoker(metadata::RtManagedMethodPointer methodPt
     auto left = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
     auto right = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 1);
 
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemType::equals(left, right));
-    interp::EvalStackOp::set_return(ret, !result);
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemType::not_equals(left, right));
+    interp::EvalStackOp::set_return(ret, result);
     RET_VOID_OK();
 }
 
@@ -107,8 +143,8 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_type[] = {
     {"System.RuntimeType::IsValueTypeImpl()", (vm::IntrinsicFunction)&SystemType::get_is_value_type, get_is_value_type_invoker},
     {"System.Type::op_Equality(System.Type,System.Type)", (vm::IntrinsicFunction)&SystemType::equals, equals_invoker},
     {"System.Type::op_Equality", (vm::IntrinsicFunction)&SystemType::equals, equals_invoker},
-    {"System.Type::op_Inequality(System.Type,System.Type)", (vm::IntrinsicFunction)&SystemType::equals, not_equals_invoker},
-    {"System.Type::op_Inequality", (vm::IntrinsicFunction)&SystemType::equals, not_equals_invoker},
+    {"System.Type::op_Inequality(System.Type,System.Type)", (vm::IntrinsicFunction)&SystemType::not_equals, not_equals_invoker},
+    {"System.Type::op_Inequality", (vm::IntrinsicFunction)&SystemType::not_equals, not_equals_invoker},
 };
 
 utils::Span<vm::IntrinsicEntry> SystemType::get_intrinsic_entries() noexcept

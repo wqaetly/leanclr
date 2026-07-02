@@ -48,6 +48,19 @@ namespace ManagedNet10.LegacyTests
             return executed;
         }
 
+        public static int RunAssemblyPrefix(Assembly assembly, int maxTypes)
+        {
+            int executed = 0;
+            Type[] types = assembly.GetTypes();
+            int count = maxTypes < types.Length ? maxTypes : types.Length;
+            for (int i = 0; i < count; i++)
+            {
+                executed += RunType(types[i], skipNet10ReplacedLegacyTests: true);
+            }
+
+            return executed;
+        }
+
         public static int RunType(Type type)
         {
             return RunType(type, skipNet10ReplacedLegacyTests: false);
@@ -60,6 +73,12 @@ namespace ManagedNet10.LegacyTests
 
         private static int RunType(Type type, bool skipNet10ReplacedLegacyTests)
         {
+            bool trace = Environment.GetEnvironmentVariable("LEANCLR_LEGACY_TRACE") == "1";
+            if (trace)
+            {
+                Console.WriteLine("legacy-type: " + type.FullName);
+            }
+
             bool isIgnored;
             try
             {
@@ -114,6 +133,11 @@ namespace ManagedNet10.LegacyTests
                     continue;
                 }
 
+                if (trace)
+                {
+                    Console.WriteLine("legacy-test: " + type.FullName + "." + method.Name);
+                }
+
                 if (!method.IsStatic && instance == null)
                 {
                     instance = Activator.CreateInstance(type);
@@ -130,6 +154,10 @@ namespace ManagedNet10.LegacyTests
                     finally
                     {
                         testCase?.TearDown();
+                    }
+                    if (trace)
+                    {
+                        Console.WriteLine("legacy-test-done: " + type.FullName + "." + method.Name);
                     }
                 }
                 catch (Exception ex)
@@ -148,7 +176,16 @@ namespace ManagedNet10.LegacyTests
 
         public static void RunMethod(Type type, string methodName)
         {
+            bool trace = Environment.GetEnvironmentVariable("LEANCLR_LEGACY_TRACE") == "1";
+            if (trace)
+            {
+                Console.WriteLine("legacy-method-lookup: " + type.FullName + "." + methodName);
+            }
             MethodInfo method = type.GetMethod(methodName, TestMethodFlags);
+            if (trace)
+            {
+                Console.WriteLine("legacy-method-found: " + (method == null ? "<null>" : method.Name));
+            }
             if (method == null)
             {
                 throw new MissingMethodException(type.FullName, methodName);
@@ -159,6 +196,10 @@ namespace ManagedNet10.LegacyTests
             }
 
             object instance = method.IsStatic ? null : Activator.CreateInstance(type);
+            if (trace)
+            {
+                Console.WriteLine("legacy-method-invoke: " + type.FullName + "." + method.Name);
+            }
             TestCaseBase testCase = instance as TestCaseBase;
             testCase?.SetUp();
             try

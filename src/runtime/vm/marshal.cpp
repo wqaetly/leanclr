@@ -236,6 +236,12 @@ RtResult<RtDelegate*> Marshal::marshal_function_pointer_to_delegate(metadata::Rt
     {
         RET_OK(nullptr);
     }
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtMethodInfo*, mono_pinvoke_callback_method,
+                                            metadata::AotModule::find_mono_pinvoke_callback_method_by_native_ptr(ptr));
+    if (mono_pinvoke_callback_method != nullptr)
+    {
+        return Delegate::new_delegate(delegate_class, nullptr, mono_pinvoke_callback_method).cast<RtDelegate*>();
+    }
     auto* method = reinterpret_cast<const metadata::RtMethodInfo*>(ptr);
     return Delegate::new_delegate(delegate_class, nullptr, method).cast<RtDelegate*>();
 }

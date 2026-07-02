@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include "core/stl_compat.h"
@@ -39,6 +40,26 @@ namespace vm
 {
 namespace
 {
+class ScopedRtObjectRoot
+{
+  public:
+    explicit ScopedRtObjectRoot(RtObject** slot) noexcept : slot_(slot)
+    {
+        gc::GcRoots::register_slot(slot_);
+    }
+
+    ~ScopedRtObjectRoot()
+    {
+        gc::GcRoots::unregister_slot(slot_);
+    }
+
+    ScopedRtObjectRoot(const ScopedRtObjectRoot&) = delete;
+    ScopedRtObjectRoot& operator=(const ScopedRtObjectRoot&) = delete;
+
+  private:
+    RtObject** slot_;
+};
+
 struct MethodKey
 {
     const metadata::RtMethodInfo* method;
@@ -977,6 +998,32 @@ RtResult<const metadata::RtTypeSig*> Reflection::get_type_sig_from_net10_type_ha
         RET_OK(klass->by_val);
     }
 
+    auto slot_value = *reinterpret_cast<void* const*>(type_handle);
+    if (slot_value != nullptr && slot_value != type_handle)
+    {
+        auto slot_type_sig = get_type_sig_from_net10_method_table(slot_value);
+        if (slot_type_sig.is_ok())
+        {
+            return slot_type_sig;
+        }
+
+        auto slot_as_type_sig = reinterpret_cast<const metadata::RtTypeSig*>(slot_value);
+        if (looks_like_leanclr_type_sig(slot_as_type_sig))
+        {
+            RET_OK(slot_as_type_sig);
+        }
+
+        auto slot_as_klass = reinterpret_cast<const metadata::RtClass*>(slot_value);
+        if (slot_as_klass != nullptr && slot_as_klass->by_val != nullptr)
+        {
+            RET_OK(slot_as_klass->by_val);
+        }
+    }
+
+    if (std::getenv("LEANCLR_REFLECTION_TRACE") != nullptr)
+    {
+        std::fprintf(stderr, "leanclr-reflection: bad net10 type handle handle=%p slot=%p\n", type_handle, slot_value);
+    }
     RET_ERR(RtErr::BadImageFormat);
 }
 
@@ -1033,6 +1080,14 @@ RtResult<RtReflectionRuntimeType*> Reflection::get_runtime_type_from_handle_arg(
     if (auto runtime_type = try_get_runtime_type_object(slot_value))
     {
         RET_OK(runtime_type);
+    }
+
+    auto slot_net10_type_sig = get_type_sig_from_net10_method_table(slot_value);
+    if (slot_net10_type_sig.is_ok())
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, ref_type,
+                                                get_type_reflection_object(slot_net10_type_sig.unwrap()));
+        RET_OK(reinterpret_cast<RtReflectionRuntimeType*>(ref_type));
     }
 
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtClass*, klass,
@@ -1095,6 +1150,21 @@ RtResult<const metadata::RtTypeSig*> Reflection::get_type_sig_from_reflection_ty
     auto raw_obj = reinterpret_cast<RtObject*>(const_cast<RtReflectionType*>(type_obj));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, normalized_obj, normalize_coreclr_reflection_object(raw_obj));
     auto normalized_type = reinterpret_cast<const RtReflectionType*>(normalized_obj);
+    if (std::getenv("LEANCLR_REFLECTION_TRACE") != nullptr)
+    {
+        auto klass_ret = Class::get_class_from_typesig(reinterpret_cast<const metadata::RtTypeSig*>(normalized_type->type_handle));
+        const char* ns = "<class-error>";
+        const char* name = "";
+        if (klass_ret.is_ok())
+        {
+            metadata::RtClass* klass = klass_ret.unwrap();
+            ns = klass->namespaze != nullptr ? klass->namespaze : "";
+            name = klass->name != nullptr ? klass->name : "";
+        }
+        std::fprintf(stderr, "leanclr-reflection: reflection type obj=%p normalized=%p type_handle=%p klass=%p\n",
+                     type_obj, normalized_type, normalized_type->type_handle, normalized_obj->klass);
+        std::fprintf(stderr, "leanclr-reflection-name: %s.%s\n", ns, name);
+    }
     return get_type_sig_from_net10_type_handle(normalized_type->type_handle);
 }
 
@@ -1155,24 +1225,29 @@ RtResult<RtReflectionType*> Reflection::get_type_reflection_object(const metadat
         RET_OK(it2->second);
     }
 
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, net10_type_handle, get_net10_type_handle(pooled_type_sig));
     auto runtime_type_klass = Class::get_corlib_types().cls_runtimetype;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ref_obj_raw, LEANCLR_NEWOBJ_INTERNAL(runtime_type_klass, "Reflection::get_type_reflection_object"));
     auto ref_obj = reinterpret_cast<RtReflectionType*>(ref_obj_raw);
 
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, net10_type_handle, get_net10_type_handle(pooled_type_sig));
     ref_obj->type_handle = net10_type_handle;
     ref_obj->cache = nullptr;
+    auto inserted = s_class_reflection_type_map.emplace(pooled_type_sig, ref_obj);
+    if (!inserted.second)
+    {
+        ref_obj = inserted.first->second;
+    }
     auto method_table = reinterpret_cast<Net10MethodTableFacade*>(const_cast<metadata::RtTypeSig*>(net10_type_handle));
     method_table->auxiliary_data->exposed_class_object_raw = reinterpret_cast<intptr_t>(ref_obj);
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, runtime_type_cache,
-                                            get_or_create_runtime_type_cache(reinterpret_cast<RtReflectionRuntimeType*>(ref_obj)));
-    (void)runtime_type_cache;
-
-    auto inserted = s_class_reflection_type_map.emplace(pooled_type_sig, ref_obj);
     if (identity_klass != nullptr)
     {
         s_klass_reflection_type_map.emplace(identity_klass, inserted.first->second);
     }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, runtime_type_cache,
+                                            get_or_create_runtime_type_cache(reinterpret_cast<RtReflectionRuntimeType*>(inserted.first->second)));
+    (void)runtime_type_cache;
+
     RET_OK(inserted.first->second);
 }
 
@@ -1223,6 +1298,7 @@ RtResult<RtObject*> Reflection::get_or_create_runtime_type_cache(RtReflectionRun
                                             corlib->get_class_by_nested_full_name("System.RuntimeType+RuntimeTypeCache", false, true));
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, cache_obj,
                                             LEANCLR_NEWOBJ_INTERNAL(cache_klass, "Reflection::get_or_create_runtime_type_cache"));
+    ScopedRtObjectRoot cache_root(&cache_obj);
 
     const metadata::RtFieldInfo* runtime_type_field = Class::get_field_for_name(cache_klass, "m_runtimeType", true);
     if (runtime_type_field == nullptr)
@@ -1269,7 +1345,7 @@ RtResult<RtObject*> Reflection::get_or_create_runtime_type_cache(RtReflectionRun
 
     if (cache_slot == nullptr)
     {
-        void* handle = GCHandle::get_target_handle(cache_obj, nullptr, 1);
+        void* handle = GCHandle::get_target_handle(cache_obj, nullptr, 2);
         runtime_type->reflection_type.cache = GCHandle::get_target_slot(handle);
     }
     else
@@ -1335,6 +1411,7 @@ RtResult<RtReflectionMethod*> Reflection::get_method_reflection_object(const met
     bool is_constructor = Method::is_ctor_or_cctor(method);
     auto runtime_method_klass = is_constructor ? corlib_types.cls_reflection_constructor : corlib_types.cls_reflection_method;
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, ref_obj_raw, LEANCLR_NEWOBJ_INTERNAL(runtime_method_klass, "Reflection::get_method_reflection_object"));
+    ScopedRtObjectRoot ref_obj_root(&ref_obj_raw);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtReflectionType*, ref_type, get_klass_reflection_object(reflection_at_klass));
     auto runtime_ref_type = reinterpret_cast<RtReflectionRuntimeType*>(ref_type);
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, reflected_type_cache, get_or_create_runtime_type_cache(runtime_ref_type));

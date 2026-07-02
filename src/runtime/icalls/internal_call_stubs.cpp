@@ -75,6 +75,24 @@ namespace leanclr
 namespace icalls
 {
 
+namespace
+{
+
+RtResultVoid force_allow_dynamic_code_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                              interp::RtStackObject* ret) noexcept
+{
+    interp::EvalStackOp::set_return(ret, static_cast<vm::RtObject*>(nullptr));
+    RET_VOID_OK();
+}
+
+RtResultVoid ensure_dynamic_code_supported_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
+                                                   interp::RtStackObject*) noexcept
+{
+    RET_VOID_OK();
+}
+
+} // namespace
+
 template <typename T>
 static void Append(utils::Vector<T>& entries, const utils::Span<T>& sub_entries) noexcept
 {
@@ -127,6 +145,10 @@ void InternalCallStubs::get_internal_call_entries(utils::Vector<vm::InternalCall
     Append(entries, SystemIOPath::get_internal_call_entries());
     Append(entries, SystemTextEncodingHelper::get_internal_call_entries());
     Append(entries, LeanCLRProfile::get_internal_call_entries());
+    entries.push_back({"System.Reflection.Emit.AssemblyBuilder::EnsureDynamicCodeSupported()", nullptr,
+                       ensure_dynamic_code_supported_invoker});
+    entries.push_back({"System.Dynamic.Utils.DelegateHelpers::<CreateObjectArrayDelegateRefEmit>g__ForceAllowDynamicCode|19_1(System.Reflection.Emit.AssemblyBuilder)",
+                       nullptr, force_allow_dynamic_code_invoker});
 }
 
 void InternalCallStubs::get_newobj_internal_call_entries(utils::Vector<vm::NewobjInternalCallEntry>& entries) noexcept
