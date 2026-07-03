@@ -13,6 +13,7 @@ artifacts/
 └── net10-aot/
     ├── core/generated/               # .NET 10 core runtime assemblies AOT compile smoke C++
     ├── smoke/generated/              # ManagedNet10.Smoke AOT native run C++
+    ├── legacy/generated/             # ManagedNet10.LegacyTests AOT native run C++
     ├── benchmarks/generated/         # ManagedNet10.Benchmarks AOT performance comparison C++
     └── nkg/generated/                # NKG/Odin workload AOT native run C++
 └── net10-benchmarks/                 # Markdown/CSV/JSON performance comparison reports
@@ -31,6 +32,8 @@ Clean all outputs: `scripts\dev\clean-out.bat` (Windows) or `./scripts/dev/clean
 | API whitelist scan | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\api-scan.ps1 -Configuration Release` |
 | NKG/Odin workload smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` |
 | Core runtime assemblies AOT compile smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\corelib-aot-smoke.ps1 -Configuration Release` |
+| Legacy net10 AOT smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\legacy-aot-smoke.ps1 -Configuration Release -Entry "ManagedNet10.LegacyTests.Program::RunLegacyDiscoverySmoke"` |
+| Legacy net10 AOT matrix | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\legacy-aot-smoke-matrix.ps1 -Configuration Release -Entries RunLegacyDiscoverySmoke` |
 | NKG/Odin full AOT smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-aot-smoke.ps1 -Configuration Release` |
 | .NET 10 / LeanCLR perf comparison | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\perf-bench.ps1 -Configuration Release` |
 | Host bridge smoke | Run `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\host-bridge-smoke.ps1 -Configuration Release -Scenario <scenario>` for `AbiSkeleton`, `HandleRegistry`, `Dispatcher`, `EventCallback`, `EngineAdapter`, `ValueMarshal`, and `Diagnostics` |
@@ -56,4 +59,4 @@ scripts/
 
 The old `scripts/test` Mono/mono-4.5 entry points were removed with the Mono profile cleanup. Use the `scripts/dotnet10` gates for current validation.
 
-Current AOT smoke scripts clean their own `artifacts\net10-aot\...\generated` directory before generating C++. `aot-smoke.ps1` and `nkg-aot-smoke.ps1` run the core runtime assemblies AOT compile smoke first unless `-SkipCoreLibAot` is passed. Older `artifacts\net10-aot-*` directories are historical local outputs and are not part of the current validation matrix.
+Current AOT smoke scripts clean their own `artifacts\net10-aot\...\generated` directory before generating C++. `aot-smoke.ps1`, `legacy-aot-smoke.ps1`, and `nkg-aot-smoke.ps1` run the core runtime assemblies AOT compile smoke first unless `-SkipCoreLibAot` is passed. Older `artifacts\net10-aot-*` directories are historical local outputs and are not part of the current validation matrix.
