@@ -14,6 +14,7 @@
 #include "rt_thread.h"
 #include "appdomain.h"
 #include "method.h"
+#include "field.h"
 #include "object.h"
 #include "environment.h"
 #include "settings.h"
@@ -36,6 +37,40 @@ namespace leanclr
 {
 namespace vm
 {
+
+static bool is_runtime_init_trace_enabled()
+{
+    return std::getenv("LEANCLR_RUNTIME_INIT_TRACE") != nullptr;
+}
+
+static RtResultVoid trace_runtime_init_step(const char* step, RtResultVoid result)
+{
+    if (is_runtime_init_trace_enabled())
+    {
+        std::fprintf(stderr, "leanclr-runtime-init: %s => %s", step, result.is_ok() ? "ok" : "err");
+        if (result.is_err())
+        {
+            std::fprintf(stderr, " (%d)", static_cast<int>(result.unwrap_err()));
+        }
+        std::fprintf(stderr, "\n");
+    }
+    return result;
+}
+
+template <typename T>
+static RtResult<T> trace_runtime_init_step(const char* step, RtResult<T> result)
+{
+    if (is_runtime_init_trace_enabled())
+    {
+        std::fprintf(stderr, "leanclr-runtime-init: %s => %s", step, result.is_ok() ? "ok" : "err");
+        if (result.is_err())
+        {
+            std::fprintf(stderr, " (%d)", static_cast<int>(result.unwrap_err()));
+        }
+        std::fprintf(stderr, "\n");
+    }
+    return result;
+}
 
 // Helper structure for managing temporary buffers during method invocation
 struct ScopeBufferGuard
@@ -387,21 +422,18 @@ static RtResult<RtObject*> invoke_without_run_cctor(const metadata::RtMethodInfo
 static RtResultVoid configure_runtime_feature_switches()
 {
     metadata::RtModuleDef* corlib_mod = Assembly::get_corlib()->mod;
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, app_context_class,
-                                            corlib_mod->get_class_by_name("System.AppContext", false, true));
-    RET_ERR_ON_FAIL(Class::initialize_methods(app_context_class));
-    const metadata::RtMethodInfo* set_switch = Class::get_method_for_name(app_context_class, "SetSwitch", 2, false);
-    if (set_switch == nullptr)
-    {
-        RET_ERR(RtErr::MissingMethod);
-    }
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, runtime_feature_class,
+                                            corlib_mod->get_class_by_name("System.Runtime.CompilerServices.RuntimeFeature", false, true));
+    RET_ERR_ON_FAIL(Class::initialize_all(runtime_feature_class));
 
-    RtString* dynamic_code_switch =
-        String::create_string_from_utf8cstr("System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported");
+    constexpr metadata::EncodedTokenId is_dynamic_code_supported_field_token = 0x040016DA;
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtFieldInfo*, is_dynamic_code_supported_field,
+                                            corlib_mod->get_field_by_token(metadata::RtToken::decode(is_dynamic_code_supported_field_token),
+                                                                          metadata::RtGenericContainerContext{}, nullptr));
+
     bool is_supported = false;
-    const void* args[] = {dynamic_code_switch, &is_supported};
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtObject*, unused, invoke_without_run_cctor(set_switch, nullptr, args));
-    (void)unused;
+    RET_ERR_ON_FAIL(Field::set_static_value(is_dynamic_code_supported_field, &is_supported));
+    Class::set_cctor_finished(runtime_feature_class);
     RET_VOID_OK();
 }
 
@@ -431,16 +463,17 @@ RtResultVoid Runtime::initialize()
     interp::MachineState::initialize();
     GC::initialize();
 
-    RET_ERR_ON_FAIL(Assembly::load_corlib());
-    RET_ERR_ON_FAIL(Class::initialize());
-    RET_ERR_ON_FAIL(ArrayClass::initialize());
-    RET_ERR_ON_FAIL(Class::verify_integrity_of_corlib_classes());
-    RET_ERR_ON_FAIL(String::initialize());
-    RET_ERR_ON_FAIL(Exception::initialize());
-    RET_ERR_ON_FAIL(Delegate::initialize());
-    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtAppDomain*, defaultAppDomain, AppDomain::init_default_app_domain());
+    RET_ERR_ON_FAIL(trace_runtime_init_step("Assembly::load_corlib", Assembly::load_corlib()));
+    RET_ERR_ON_FAIL(trace_runtime_init_step("Class::initialize", Class::initialize()));
+    RET_ERR_ON_FAIL(trace_runtime_init_step("ArrayClass::initialize", ArrayClass::initialize()));
+    RET_ERR_ON_FAIL(trace_runtime_init_step("Class::verify_integrity_of_corlib_classes", Class::verify_integrity_of_corlib_classes()));
+    RET_ERR_ON_FAIL(trace_runtime_init_step("String::initialize", String::initialize()));
+    RET_ERR_ON_FAIL(trace_runtime_init_step("Exception::initialize", Exception::initialize()));
+    RET_ERR_ON_FAIL(trace_runtime_init_step("Delegate::initialize", Delegate::initialize()));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(RtAppDomain*, defaultAppDomain,
+                                            trace_runtime_init_step("AppDomain::init_default_app_domain", AppDomain::init_default_app_domain()));
     Thread::attach_current_thread(defaultAppDomain);
-    RET_ERR_ON_FAIL(AppDomain::initialize_context());
+    RET_ERR_ON_FAIL(trace_runtime_init_step("AppDomain::initialize_context", AppDomain::initialize_context()));
 
     int32_t argc;
     const char** argv;
@@ -454,10 +487,14 @@ RtResultVoid Runtime::initialize()
     auto corlib_aot_module_data = corlib_mod->get_aot_module_data();
     if (corlib_aot_module_data != nullptr && corlib_aot_module_data->deferred_initializer)
     {
+        if (is_runtime_init_trace_enabled())
+        {
+            std::fprintf(stderr, "leanclr-runtime-init: System.Private.CoreLib deferred_initializer\n");
+        }
         corlib_aot_module_data->deferred_initializer(corlib_mod);
     }
 
-    RET_ERR_ON_FAIL(configure_runtime_feature_switches());
+    RET_ERR_ON_FAIL(trace_runtime_init_step("configure_runtime_feature_switches", configure_runtime_feature_switches()));
 
     RET_VOID_OK();
 }

@@ -194,7 +194,13 @@ void InternalCalls::initialize()
     utils::Vector<vm::InternalCallEntry> entries;
     icalls::InternalCallStubs::get_internal_call_entries(entries);
     for (auto& entry : entries)
+    {
         register_internal_call(entry.name, entry.func, entry.invoker);
+        if (entry.func != nullptr)
+        {
+            register_lite_internal_call(entry.name, entry.func);
+        }
+    }
 
     utils::Vector<vm::NewobjInternalCallEntry> newobjEntries;
     icalls::InternalCallStubs::get_newobj_internal_call_entries(newobjEntries);

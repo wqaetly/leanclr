@@ -15,6 +15,7 @@
 #include "vm/settings.h"
 #include "vm/type.h"
 #include "vm/rt_exception.h"
+#include "vm/rt_string.h"
 #include "vm/property.h"
 #include "vm/field.h"
 #include "metadata/metadata_name.h"
@@ -263,6 +264,13 @@ static int run(const std::string& dll_name, const std::vector<std::string>& dll_
     {
         std::cerr << "Failed to invoke entry method, error: " << static_cast<int>(invoke_result.unwrap_err()) << std::endl;
         print_error_and_exit("Invocation failed", invoke_result.unwrap_err());
+    }
+    vm::RtObject* result = invoke_result.unwrap();
+    if (result != nullptr && vm::Class::is_string_class(result->klass))
+    {
+        auto str = reinterpret_cast<vm::RtString*>(result);
+        utils::Utf8StringBuilder sb(vm::String::get_chars_ptr(str), static_cast<size_t>(vm::String::get_length(str)));
+        std::cout << sb.get_const_chars();
     }
 
     return 0;
