@@ -10,6 +10,7 @@ param(
     [string[]]$AdditionalAssemblyDir = @(),
     [switch]$IncludeFullAssemblyEntry,
     [switch]$IncludeEnvironmentEntries,
+    [switch]$IncludeInterpreterUnsupportedEntries,
     [switch]$SkipCoreLibAot,
     [switch]$SkipAotBuild,
     [switch]$ListOnly
@@ -97,6 +98,13 @@ $environmentEntries = @(
     "RunAllPrefixThenRuntimeTypeMethod",
     "RunGcFinalizerMethodThenRuntimeType"
 )
+$interpreterUnsupportedEntries = @(
+    "RunCorlibConsole",
+    "RunCorlibMonitor",
+    "RunCorlibMonitorWaitPulse",
+    "RunCorlibReflectionRuntimeModule",
+    "RunCorlibRuntimeServices"
+)
 
 if ($Entries.Count -eq 0) {
     $Entries = @(Get-LegacySmokeEntries -SourceDir $sourceDir)
@@ -112,6 +120,11 @@ if (-not $IncludeFullAssemblyEntry) {
 }
 if (-not $IncludeEnvironmentEntries) {
     foreach ($entry in $environmentEntries) {
+        $excluded[$entry] = $true
+    }
+}
+if (-not $IncludeInterpreterUnsupportedEntries) {
+    foreach ($entry in $interpreterUnsupportedEntries) {
         $excluded[$entry] = $true
     }
 }
