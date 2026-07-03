@@ -51,11 +51,11 @@ internal sealed class BenchmarkCase
     public Func<int, long> Run { get; }
 }
 
-internal static class Program
+internal static class BenchmarkData
 {
-    private const int ArrayLength = 256;
-    private const string TextPayload = "LeanCLR net10 performance baseline: arithmetic, arrays, calls, allocation, strings.";
-    private static readonly string[] LookupKeys =
+    public const int ArrayLength = 256;
+    public const string TextPayload = "LeanCLR net10 performance baseline: arithmetic, arrays, calls, allocation, strings.";
+    public static readonly string[] LookupKeys =
     [
         "player",
         "enemy",
@@ -67,7 +67,7 @@ internal static class Program
         "resource",
     ];
 
-    private static readonly string[] NumericText =
+    public static readonly string[] NumericText =
     [
         "17",
         "42",
@@ -78,7 +78,10 @@ internal static class Program
         "16384",
         "65535",
     ];
+}
 
+internal static class Program
+{
     private static readonly BenchmarkCase[] Cases =
     [
         new("IntegerArithmetic", 1_200_000, IntegerArithmetic),
@@ -182,7 +185,7 @@ internal static class Program
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static long ArrayTraversal(int iterations)
     {
-        int[] values = new int[ArrayLength];
+        int[] values = new int[BenchmarkData.ArrayLength];
         for (int i = 0; i < values.Length; i++)
         {
             values[i] = i * 17 + 3;
@@ -247,9 +250,9 @@ internal static class Program
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            for (int i = 0; i < TextPayload.Length; i++)
+            for (int i = 0; i < BenchmarkData.TextPayload.Length; i++)
             {
-                acc += TextPayload[i] * (i + 1);
+                acc += BenchmarkData.TextPayload[i] * (i + 1);
             }
         }
 
@@ -280,16 +283,16 @@ internal static class Program
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static long DictionaryLookup(int iterations)
     {
-        var map = new Dictionary<string, int>(LookupKeys.Length, StringComparer.Ordinal);
-        for (int i = 0; i < LookupKeys.Length; i++)
+        var map = new Dictionary<string, int>(BenchmarkData.LookupKeys.Length, StringComparer.Ordinal);
+        for (int i = 0; i < BenchmarkData.LookupKeys.Length; i++)
         {
-            map.Add(LookupKeys[i], i * 17 + 3);
+            map.Add(BenchmarkData.LookupKeys[i], i * 17 + 3);
         }
 
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            string key = LookupKeys[round & 7];
+            string key = BenchmarkData.LookupKeys[round & 7];
             if (map.TryGetValue(key, out int value))
             {
                 acc += value;
@@ -322,7 +325,7 @@ internal static class Program
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            string text = NumericText[round & 7];
+            string text = BenchmarkData.NumericText[round & 7];
             if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
             {
                 string formatted = (value + round).ToString(CultureInfo.InvariantCulture);
@@ -379,7 +382,7 @@ internal static class Program
                 acc++;
             }
 
-            if (stringComparer.Equals(LookupKeys[i & 7], LookupKeys[(i + 8) & 7]))
+            if (stringComparer.Equals(BenchmarkData.LookupKeys[i & 7], BenchmarkData.LookupKeys[(i + 8) & 7]))
             {
                 acc += 3;
             }
@@ -426,32 +429,6 @@ internal static class BenchHostNative
 
 internal static class AotBenchmarkHost
 {
-    private const int ArrayLength = 256;
-    private const string TextPayload = "LeanCLR net10 performance baseline: arithmetic, arrays, calls, allocation, strings.";
-    private static readonly string[] LookupKeys =
-    [
-        "player",
-        "enemy",
-        "projectile",
-        "inventory",
-        "quest",
-        "dialog",
-        "scene",
-        "resource",
-    ];
-
-    private static readonly string[] NumericText =
-    [
-        "17",
-        "42",
-        "128",
-        "255",
-        "1024",
-        "4096",
-        "16384",
-        "65535",
-    ];
-
     private static long s_sink;
 
     public static void RunAll()
@@ -576,7 +553,7 @@ internal static class AotBenchmarkHost
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static long ArrayTraversal(int iterations)
     {
-        int[] values = new int[ArrayLength];
+        int[] values = new int[BenchmarkData.ArrayLength];
         for (int i = 0; i < values.Length; i++)
         {
             values[i] = i * 17 + 3;
@@ -641,9 +618,9 @@ internal static class AotBenchmarkHost
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            for (int i = 0; i < TextPayload.Length; i++)
+            for (int i = 0; i < BenchmarkData.TextPayload.Length; i++)
             {
-                acc += TextPayload[i] * (i + 1);
+                acc += BenchmarkData.TextPayload[i] * (i + 1);
             }
         }
 
@@ -674,16 +651,16 @@ internal static class AotBenchmarkHost
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static long DictionaryLookup(int iterations)
     {
-        var map = new Dictionary<string, int>(LookupKeys.Length, StringComparer.Ordinal);
-        for (int i = 0; i < LookupKeys.Length; i++)
+        var map = new Dictionary<string, int>(BenchmarkData.LookupKeys.Length, StringComparer.Ordinal);
+        for (int i = 0; i < BenchmarkData.LookupKeys.Length; i++)
         {
-            map.Add(LookupKeys[i], i * 17 + 3);
+            map.Add(BenchmarkData.LookupKeys[i], i * 17 + 3);
         }
 
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            string key = LookupKeys[round & 7];
+            string key = BenchmarkData.LookupKeys[round & 7];
             if (map.TryGetValue(key, out int value))
             {
                 acc += value;
@@ -716,7 +693,7 @@ internal static class AotBenchmarkHost
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            string text = NumericText[round & 7];
+            string text = BenchmarkData.NumericText[round & 7];
             if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
             {
                 string formatted = (value + round).ToString(CultureInfo.InvariantCulture);
@@ -773,7 +750,7 @@ internal static class AotBenchmarkHost
                 acc++;
             }
 
-            if (stringComparer.Equals(LookupKeys[i & 7], LookupKeys[(i + 8) & 7]))
+            if (stringComparer.Equals(BenchmarkData.LookupKeys[i & 7], BenchmarkData.LookupKeys[(i + 8) & 7]))
             {
                 acc += 3;
             }
