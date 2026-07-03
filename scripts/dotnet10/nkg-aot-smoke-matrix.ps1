@@ -11,6 +11,7 @@ param(
     [string[]]$ExcludeEntries = @(),
     [string[]]$AdditionalAssemblyDir = @(),
     [switch]$IncludeNetworkEntries,
+    [switch]$IncludeConsoleAot,
     [switch]$SkipNkgBuild,
     [switch]$SkipCoreLibAot,
     [switch]$SkipAotBuild,
@@ -148,6 +149,9 @@ if (-not $SkipAotBuild) {
     }
     if ($SkipCoreLibAot) {
         $buildArgs += "-SkipCoreLibAot"
+    }
+    if ($IncludeConsoleAot) {
+        $buildArgs += "-IncludeConsoleAot"
     }
     if ($IncludeNetworkEntries) {
         $buildArgs += "-IncludeNetworkEntries"

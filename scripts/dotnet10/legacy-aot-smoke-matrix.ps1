@@ -11,6 +11,7 @@ param(
     [switch]$IncludeFullAssemblyEntry,
     [switch]$IncludeEnvironmentEntries,
     [switch]$IncludeInterpreterUnsupportedEntries,
+    [switch]$IncludeConsoleAot,
     [switch]$SkipCoreLibAot,
     [switch]$SkipAotBuild,
     [switch]$ListOnly
@@ -181,6 +182,9 @@ if (-not $SkipAotBuild) {
     }
     if ($SkipCoreLibAot) {
         $buildArgs += "-SkipCoreLibAot"
+    }
+    if ($IncludeConsoleAot) {
+        $buildArgs += "-IncludeConsoleAot"
     }
 
     Invoke-Checked powershell @buildArgs

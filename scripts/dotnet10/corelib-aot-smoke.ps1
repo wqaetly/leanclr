@@ -4,7 +4,8 @@ param(
     [string]$Configuration = "Release",
     [string]$NativeBuildDir,
     [string]$CMakeGenerator,
-    [string]$CMakeArchitecture
+    [string]$CMakeArchitecture,
+    [switch]$IncludeConsoleAot
 )
 
 $ErrorActionPreference = "Stop"
@@ -117,7 +118,13 @@ $profilePath = [System.IO.Path]::Combine($repoRoot, "src", "leanaot", "LeanAOT",
 $profile = Get-Content -Raw $profilePath | ConvertFrom-Json
 $coreRuntimeAssemblies = @()
 $skippedCoreModules = @()
+$defaultExcludedCoreModules = @()
 foreach ($moduleName in @($profile.coreLibraryModules)) {
+    if ($moduleName -eq "System.Console" -and -not $IncludeConsoleAot) {
+        $defaultExcludedCoreModules += $moduleName
+        continue
+    }
+
     $assemblyPath = [System.IO.Path]::Combine($RuntimeDir, "$moduleName.dll")
     if (Test-Path $assemblyPath) {
         $coreRuntimeAssemblies += $moduleName
@@ -165,6 +172,9 @@ foreach ($fileName in $expectedFiles) {
 Write-Host "Generated .NET 10 core runtime LeanAOT C++ for $($coreRuntimeAssemblies -join ', ') to $OutputDir"
 if ($skippedCoreModules.Count -gt 0) {
     Write-Host "Skipped profile core modules not found in runtime pack: $($skippedCoreModules -join ', ')"
+}
+if ($defaultExcludedCoreModules.Count -gt 0) {
+    Write-Host "Skipped default-excluded core modules: $($defaultExcludedCoreModules -join ', ')"
 }
 
 $cmakePath = Resolve-CMakePath

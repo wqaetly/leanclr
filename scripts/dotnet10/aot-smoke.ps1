@@ -7,6 +7,7 @@ param(
     [string]$NativeBuildDir,
     [string]$CMakeGenerator,
     [string]$CMakeArchitecture,
+    [switch]$IncludeConsoleAot,
     [switch]$SkipCoreLibAot
 )
 
@@ -122,6 +123,9 @@ if (-not $SkipCoreLibAot) {
     }
     if (-not [string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
         $corelibArgs += @("-CMakeArchitecture", $CMakeArchitecture)
+    }
+    if ($IncludeConsoleAot) {
+        $corelibArgs += "-IncludeConsoleAot"
     }
 
     Invoke-Checked -FilePath powershell -Arguments $corelibArgs

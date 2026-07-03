@@ -6,6 +6,7 @@ param(
     [string]$CMakeGenerator,
     [string]$CMakeArchitecture,
     [string]$Entry = "ManagedNet10.LegacyTests.Program::RunLegacyDiscoverySmoke",
+    [switch]$IncludeConsoleAot,
     [switch]$SkipCoreLibAot,
     [switch]$BuildOnly
 )
@@ -125,6 +126,9 @@ if (-not $SkipCoreLibAot) {
     }
     if (-not [string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
         $corelibArgs += @("-CMakeArchitecture", $CMakeArchitecture)
+    }
+    if ($IncludeConsoleAot) {
+        $corelibArgs += "-IncludeConsoleAot"
     }
 
     Invoke-Checked -FilePath powershell -Arguments $corelibArgs

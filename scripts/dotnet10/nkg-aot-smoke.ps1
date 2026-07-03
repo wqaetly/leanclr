@@ -9,6 +9,7 @@ param(
     [string]$Entry = "ManagedNet10.NkgSmoke.Program::RunFullWorkloadSurfaceSmoke",
     [switch]$SkipNkgBuild,
     [switch]$SkipCoreLibAot,
+    [switch]$IncludeConsoleAot,
     [switch]$IncludeNetworkEntries,
     [switch]$BuildOnly
 )
@@ -145,6 +146,9 @@ if (-not $SkipCoreLibAot) {
     }
     if (-not [string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
         $corelibArgs += @("-CMakeArchitecture", $CMakeArchitecture)
+    }
+    if ($IncludeConsoleAot) {
+        $corelibArgs += "-IncludeConsoleAot"
     }
 
     Invoke-Checked -FilePath powershell -Arguments $corelibArgs
