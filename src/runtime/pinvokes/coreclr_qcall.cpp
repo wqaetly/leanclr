@@ -5859,6 +5859,30 @@ RtResultVoid runtime_type_handle_internal_alloc_invoker(metadata::RtManagedMetho
     RET_VOID_OK();
 }
 
+RtResultVoid runtime_type_handle_get_runtime_type_from_handle_slow_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo* method,
+                                                                           const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    auto method_table = interp::EvalStackOp::get_param<const void*>(params, 0);
+    if (method != nullptr && method->parameter_count == 1)
+    {
+        DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, runtime_type,
+                                                vm::Reflection::get_runtime_type_from_handle_arg(method_table));
+        interp::EvalStackOp::set_return(ret, runtime_type);
+        RET_VOID_OK();
+    }
+
+    auto result_slot = interp::EvalStackOp::get_param<vm::RtObject**>(params, 1);
+    if (result_slot == nullptr)
+    {
+        RET_ERR(RtErr::ArgumentNull);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(vm::RtReflectionRuntimeType*, runtime_type,
+                                            vm::Reflection::get_runtime_type_from_handle_arg(method_table));
+    *result_slot = reinterpret_cast<vm::RtObject*>(runtime_type);
+    RET_VOID_OK();
+}
+
 RtResultVoid signature_init_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                     interp::RtStackObject*) noexcept
 {
@@ -7667,6 +7691,13 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.RuntimeTypeHandle::InternalAlloc(System.Runtime.CompilerServices.MethodTable*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, runtime_type_handle_internal_alloc_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::InternalAlloc", nullptr, runtime_type_handle_internal_alloc_invoker);
+    vm::PInvokes::register_pinvoke(
+        "System.RuntimeTypeHandle::GetRuntimeTypeFromHandleSlow(System.IntPtr,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+        nullptr, runtime_type_handle_get_runtime_type_from_handle_slow_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetRuntimeTypeFromHandleSlow(System.IntPtr)", nullptr,
+                                   runtime_type_handle_get_runtime_type_from_handle_slow_invoker);
+    vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetRuntimeTypeFromHandleSlow", nullptr,
+                                   runtime_type_handle_get_runtime_type_from_handle_slow_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::GetMethodAt(System.Runtime.CompilerServices.MethodTable*,System.Int32)", nullptr,
         runtime_type_handle_get_method_at_invoker);

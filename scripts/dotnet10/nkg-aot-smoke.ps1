@@ -8,7 +8,8 @@ param(
     [string]$CMakeArchitecture,
     [string]$Entry = "ManagedNet10.NkgSmoke.Program::RunFullWorkloadSurfaceSmoke",
     [switch]$SkipNkgBuild,
-    [switch]$SkipCoreLibAot
+    [switch]$SkipCoreLibAot,
+    [switch]$BuildOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -302,6 +303,10 @@ if (-not (Test-Path $nativeRunner)) {
 }
 
 Write-Host "Built .NET 10 NKG LeanAOT native smoke runner at $nativeRunner"
+if ($BuildOnly) {
+    return
+}
+
 Invoke-Checked -FilePath $nativeRunner -Arguments @(
     "-l",
     $nkgSmokeDir,
