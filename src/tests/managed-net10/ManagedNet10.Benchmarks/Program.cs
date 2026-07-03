@@ -80,23 +80,288 @@ internal static class BenchmarkData
     ];
 }
 
+internal static class BenchmarkKernels
+{
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long IntegerArithmetic(int iterations)
+    {
+        long acc = 17;
+        for (int i = 0; i < iterations; i++)
+        {
+            acc = ((acc * 1_103_515_245L) + 12_345 + i) & 0x7FFF_FFFF;
+            acc ^= (acc << 7) & 0x00FF_FFFF;
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long BranchingLoop(int iterations)
+    {
+        long acc = 0;
+        for (int i = 0; i < iterations; i++)
+        {
+            if ((i & 3) == 0)
+            {
+                acc += i * 3L;
+            }
+            else if ((i & 1) == 0)
+            {
+                acc -= i;
+            }
+            else
+            {
+                acc ^= i;
+            }
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long ArrayTraversal(int iterations)
+    {
+        int[] values = new int[BenchmarkData.ArrayLength];
+        for (int i = 0; i < values.Length; i++)
+        {
+            values[i] = i * 17 + 3;
+        }
+
+        long acc = 0;
+        for (int round = 0; round < iterations; round++)
+        {
+            for (int i = 0; i < values.Length; i++)
+            {
+                int next = values[i] + round + i;
+                values[i] = next & 0x7FFF;
+                acc += values[i];
+            }
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long VirtualDispatch(int iterations)
+    {
+        VirtualWorker worker = new AddWorker();
+        long acc = 0;
+        for (int i = 0; i < iterations; i++)
+        {
+            acc += worker.Apply(i);
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long DelegateInvoke(int iterations)
+    {
+        Func<int, int> fn = static value => (value * 13) ^ (value >> 2);
+        long acc = 0;
+        for (int i = 0; i < iterations; i++)
+        {
+            acc += fn(i);
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long ObjectAllocation(int iterations)
+    {
+        long acc = 0;
+        for (int i = 0; i < iterations; i++)
+        {
+            var payload = new Payload(i, i + 1);
+            acc += payload.Sum();
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long StringScan(int iterations)
+    {
+        long acc = 0;
+        for (int round = 0; round < iterations; round++)
+        {
+            for (int i = 0; i < BenchmarkData.TextPayload.Length; i++)
+            {
+                acc += BenchmarkData.TextPayload[i] * (i + 1);
+            }
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long ListAppendAndSum(int iterations)
+    {
+        long acc = 0;
+        for (int round = 0; round < iterations; round++)
+        {
+            var values = new List<int>(64);
+            for (int i = 0; i < 64; i++)
+            {
+                values.Add((round + i) & 0xFF);
+            }
+
+            for (int i = 0; i < values.Count; i++)
+            {
+                acc += values[i];
+            }
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long DictionaryLookup(int iterations)
+    {
+        var map = new Dictionary<string, int>(BenchmarkData.LookupKeys.Length, StringComparer.Ordinal);
+        for (int i = 0; i < BenchmarkData.LookupKeys.Length; i++)
+        {
+            map.Add(BenchmarkData.LookupKeys[i], i * 17 + 3);
+        }
+
+        long acc = 0;
+        for (int round = 0; round < iterations; round++)
+        {
+            string key = BenchmarkData.LookupKeys[round & 7];
+            if (map.TryGetValue(key, out int value))
+            {
+                acc += value;
+            }
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long StringBuilderBuild(int iterations)
+    {
+        long acc = 0;
+        for (int round = 0; round < iterations; round++)
+        {
+            var builder = new StringBuilder(64);
+            builder.Append("entity:");
+            builder.Append(round & 1023);
+            builder.Append(":state:");
+            builder.Append((round * 17) & 255);
+            acc += builder.ToString().Length;
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long ParseAndFormatNumbers(int iterations)
+    {
+        long acc = 0;
+        for (int round = 0; round < iterations; round++)
+        {
+            string text = BenchmarkData.NumericText[round & 7];
+            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
+            {
+                string formatted = (value + round).ToString(CultureInfo.InvariantCulture);
+                acc += formatted.Length + value;
+            }
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long InterfaceTypeChecks(int iterations)
+    {
+        object[] values =
+        [
+            new ScoreProvider(7),
+            "not-score",
+            new ScoreProvider(13),
+            42,
+        ];
+
+        long acc = 0;
+        for (int round = 0; round < iterations; round++)
+        {
+            object value = values[round & 3];
+            if (value is IScoreProvider provider)
+            {
+                acc += provider.Score;
+            }
+            else if (value is string text)
+            {
+                acc += text.Length;
+            }
+            else if (value is int number)
+            {
+                acc += number;
+            }
+        }
+
+        return acc;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static long GenericEquality(int iterations)
+    {
+        EqualityComparer<int> intComparer = EqualityComparer<int>.Default;
+        EqualityComparer<string> stringComparer = EqualityComparer<string>.Default;
+
+        long acc = 0;
+        for (int i = 0; i < iterations; i++)
+        {
+            if (intComparer.Equals(i & 255, (i + 256) & 255))
+            {
+                acc++;
+            }
+
+            if (stringComparer.Equals(BenchmarkData.LookupKeys[i & 7], BenchmarkData.LookupKeys[(i + 8) & 7]))
+            {
+                acc += 3;
+            }
+        }
+
+        return acc;
+    }
+
+    internal sealed class Payload
+    {
+        private readonly int _left;
+        private readonly int _right;
+
+        public Payload(int left, int right)
+        {
+            _left = left;
+            _right = right;
+        }
+
+        public int Sum()
+        {
+            return _left + _right;
+        }
+    }
+}
+
 internal static class Program
 {
     private static readonly BenchmarkCase[] Cases =
     [
-        new("IntegerArithmetic", 1_200_000, IntegerArithmetic),
-        new("BranchingLoop", 900_000, BranchingLoop),
-        new("ArrayTraversal", 5_000, ArrayTraversal),
-        new("VirtualDispatch", 500_000, VirtualDispatch),
-        new("DelegateInvoke", 500_000, DelegateInvoke),
-        new("ObjectAllocation", 120_000, ObjectAllocation),
-        new("StringScan", 35_000, StringScan),
-        new("ListAppendAndSum", 20_000, ListAppendAndSum),
-        new("DictionaryLookup", 45_000, DictionaryLookup),
-        new("StringBuilderBuild", 18_000, StringBuilderBuild),
-        new("ParseAndFormatNumbers", 25_000, ParseAndFormatNumbers),
-        new("InterfaceTypeChecks", 80_000, InterfaceTypeChecks),
-        new("GenericEquality", 180_000, GenericEquality),
+        new("IntegerArithmetic", 1_200_000, BenchmarkKernels.IntegerArithmetic),
+        new("BranchingLoop", 900_000, BenchmarkKernels.BranchingLoop),
+        new("ArrayTraversal", 5_000, BenchmarkKernels.ArrayTraversal),
+        new("VirtualDispatch", 500_000, BenchmarkKernels.VirtualDispatch),
+        new("DelegateInvoke", 500_000, BenchmarkKernels.DelegateInvoke),
+        new("ObjectAllocation", 120_000, BenchmarkKernels.ObjectAllocation),
+        new("StringScan", 35_000, BenchmarkKernels.StringScan),
+        new("ListAppendAndSum", 20_000, BenchmarkKernels.ListAppendAndSum),
+        new("DictionaryLookup", 45_000, BenchmarkKernels.DictionaryLookup),
+        new("StringBuilderBuild", 18_000, BenchmarkKernels.StringBuilderBuild),
+        new("ParseAndFormatNumbers", 25_000, BenchmarkKernels.ParseAndFormatNumbers),
+        new("InterfaceTypeChecks", 80_000, BenchmarkKernels.InterfaceTypeChecks),
+        new("GenericEquality", 180_000, BenchmarkKernels.GenericEquality),
     ];
 
     private static long s_sink;
@@ -147,271 +412,9 @@ internal static class Program
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long IntegerArithmetic(int iterations)
-    {
-        long acc = 17;
-        for (int i = 0; i < iterations; i++)
-        {
-            acc = ((acc * 1_103_515_245L) + 12_345 + i) & 0x7FFF_FFFF;
-            acc ^= (acc << 7) & 0x00FF_FFFF;
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long BranchingLoop(int iterations)
-    {
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            if ((i & 3) == 0)
-            {
-                acc += i * 3L;
-            }
-            else if ((i & 1) == 0)
-            {
-                acc -= i;
-            }
-            else
-            {
-                acc ^= i;
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long ArrayTraversal(int iterations)
-    {
-        int[] values = new int[BenchmarkData.ArrayLength];
-        for (int i = 0; i < values.Length; i++)
-        {
-            values[i] = i * 17 + 3;
-        }
-
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            for (int i = 0; i < values.Length; i++)
-            {
-                int next = values[i] + round + i;
-                values[i] = next & 0x7FFF;
-                acc += values[i];
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long VirtualDispatch(int iterations)
-    {
-        VirtualWorker worker = new AddWorker();
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            acc += worker.Apply(i);
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long DelegateInvoke(int iterations)
-    {
-        Func<int, int> fn = static value => (value * 13) ^ (value >> 2);
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            acc += fn(i);
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long ObjectAllocation(int iterations)
-    {
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            var payload = new Payload(i, i + 1);
-            acc += payload.Sum();
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long StringScan(int iterations)
-    {
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            for (int i = 0; i < BenchmarkData.TextPayload.Length; i++)
-            {
-                acc += BenchmarkData.TextPayload[i] * (i + 1);
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long ListAppendAndSum(int iterations)
-    {
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            var values = new List<int>(64);
-            for (int i = 0; i < 64; i++)
-            {
-                values.Add((round + i) & 0xFF);
-            }
-
-            for (int i = 0; i < values.Count; i++)
-            {
-                acc += values[i];
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long DictionaryLookup(int iterations)
-    {
-        var map = new Dictionary<string, int>(BenchmarkData.LookupKeys.Length, StringComparer.Ordinal);
-        for (int i = 0; i < BenchmarkData.LookupKeys.Length; i++)
-        {
-            map.Add(BenchmarkData.LookupKeys[i], i * 17 + 3);
-        }
-
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            string key = BenchmarkData.LookupKeys[round & 7];
-            if (map.TryGetValue(key, out int value))
-            {
-                acc += value;
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long StringBuilderBuild(int iterations)
-    {
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            var builder = new StringBuilder(64);
-            builder.Append("entity:");
-            builder.Append(round & 1023);
-            builder.Append(":state:");
-            builder.Append((round * 17) & 255);
-            acc += builder.ToString().Length;
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long ParseAndFormatNumbers(int iterations)
-    {
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            string text = BenchmarkData.NumericText[round & 7];
-            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
-            {
-                string formatted = (value + round).ToString(CultureInfo.InvariantCulture);
-                acc += formatted.Length + value;
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long InterfaceTypeChecks(int iterations)
-    {
-        object[] values =
-        [
-            new ScoreProvider(7),
-            "not-score",
-            new ScoreProvider(13),
-            42,
-        ];
-
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            object value = values[round & 3];
-            if (value is IScoreProvider provider)
-            {
-                acc += provider.Score;
-            }
-            else if (value is string text)
-            {
-                acc += text.Length;
-            }
-            else if (value is int number)
-            {
-                acc += number;
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long GenericEquality(int iterations)
-    {
-        EqualityComparer<int> intComparer = EqualityComparer<int>.Default;
-        EqualityComparer<string> stringComparer = EqualityComparer<string>.Default;
-
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            if (intComparer.Equals(i & 255, (i + 256) & 255))
-            {
-                acc++;
-            }
-
-            if (stringComparer.Equals(BenchmarkData.LookupKeys[i & 7], BenchmarkData.LookupKeys[(i + 8) & 7]))
-            {
-                acc += 3;
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
     private static void Consume(long value)
     {
         s_sink ^= value;
-    }
-
-    internal sealed class Payload
-    {
-        private readonly int _left;
-        private readonly int _right;
-
-        public Payload(int left, int right)
-        {
-            _left = left;
-            _right = right;
-        }
-
-        public int Sum()
-        {
-            return _left + _right;
-        }
     }
 }
 
@@ -498,265 +501,20 @@ internal static class AotBenchmarkHost
     {
         return id switch
         {
-            0 => IntegerArithmetic(iterations),
-            1 => BranchingLoop(iterations),
-            2 => ArrayTraversal(iterations),
-            3 => VirtualDispatch(iterations),
-            4 => DelegateInvoke(iterations),
-            5 => ObjectAllocation(iterations),
-            6 => StringScan(iterations),
-            7 => ListAppendAndSum(iterations),
-            8 => DictionaryLookup(iterations),
-            9 => StringBuilderBuild(iterations),
-            10 => ParseAndFormatNumbers(iterations),
-            11 => InterfaceTypeChecks(iterations),
-            _ => GenericEquality(iterations),
+            0 => BenchmarkKernels.IntegerArithmetic(iterations),
+            1 => BenchmarkKernels.BranchingLoop(iterations),
+            2 => BenchmarkKernels.ArrayTraversal(iterations),
+            3 => BenchmarkKernels.VirtualDispatch(iterations),
+            4 => BenchmarkKernels.DelegateInvoke(iterations),
+            5 => BenchmarkKernels.ObjectAllocation(iterations),
+            6 => BenchmarkKernels.StringScan(iterations),
+            7 => BenchmarkKernels.ListAppendAndSum(iterations),
+            8 => BenchmarkKernels.DictionaryLookup(iterations),
+            9 => BenchmarkKernels.StringBuilderBuild(iterations),
+            10 => BenchmarkKernels.ParseAndFormatNumbers(iterations),
+            11 => BenchmarkKernels.InterfaceTypeChecks(iterations),
+            _ => BenchmarkKernels.GenericEquality(iterations),
         };
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long IntegerArithmetic(int iterations)
-    {
-        long acc = 17;
-        for (int i = 0; i < iterations; i++)
-        {
-            acc = ((acc * 1_103_515_245L) + 12_345 + i) & 0x7FFF_FFFF;
-            acc ^= (acc << 7) & 0x00FF_FFFF;
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long BranchingLoop(int iterations)
-    {
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            if ((i & 3) == 0)
-            {
-                acc += i * 3L;
-            }
-            else if ((i & 1) == 0)
-            {
-                acc -= i;
-            }
-            else
-            {
-                acc ^= i;
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long ArrayTraversal(int iterations)
-    {
-        int[] values = new int[BenchmarkData.ArrayLength];
-        for (int i = 0; i < values.Length; i++)
-        {
-            values[i] = i * 17 + 3;
-        }
-
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            for (int i = 0; i < values.Length; i++)
-            {
-                int next = values[i] + round + i;
-                values[i] = next & 0x7FFF;
-                acc += values[i];
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long VirtualDispatch(int iterations)
-    {
-        VirtualWorker worker = new AddWorker();
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            acc += worker.Apply(i);
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long DelegateInvoke(int iterations)
-    {
-        Func<int, int> fn = static value => (value * 13) ^ (value >> 2);
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            acc += fn(i);
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long ObjectAllocation(int iterations)
-    {
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            var payload = new Program.Payload(i, i + 1);
-            acc += payload.Sum();
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long StringScan(int iterations)
-    {
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            for (int i = 0; i < BenchmarkData.TextPayload.Length; i++)
-            {
-                acc += BenchmarkData.TextPayload[i] * (i + 1);
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long ListAppendAndSum(int iterations)
-    {
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            var values = new List<int>(64);
-            for (int i = 0; i < 64; i++)
-            {
-                values.Add((round + i) & 0xFF);
-            }
-
-            for (int i = 0; i < values.Count; i++)
-            {
-                acc += values[i];
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long DictionaryLookup(int iterations)
-    {
-        var map = new Dictionary<string, int>(BenchmarkData.LookupKeys.Length, StringComparer.Ordinal);
-        for (int i = 0; i < BenchmarkData.LookupKeys.Length; i++)
-        {
-            map.Add(BenchmarkData.LookupKeys[i], i * 17 + 3);
-        }
-
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            string key = BenchmarkData.LookupKeys[round & 7];
-            if (map.TryGetValue(key, out int value))
-            {
-                acc += value;
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long StringBuilderBuild(int iterations)
-    {
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            var builder = new StringBuilder(64);
-            builder.Append("entity:");
-            builder.Append(round & 1023);
-            builder.Append(":state:");
-            builder.Append((round * 17) & 255);
-            acc += builder.ToString().Length;
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long ParseAndFormatNumbers(int iterations)
-    {
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            string text = BenchmarkData.NumericText[round & 7];
-            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
-            {
-                string formatted = (value + round).ToString(CultureInfo.InvariantCulture);
-                acc += formatted.Length + value;
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long InterfaceTypeChecks(int iterations)
-    {
-        object[] values =
-        [
-            new ScoreProvider(7),
-            "not-score",
-            new ScoreProvider(13),
-            42,
-        ];
-
-        long acc = 0;
-        for (int round = 0; round < iterations; round++)
-        {
-            object value = values[round & 3];
-            if (value is IScoreProvider provider)
-            {
-                acc += provider.Score;
-            }
-            else if (value is string text)
-            {
-                acc += text.Length;
-            }
-            else if (value is int number)
-            {
-                acc += number;
-            }
-        }
-
-        return acc;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long GenericEquality(int iterations)
-    {
-        EqualityComparer<int> intComparer = EqualityComparer<int>.Default;
-        EqualityComparer<string> stringComparer = EqualityComparer<string>.Default;
-
-        long acc = 0;
-        for (int i = 0; i < iterations; i++)
-        {
-            if (intComparer.Equals(i & 255, (i + 256) & 255))
-            {
-                acc++;
-            }
-
-            if (stringComparer.Equals(BenchmarkData.LookupKeys[i & 7], BenchmarkData.LookupKeys[(i + 8) & 7]))
-            {
-                acc += 3;
-            }
-        }
-
-        return acc;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
