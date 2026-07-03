@@ -35,6 +35,13 @@ Full documentation site: **https://doc.leanclr.com**
 - [Testing](https://doc.leanclr.com/docs/development/testing)
 - [Contributing](https://doc.leanclr.com/docs/development/contributing)
 
+Current repository docs:
+
+- [Documentation Index](docs/README.md)
+- [.NET 10 Support Status](docs/dotnet10-support-review.md)
+- [.NET 10 Runtime Contract](docs/net10-runtime-contract.md)
+- [Testing](src/tests/TESTING.md)
+
 ## Supported Platforms (Standard)
 
 Standard edition currently supports:
@@ -109,7 +116,7 @@ The current goal is to run controlled, pure-logic `net10.0` assemblies rather th
 - Full CoreCLR `AssemblyLoadContext` (collectible / unload) and the debugger protocol
 - COM interop and complex marshaling
 
-> LeanCLR is a single-threaded runtime and does not plan to support a multi-threaded runtime; async/await is expressed through a single-threaded frame scheduler or the host dispatcher.
+> LeanCLR is currently documented as a single-threaded runtime; async/await is expressed through a single-threaded frame scheduler or the host dispatcher. A full multi-threaded runtime is outside the current support surface.
 
 #### Full Test Suite
 
@@ -117,7 +124,7 @@ The current goal is to run controlled, pure-logic `net10.0` assemblies rather th
 
 ## Editions
 
-LeanCLR provides **Standard** and **Core** editions: **Core is trimmed from Standard**. Both are single-threaded runtimes; multi-threaded runtime support is not planned. See [Core & Standard](https://doc.leanclr.com/docs/intro/editions).
+LeanCLR provides **Standard** and **Core** editions: **Core is trimmed from Standard**. Both editions currently ship under a single-threaded runtime boundary; a full multi-threaded runtime is outside the current support surface. See [Core & Standard](https://doc.leanclr.com/docs/intro/editions).
 
 ### Core Edition
 

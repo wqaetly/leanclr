@@ -1,6 +1,6 @@
 # LeanCLR .NET 10 Runtime 与 Unity/Godot 接入流程
 
-日期：2026-06-26
+状态：当前架构说明；历史执行记录不在本文维护。
 
 本文档用于说明 LeanCLR 兼容 .NET 10 时真正需要完成的工作，以及后续接入 Unity / Godot 时，从加载 DLL、执行托管代码、调用引擎 API 到宿主与托管层隐形交互的整体流程。
 
@@ -10,7 +10,7 @@ LeanCLR 对接 .NET 10 不是从零重新实现一套 CLR，也不是把元数�
 
 更准确的说法是：LeanCLR 已经有自己的 VM、元数据加载、类型系统、对象模型、解释器、AOT、GC、反射框架、ICALL/Intrinsic 注册表。当前 `.NET 10` 适配的主线已经收敛为 **LeanCLR minimal net10 profile**：运行项目自己的、受控的、纯逻辑 `net10.0` DLL，而不是完整承接 `System.Private.CoreLib` / `Microsoft.NETCore.App`。
 
-这里的 `minimal` 只定义近期支持边界，不缩减最终测试门槛。原作者已经设计好的 managed 测试源码素材仍应通过 `ManagedNet10.LegacyTests` 分阶段迁移，并最终全量跑通；同时用 `C:\study\wqaetly\new\NKGGameFramework` 作为第一批真实框架 workload，验证纯逻辑 DLL、async、轻量反射、序列化和后续引擎 bridge 在真实项目结构下是否成立。
+这里的 `minimal` 只定义近期支持边界，不缩减测试门槛。原作者已经设计好的 managed 测试源码素材通过 `ManagedNet10.LegacyTests` 收口；真实框架 workload 以 NKGGameFramework / Odin / UniTask 这类纯逻辑 `net10.0` 组合为基线，验证 async、轻量反射、序列化和后续引擎 bridge 在真实项目结构下是否成立。
 
 因此工作重点是：
 
@@ -154,7 +154,7 @@ flowchart LR
     I --> G
 ```
 
-本循环的执行清单以 [`docs/net10-runtime-contract.md`](net10-runtime-contract.md) 为准。当前第一批执行切片已经从单一 `RuntimeType` 身份扩展为 RuntimeType / RuntimeFieldHandle / RuntimeModule / ValueType / delegate `MethodTable*` façade 的统一边界：所有 CoreLib 传入的 handle 或 `System.Runtime.CompilerServices.MethodTable*` 都必须先解析成 net10 façade，再映射到 LeanCLR 自己的 `RtClass`、`RtMethodInfo` 或 `RtFieldInfo`。下一阻塞点是 `MulticastDelegate.NewMulticastDelegate` 触发的 `RuntimeTypeHandle.InternalAllocNoChecks_FastPath(MethodTable*)` 分配路径。建议每个新增 contract 都满足四个条件：
+本循环的执行清单以 [`net10-runtime-contract.md`](net10-runtime-contract.md) 为准。当前 contract 已收敛为 RuntimeType / RuntimeHandle / RuntimeModule / ValueType / delegate `MethodTable*` façade 的统一边界：所有 CoreLib 传入的 handle 或 `System.Runtime.CompilerServices.MethodTable*` 都必须先解析成 net10 façade，再映射到 LeanCLR 自己的 `RtClass`、`RtMethodInfo` 或 `RtFieldInfo`。后续每个新增 contract 都满足四个条件：
 
 - 能被 `coreclr-net10` profile 独立描述。
 - 能在 [`net10-runtime-contract`](net10-runtime-contract.md) 中说明它来自 CoreLib 哪条真实调用链。
@@ -356,7 +356,7 @@ flowchart TD
 | 1. minimal net10 解释执行基线 | `ManagedNet10.Smoke` 和最小真实纯逻辑 DLL 的核心入口稳定通过 | `scripts/dotnet10/interp-smoke.ps1 -Configuration Release` 加真实 DLL smoke |
 | 2. 原作者测试资产迁移 | 将已有 managed 测试源码按能力分层迁入 `.NET 10` 验证路径 | 每批迁移测试通过；最终全量跑通才算 LeanCLR 自身能力合格 |
 | 3. API 白名单与静态扫描 | 定义允许的 BCL/API 集合，并扫描 `AssemblyRef` / `TypeRef` / `MemberRef` | 白名单外 API 在构建或加载阶段给出明确错误 |
-| 4. NKGGameFramework 真实 workload | 用 `C:\study\wqaetly\new\NKGGameFramework` 的核心 `net10.0` 逻辑库验证真实项目 | NKG core smoke 通过，且不依赖完整 `Microsoft.NETCore.App` |
+| 4. NKGGameFramework 真实 workload | 用 NKGGameFramework / Odin / UniTask 的核心 `net10.0` 逻辑库验证真实项目 | NKG core smoke 通过，且不依赖完整 `Microsoft.NETCore.App` |
 | 5. Host Bridge ABI | 定义 Unity/Godot 共用的对象 handle、函数表、dispatcher、异常返回协议 | native mock host 可调用托管入口并返回 |
 | 6. 引擎 API Wrapper | 托管层提供 GameObject/Node/Resource/Transform 等薄封装 | 用 mock 或真实引擎跑属性、方法、事件、生命周期 |
 | 7. 隐形交互闭环 | 完成事件回调、生命周期、GCHandle、主线程投递、对象销毁 | 场景加载/卸载、事件订阅/取消、异常传播测试通过 |

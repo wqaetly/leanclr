@@ -35,6 +35,13 @@ LeanCLR 的定位是补足上述空白：在保持 ECMA-335 高兼容的前提�
 - [测试指南](https://doc.leanclr.com/docs/development/testing)
 - [贡献指南](https://doc.leanclr.com/docs/development/contributing)
 
+仓库内当前状态文档：
+
+- [文档索引](docs/README.md)
+- [.NET 10 支持状态](docs/dotnet10-support-review.md)
+- [.NET 10 Runtime Contract](docs/net10-runtime-contract.md)
+- [测试工程](src/tests/TESTING.md)
+
 ## 支持平台（Standard）
 
 Standard 版本目前已支持以下平台：
@@ -109,7 +116,7 @@ LeanCLR 已支持 Unity 引擎与 .NET 10 BCL，正在接入 Godot，并将持�
 - 完整 CoreCLR `AssemblyLoadContext`（可回收 / 卸载）以及调试器协议
 - COM 互操作与复杂 marshaling
 
-> LeanCLR 是单线程 runtime，不规划多线程运行时支持；async/await 通过单线程帧调度器或宿主分发器表达。
+> 当前 LeanCLR 按单线程 runtime 约束描述；async/await 通过单线程帧调度器或宿主分发器表达。完整多线程 runtime 不属于当前支持面。
 
 #### 完整测试用例
 
@@ -117,7 +124,7 @@ LeanCLR 已支持 Unity 引擎与 .NET 10 BCL，正在接入 Godot，并将持�
 
 ## 版本说明
 
-LeanCLR 提供 **Standard** 与 **Core** 两个版本：**Core 自 Standard 裁剪而来**。两者均为单线程 runtime，不规划多线程运行时支持。详见 [Core 与 Standard](https://doc.leanclr.com/docs/intro/editions)。
+LeanCLR 提供 **Standard** 与 **Core** 两个版本：**Core 自 Standard 裁剪而来**。两者当前均按单线程 runtime 约束发布，完整多线程 runtime 不属于当前支持面。详见 [Core 与 Standard](https://doc.leanclr.com/docs/intro/editions)。
 
 ### Core 版本
 
