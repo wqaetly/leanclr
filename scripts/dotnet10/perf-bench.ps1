@@ -7,6 +7,7 @@ param(
     [string]$NativeAotBuildDir,
     [string]$CMakeGenerator,
     [string]$CMakeArchitecture,
+    [string[]]$Benchmarks = @(),
     [switch]$IncludeCoreRuntimeAot,
     [switch]$IncludeConsoleAot,
     [switch]$SkipAotBuild,
@@ -229,6 +230,39 @@ function Format-Ms {
     return $Value.ToString("F3", [Globalization.CultureInfo]::InvariantCulture)
 }
 
+function Select-BenchmarkEntries {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$AllEntries,
+
+        [string[]]$RequestedNames = @()
+    )
+
+    $names = @($RequestedNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
+    if ($names.Count -eq 0) {
+        return @($AllEntries)
+    }
+
+    $byName = @{}
+    foreach ($entry in $AllEntries) {
+        $byName[$entry.Name] = $entry
+    }
+
+    $selected = @()
+    $seen = @{}
+    foreach ($name in $names) {
+        if (-not $byName.ContainsKey($name)) {
+            throw "Unknown benchmark '$name'. Known benchmarks: $((@($AllEntries | ForEach-Object { $_.Name }) -join ', '))"
+        }
+        if (-not $seen.ContainsKey($name)) {
+            $selected += $byName[$name]
+            $seen[$name] = $true
+        }
+    }
+
+    return @($selected)
+}
+
 $repoRoot = (Resolve-Path ([System.IO.Path]::Combine($PSScriptRoot, "..", ".."))).Path
 
 if ([string]::IsNullOrWhiteSpace($RuntimeDir)) {
@@ -262,6 +296,23 @@ $solutionPath = [System.IO.Path]::Combine($repoRoot, "src", "tests", "managed-ne
 $leanAotProject = [System.IO.Path]::Combine($repoRoot, "src", "leanaot", "LeanAOT", "LeanAOT.csproj")
 $benchmarkDir = [System.IO.Path]::Combine($repoRoot, "out", "dotnet", "ManagedNet10.Benchmarks", $Configuration, "net10.0")
 $benchmarkDll = [System.IO.Path]::Combine($benchmarkDir, "ManagedNet10.Benchmarks.dll")
+$allBenchmarkEntries = @(
+    [pscustomobject]@{ Name = "IntegerArithmetic"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunIntegerArithmetic" },
+    [pscustomobject]@{ Name = "BranchingLoop"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunBranchingLoop" },
+    [pscustomobject]@{ Name = "ArrayTraversal"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunArrayTraversal" },
+    [pscustomobject]@{ Name = "VirtualDispatch"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunVirtualDispatch" },
+    [pscustomobject]@{ Name = "DelegateInvoke"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunDelegateInvoke" },
+    [pscustomobject]@{ Name = "ObjectAllocation"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunObjectAllocation" },
+    [pscustomobject]@{ Name = "StringScan"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunStringScan" },
+    [pscustomobject]@{ Name = "ListAppendAndSum"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunListAppendAndSum" },
+    [pscustomobject]@{ Name = "DictionaryLookup"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunDictionaryLookup" },
+    [pscustomobject]@{ Name = "StringBuilderBuild"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunStringBuilderBuild" },
+    [pscustomobject]@{ Name = "ParseAndFormatNumbers"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunParseAndFormatNumbers" },
+    [pscustomobject]@{ Name = "InterfaceTypeChecks"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunInterfaceTypeChecks" },
+    [pscustomobject]@{ Name = "GenericEquality"; Entry = "ManagedNet10.Benchmarks.AotBenchmarkHost::RunGenericEquality" }
+)
+$selectedBenchmarkEntries = Select-BenchmarkEntries -AllEntries $allBenchmarkEntries -RequestedNames $Benchmarks
+$selectedBenchmarkNames = @($selectedBenchmarkEntries | ForEach-Object { $_.Name })
 
 Write-Host "Building managed benchmark project..."
 Invoke-Checked dotnet build $solutionPath -c $Configuration
@@ -348,44 +399,34 @@ if (-not $SkipAotBuild) {
 $aotTester = Get-NativeRunnerPath -BuildDir $NativeAotBuildDir -ExeBaseName "aot-tester"
 
 Write-Host "Running .NET 10 native benchmarks..."
-$nativeLines = Invoke-Captured -FilePath dotnet -Arguments @($benchmarkDll)
+$nativeArgs = @($benchmarkDll)
+$nativeArgs += $selectedBenchmarkNames
+$nativeLines = Invoke-Captured -FilePath dotnet -Arguments $nativeArgs
 $nativeResults = Parse-BenchmarkOutput -Runtime ".NET 10 Native" -Lines $nativeLines
 
 Write-Host "Running LeanCLR interpreter benchmarks..."
-$interpLines = Invoke-Captured -FilePath $leanrun -Arguments @(
+$interpArgs = @(
     "-l",
     $benchmarkDir,
     "-l",
     $RuntimeDir,
     "ManagedNet10.Benchmarks"
 )
+$interpArgs += "--"
+$interpArgs += $selectedBenchmarkNames
+$interpLines = Invoke-Captured -FilePath $leanrun -Arguments $interpArgs
 $interpResults = Parse-BenchmarkOutput -Runtime "LeanCLR Interpreter" -Lines $interpLines
 
 Write-Host "Running LeanCLR AOT benchmarks..."
-$aotBenchmarkEntries = @(
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunIntegerArithmetic",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunBranchingLoop",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunArrayTraversal",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunVirtualDispatch",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunDelegateInvoke",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunObjectAllocation",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunStringScan",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunListAppendAndSum",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunDictionaryLookup",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunStringBuilderBuild",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunParseAndFormatNumbers",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunInterfaceTypeChecks",
-    "ManagedNet10.Benchmarks.AotBenchmarkHost::RunGenericEquality"
-)
 $aotLines = @()
-foreach ($entry in $aotBenchmarkEntries) {
+foreach ($benchmark in $selectedBenchmarkEntries) {
     $aotLines += Invoke-Captured -FilePath $aotTester -Arguments @(
         "-l",
         $benchmarkDir,
         "-l",
         $RuntimeDir,
         "-e",
-        $entry,
+        $benchmark.Entry,
         "ManagedNet10.Benchmarks"
     )
 }
@@ -441,6 +482,7 @@ $markdown.Add("- Configuration: ``$Configuration``")
 $markdown.Add("- Runtime pack: ``$RuntimeDir``")
 $markdown.Add("- Benchmark assembly: ``$benchmarkDll``")
 $markdown.Add("- AOT generated C++: ``$AotOutputDir``")
+$markdown.Add("- Selected benchmarks: ``$($selectedBenchmarkNames -join ', ')``")
 $coreRuntimeAotLabel = if ($IncludeCoreRuntimeAot) {
     if ($IncludeConsoleAot) {
         "included in benchmark generated directory"

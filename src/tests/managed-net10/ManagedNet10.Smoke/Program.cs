@@ -178,6 +178,7 @@ internal static class Program
         TestReflection();
         TestSpan();
         TestRuntimeHelpers();
+        TestCommandLineArguments();
         TestThreadingSubset();
         HostBridgeWrapperSmoke.Run();
         EngineBindingSmoke.Run();
@@ -836,6 +837,13 @@ internal static class Program
     private static int RuntimeHelpersPrepareTarget(int left, int right)
     {
         return left + right;
+    }
+
+    private static void TestCommandLineArguments()
+    {
+        string[] args = Environment.GetCommandLineArgs();
+        Require(args.Length >= 1, "command line args missing argv0");
+        Require(args[0].Contains("ManagedNet10.Smoke", StringComparison.Ordinal), "command line argv0 assembly name failed");
     }
 
     private static void TestThreadingSubset()

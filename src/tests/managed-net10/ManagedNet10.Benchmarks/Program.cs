@@ -373,19 +373,71 @@ internal static class Program
 
     public static void RunAll()
     {
-        Console.Write(RunAllText());
+        Console.Write(RunAllText(GetRequestedBenchmarkNames()));
     }
 
-    public static string RunAllText()
+    public static string RunAllText(params string[] benchmarkNames)
     {
         var output = new StringBuilder();
+        HashSet<string>? requested = CreateBenchmarkSelection(benchmarkNames);
+        HashSet<string>? remaining = requested is null ? null : new HashSet<string>(requested, StringComparer.OrdinalIgnoreCase);
+        int emitted = 0;
+
         output.AppendLine("BENCHMARK|ManagedNet10.Benchmarks|1");
         foreach (BenchmarkCase benchmark in Cases)
         {
+            if (requested is not null && !requested.Contains(benchmark.Name))
+            {
+                continue;
+            }
+
             RunOne(benchmark, output);
+            emitted++;
+            remaining?.Remove(benchmark.Name);
+        }
+
+        if (remaining is { Count: > 0 })
+        {
+            throw new ArgumentException("Unknown benchmark(s): " + string.Join(", ", remaining));
+        }
+        if (emitted == 0)
+        {
+            throw new ArgumentException("No benchmark cases were selected.");
         }
 
         return output.ToString();
+    }
+
+    private static string[] GetRequestedBenchmarkNames()
+    {
+        string[] args = Environment.GetCommandLineArgs();
+        if (args.Length <= 1)
+        {
+            return Array.Empty<string>();
+        }
+
+        string[] benchmarkNames = new string[args.Length - 1];
+        Array.Copy(args, 1, benchmarkNames, 0, benchmarkNames.Length);
+        return benchmarkNames;
+    }
+
+    private static HashSet<string>? CreateBenchmarkSelection(string[] benchmarkNames)
+    {
+        if (benchmarkNames.Length == 0)
+        {
+            return null;
+        }
+
+        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string benchmarkName in benchmarkNames)
+        {
+            if (!string.IsNullOrWhiteSpace(benchmarkName))
+            {
+                selected.Add(benchmarkName.Trim());
+            }
+        }
+
+        return selected.Count == 0 ? null : selected;
     }
 
     private static void RunOne(BenchmarkCase benchmark, StringBuilder output)
