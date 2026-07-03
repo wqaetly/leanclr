@@ -8,6 +8,12 @@ All build and intermediate outputs go under `out/` at the repository root (overr
 out/
 ├── cmake/<module>/<Config>-<Arch>/   # CMake build trees and native binaries
 └── dotnet/<ProjectName>/<Config>/    # .NET assemblies
+
+artifacts/
+└── net10-aot/
+    ├── core/generated/               # .NET 10 core runtime assemblies AOT compile smoke C++
+    ├── smoke/generated/              # ManagedNet10.Smoke AOT native run C++
+    └── nkg/generated/                # NKG/Odin workload AOT native run C++
 ```
 
 Clean all outputs: `scripts\dev\clean-out.bat` (Windows) or `./scripts/dev/clean-out.sh` (Unix).
@@ -22,6 +28,7 @@ Clean all outputs: `scripts\dev\clean-out.bat` (Windows) or `./scripts/dev/clean
 | Interpreter smoke matrix | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke-matrix.ps1 -Configuration Release` |
 | API whitelist scan | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\api-scan.ps1 -Configuration Release` |
 | NKG/Odin workload smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` |
+| Core runtime assemblies AOT compile smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\corelib-aot-smoke.ps1 -Configuration Release` |
 | NKG/Odin full AOT smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-aot-smoke.ps1 -Configuration Release` |
 | Host bridge smoke | Run `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\host-bridge-smoke.ps1 -Configuration Release -Scenario <scenario>` for `AbiSkeleton`, `HandleRegistry`, `Dispatcher`, `EventCallback`, `EngineAdapter`, `ValueMarshal`, and `Diagnostics` |
 | Runtime API signature gate | `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` |
@@ -45,3 +52,5 @@ scripts/
 ```
 
 The old `scripts/test` Mono/mono-4.5 entry points were removed with the Mono profile cleanup. Use the `scripts/dotnet10` gates for current validation.
+
+Current AOT smoke scripts clean their own `artifacts\net10-aot\...\generated` directory before generating C++. `aot-smoke.ps1` and `nkg-aot-smoke.ps1` run the core runtime assemblies AOT compile smoke first unless `-SkipCoreLibAot` is passed. Older `artifacts\net10-aot-*` directories are historical local outputs and are not part of the current validation matrix.

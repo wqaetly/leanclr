@@ -2,12 +2,9 @@ param(
     [string]$RuntimeDir,
     [string]$OutputDir,
     [string]$Configuration = "Release",
-    [switch]$NativeBuild,
-    [switch]$NativeRun,
     [string]$NativeBuildDir,
     [string]$CMakeGenerator,
-    [string]$CMakeArchitecture,
-    [switch]$SkipCoreLibAot
+    [string]$CMakeArchitecture
 )
 
 $ErrorActionPreference = "Stop"
@@ -96,48 +93,42 @@ if ([string]::IsNullOrWhiteSpace($RuntimeDir)) {
     $RuntimeDir = Get-DotNet10RuntimeDir
 }
 
-$RuntimeDir = (Resolve-Path $RuntimeDir).Path
-
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
-    $OutputDir = [System.IO.Path]::Combine($repoRoot, "artifacts", "net10-aot", "smoke", "generated")
+    $OutputDir = [System.IO.Path]::Combine($repoRoot, "artifacts", "net10-aot", "core", "generated")
 }
 
+if ([string]::IsNullOrWhiteSpace($NativeBuildDir)) {
+    $NativeBuildDir = [System.IO.Path]::Combine($repoRoot, "out", "cmake", "tests", "net10-aot-core", "$Configuration-x64")
+}
+
+$RuntimeDir = (Resolve-Path $RuntimeDir).Path
 $OutputDir = [System.IO.Path]::GetFullPath($OutputDir)
+$NativeBuildDir = [System.IO.Path]::GetFullPath($NativeBuildDir)
 Clear-GeneratedOutputDirectory $OutputDir
 
-if (-not $SkipCoreLibAot) {
-    $corelibSmokeScript = [System.IO.Path]::Combine($PSScriptRoot, "corelib-aot-smoke.ps1")
-    $corelibArgs = @(
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        $corelibSmokeScript,
-        "-Configuration",
-        $Configuration,
-        "-RuntimeDir",
-        $RuntimeDir
-    )
-    if (-not [string]::IsNullOrWhiteSpace($CMakeGenerator)) {
-        $corelibArgs += @("-CMakeGenerator", $CMakeGenerator)
-    }
-    if (-not [string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
-        $corelibArgs += @("-CMakeArchitecture", $CMakeArchitecture)
-    }
-
-    Invoke-Checked -FilePath powershell -Arguments $corelibArgs
-}
-
 Invoke-Checked dotnet build ([System.IO.Path]::Combine($repoRoot, "src", "leanaot", "LeanAOT", "LeanAOT.csproj")) -c $Configuration
-Invoke-Checked dotnet build ([System.IO.Path]::Combine($repoRoot, "src", "tests", "managed-net10", "managed-net10.sln")) -c $Configuration
 
 $leanAotDll = [System.IO.Path]::Combine($repoRoot, "out", "dotnet", "LeanAOT", $Configuration, "net8.0", "LeanAOT.dll")
 if (-not (Test-Path $leanAotDll)) {
     throw "LeanAOT output not found: $leanAotDll"
 }
 
-$smokeDir = [System.IO.Path]::Combine($repoRoot, "out", "dotnet", "ManagedNet10.Smoke", $Configuration, "net10.0")
-if (-not (Test-Path ([System.IO.Path]::Combine($smokeDir, "ManagedNet10.Smoke.dll")))) {
-    throw "ManagedNet10.Smoke output not found: $smokeDir"
+$profilePath = [System.IO.Path]::Combine($repoRoot, "src", "leanaot", "LeanAOT", "runtime-apis", "coreclr-net10", "profile.json")
+$profile = Get-Content -Raw $profilePath | ConvertFrom-Json
+$coreRuntimeAssemblies = @()
+$skippedCoreModules = @()
+foreach ($moduleName in @($profile.coreLibraryModules)) {
+    $assemblyPath = [System.IO.Path]::Combine($RuntimeDir, "$moduleName.dll")
+    if (Test-Path $assemblyPath) {
+        $coreRuntimeAssemblies += $moduleName
+    }
+    else {
+        $skippedCoreModules += $moduleName
+    }
+}
+
+if ($coreRuntimeAssemblies.Count -eq 0) {
+    throw "No core runtime assemblies from $profilePath were found under $RuntimeDir"
 }
 
 $leanAotArgs = @(
@@ -145,24 +136,24 @@ $leanAotArgs = @(
     "--leanaot-runtime-api-profile",
     "coreclr-net10",
     "-d",
-    $smokeDir,
-    "-d",
-    $RuntimeDir,
-    "-a",
-    "ManagedNet10.Smoke",
-    "-o",
-    $OutputDir
+    $RuntimeDir
 )
+foreach ($assemblyName in $coreRuntimeAssemblies) {
+    $leanAotArgs += @("-a", $assemblyName)
+}
+$leanAotArgs += @("-o", $OutputDir)
 
 Invoke-Checked -FilePath dotnet -Arguments $leanAotArgs
 
 $expectedFiles = @(
-    "ManagedNet10_Smoke.module_registration.cpp",
-    "ManagedNet10_Smoke.method_body_part1.cpp",
+    "System_Private_CoreLib.method_body_part1.cpp",
     "modules_registration.cpp",
     "method_invokers_part0.cpp",
     "method_direct_call_bridges_part0.cpp"
 )
+foreach ($assemblyName in $coreRuntimeAssemblies) {
+    $expectedFiles += "$($assemblyName.Replace(".", "_")).module_registration.cpp"
+}
 
 foreach ($fileName in $expectedFiles) {
     $path = [System.IO.Path]::Combine($OutputDir, $fileName)
@@ -171,69 +162,41 @@ foreach ($fileName in $expectedFiles) {
     }
 }
 
-Write-Host "Generated .NET 10 LeanAOT smoke C++ to $OutputDir"
-
-if ($NativeRun) {
-    $NativeBuild = $true
+Write-Host "Generated .NET 10 core runtime LeanAOT C++ for $($coreRuntimeAssemblies -join ', ') to $OutputDir"
+if ($skippedCoreModules.Count -gt 0) {
+    Write-Host "Skipped profile core modules not found in runtime pack: $($skippedCoreModules -join ', ')"
 }
 
-if ($NativeBuild) {
-    $cmakePath = Resolve-CMakePath
+$cmakePath = Resolve-CMakePath
+$aotTesterSourceDir = [System.IO.Path]::Combine($repoRoot, "src", "tests", "aot-tester")
+$configureArgs = @(
+    "-S",
+    $aotTesterSourceDir,
+    "-B",
+    $NativeBuildDir,
+    "-DAOT_GENERATED_CPP_DIR=$OutputDir"
+)
 
-    if ([string]::IsNullOrWhiteSpace($NativeBuildDir)) {
-        $NativeBuildDir = [System.IO.Path]::Combine($repoRoot, "out", "cmake", "tests", "net10-aot-smoke", "$Configuration-x64")
+$isWindowsHost = $env:OS -eq "Windows_NT"
+if ($isWindowsHost) {
+    if ([string]::IsNullOrWhiteSpace($CMakeGenerator)) {
+        $CMakeGenerator = "Visual Studio 17 2022"
     }
-    $NativeBuildDir = [System.IO.Path]::GetFullPath($NativeBuildDir)
-
-    $aotTesterSourceDir = [System.IO.Path]::Combine($repoRoot, "src", "tests", "aot-tester")
-    $configureArgs = @(
-        "-S",
-        $aotTesterSourceDir,
-        "-B",
-        $NativeBuildDir,
-        "-DAOT_GENERATED_CPP_DIR=$OutputDir"
-    )
-
-    $isWindowsHost = $env:OS -eq "Windows_NT"
-    if ($isWindowsHost) {
-        if ([string]::IsNullOrWhiteSpace($CMakeGenerator)) {
-            $CMakeGenerator = "Visual Studio 17 2022"
-        }
-        if ([string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
-            $CMakeArchitecture = "x64"
-        }
-        if (-not [string]::IsNullOrWhiteSpace($CMakeGenerator)) {
-            $configureArgs += @("-G", $CMakeGenerator)
-        }
-        if (-not [string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
-            $configureArgs += @("-A", $CMakeArchitecture)
-        }
+    if ([string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
+        $CMakeArchitecture = "x64"
     }
-    else {
-        $configureArgs += "-DCMAKE_BUILD_TYPE=$Configuration"
+    if (-not [string]::IsNullOrWhiteSpace($CMakeGenerator)) {
+        $configureArgs += @("-G", $CMakeGenerator)
     }
-
-    Invoke-Checked -FilePath $cmakePath -Arguments $configureArgs
-    Invoke-Checked -FilePath $cmakePath -Arguments @("--build", $NativeBuildDir, "--config", $Configuration, "--target", "aot-tester", "--parallel")
-
-    $exeName = if ($isWindowsHost) { "aot-tester.exe" } else { "aot-tester" }
-    $nativeRunner = [System.IO.Path]::Combine($NativeBuildDir, "bin", $Configuration, $exeName)
-    if (-not (Test-Path $nativeRunner)) {
-        $nativeRunner = [System.IO.Path]::Combine($NativeBuildDir, "bin", $exeName)
-    }
-    if (-not (Test-Path $nativeRunner)) {
-        throw "Native aot-tester output not found under $NativeBuildDir"
-    }
-
-    Write-Host "Built .NET 10 LeanAOT native smoke runner at $nativeRunner"
-
-    if ($NativeRun) {
-        Invoke-Checked -FilePath $nativeRunner -Arguments @(
-            "-l",
-            $smokeDir,
-            "-l",
-            $RuntimeDir,
-            "ManagedNet10.Smoke"
-        )
+    if (-not [string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
+        $configureArgs += @("-A", $CMakeArchitecture)
     }
 }
+else {
+    $configureArgs += "-DCMAKE_BUILD_TYPE=$Configuration"
+}
+
+Invoke-Checked -FilePath $cmakePath -Arguments $configureArgs
+Invoke-Checked -FilePath $cmakePath -Arguments @("--build", $NativeBuildDir, "--config", $Configuration, "--target", "aot-tester", "--parallel")
+
+Write-Host "Built .NET 10 core runtime LeanAOT native compile smoke under $NativeBuildDir"

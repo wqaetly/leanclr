@@ -7,7 +7,8 @@ param(
     [string]$CMakeGenerator,
     [string]$CMakeArchitecture,
     [string]$Entry = "ManagedNet10.NkgSmoke.Program::RunCoreWorkloadSurfaceSmoke",
-    [switch]$SkipNkgBuild
+    [switch]$SkipNkgBuild,
+    [switch]$SkipCoreLibAot
 )
 
 $ErrorActionPreference = "Stop"
@@ -73,6 +74,23 @@ function Resolve-CMakePath {
     return $candidate.FullName
 }
 
+function Clear-GeneratedOutputDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Directory)
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    if ([string]::IsNullOrWhiteSpace($fullPath) -or $fullPath -eq $pathRoot) {
+        throw "Refusing to clean generated output directory: $fullPath"
+    }
+
+    [System.IO.Directory]::CreateDirectory($fullPath) | Out-Null
+    Get-ChildItem -LiteralPath $fullPath -Force -ErrorAction SilentlyContinue |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
+}
+
 $repoRoot = (Resolve-Path ([System.IO.Path]::Combine($PSScriptRoot, "..", ".."))).Path
 
 if ([string]::IsNullOrWhiteSpace($NkgRoot)) {
@@ -91,17 +109,39 @@ if ([string]::IsNullOrWhiteSpace($RuntimeDir)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
-    $OutputDir = [System.IO.Path]::Combine($repoRoot, "artifacts", "net10-nkg-aot-smoke", "generated")
+    $OutputDir = [System.IO.Path]::Combine($repoRoot, "artifacts", "net10-aot", "nkg", "generated")
 }
 
 if ([string]::IsNullOrWhiteSpace($NativeBuildDir)) {
-    $NativeBuildDir = [System.IO.Path]::Combine($repoRoot, "out", "cmake", "tests", "net10-nkg-aot-smoke", "$Configuration-x64")
+    $NativeBuildDir = [System.IO.Path]::Combine($repoRoot, "out", "cmake", "tests", "net10-aot-nkg", "$Configuration-x64")
 }
 
 $NkgRoot = (Resolve-Path $NkgRoot).Path
 $RuntimeDir = (Resolve-Path $RuntimeDir).Path
 $OutputDir = [System.IO.Path]::GetFullPath($OutputDir)
 $NativeBuildDir = [System.IO.Path]::GetFullPath($NativeBuildDir)
+
+if (-not $SkipCoreLibAot) {
+    $corelibSmokeScript = [System.IO.Path]::Combine($PSScriptRoot, "corelib-aot-smoke.ps1")
+    $corelibArgs = @(
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        $corelibSmokeScript,
+        "-Configuration",
+        $Configuration,
+        "-RuntimeDir",
+        $RuntimeDir
+    )
+    if (-not [string]::IsNullOrWhiteSpace($CMakeGenerator)) {
+        $corelibArgs += @("-CMakeGenerator", $CMakeGenerator)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
+        $corelibArgs += @("-CMakeArchitecture", $CMakeArchitecture)
+    }
+
+    Invoke-Checked -FilePath powershell -Arguments $corelibArgs
+}
 
 $samplerProject = [System.IO.Path]::Combine($NkgRoot, "samples", "NKGGameFramework.Sampler", "NKGGameFramework.Sampler.csproj")
 if (-not (Test-Path $samplerProject)) {
@@ -164,7 +204,7 @@ if (-not (Test-Path ([System.IO.Path]::Combine($nkgSmokeDir, "ManagedNet10.NkgSm
     throw "ManagedNet10.NkgSmoke output not found: $nkgSmokeDir"
 }
 
-[System.IO.Directory]::CreateDirectory($OutputDir) | Out-Null
+Clear-GeneratedOutputDirectory $OutputDir
 
 $aotAssemblies = @(
     "ManagedNet10.NkgSmoke",
