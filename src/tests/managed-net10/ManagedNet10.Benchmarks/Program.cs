@@ -428,6 +428,37 @@ internal static class AotBenchmarkHost
 {
     private const int ArrayLength = 256;
     private const string TextPayload = "LeanCLR net10 performance baseline: arithmetic, arrays, calls, allocation, strings.";
+    private static readonly string[] LookupKeys =
+    [
+        "player",
+        "enemy",
+        "projectile",
+        "inventory",
+        "quest",
+        "dialog",
+        "scene",
+        "resource",
+    ];
+
+    private static readonly string[] NumericText =
+    [
+        "17",
+        "42",
+        "128",
+        "255",
+        "1024",
+        "4096",
+        "16384",
+        "65535",
+    ];
+
+    private static readonly object[] InterfaceValues =
+    [
+        new ScoreProvider(7),
+        "not-score",
+        new ScoreProvider(13),
+        42,
+    ];
 
     private static long s_sink;
 
@@ -656,16 +687,16 @@ internal static class AotBenchmarkHost
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static long DictionaryLookup(int iterations)
     {
-        var map = new Dictionary<string, int>(8, StringComparer.Ordinal);
-        for (int i = 0; i < 8; i++)
+        var map = new Dictionary<string, int>(LookupKeys.Length, StringComparer.Ordinal);
+        for (int i = 0; i < LookupKeys.Length; i++)
         {
-            map.Add(LookupKey(i), i * 17 + 3);
+            map.Add(LookupKeys[i], i * 17 + 3);
         }
 
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            string key = LookupKey(round & 7);
+            string key = LookupKeys[round & 7];
             if (map.TryGetValue(key, out int value))
             {
                 acc += value;
@@ -698,7 +729,7 @@ internal static class AotBenchmarkHost
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            string text = NumericText(round & 7);
+            string text = NumericText[round & 7];
             if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
             {
                 string formatted = (value + round).ToString(CultureInfo.InvariantCulture);
@@ -715,7 +746,7 @@ internal static class AotBenchmarkHost
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            object value = InterfaceValue(round & 3);
+            object value = InterfaceValues[round & 3];
             if (value is IScoreProvider provider)
             {
                 acc += provider.Score;
@@ -747,81 +778,13 @@ internal static class AotBenchmarkHost
                 acc++;
             }
 
-            if (stringComparer.Equals(LookupKey(i & 7), LookupKey((i + 8) & 7)))
+            if (stringComparer.Equals(LookupKeys[i & 7], LookupKeys[(i + 8) & 7]))
             {
                 acc += 3;
             }
         }
 
         return acc;
-    }
-
-    private static string LookupKey(int index)
-    {
-        return index switch
-        {
-            0 => "player",
-            1 => "enemy",
-            2 => "projectile",
-            3 => "inventory",
-            4 => "quest",
-            5 => "dialog",
-            6 => "scene",
-            _ => "resource",
-        };
-    }
-
-    private static string NumericText(int index)
-    {
-        return index switch
-        {
-            0 => "17",
-            1 => "42",
-            2 => "128",
-            3 => "255",
-            4 => "1024",
-            5 => "4096",
-            6 => "16384",
-            _ => "65535",
-        };
-    }
-
-    private static int NumericValue(int index)
-    {
-        return index switch
-        {
-            0 => 17,
-            1 => 42,
-            2 => 128,
-            3 => 255,
-            4 => 1024,
-            5 => 4096,
-            6 => 16384,
-            _ => 65535,
-        };
-    }
-
-    private static int DecimalLength(int value)
-    {
-        int length = 1;
-        while (value >= 10)
-        {
-            value /= 10;
-            length++;
-        }
-
-        return length;
-    }
-
-    private static object InterfaceValue(int index)
-    {
-        return index switch
-        {
-            0 => new ScoreProvider(7),
-            1 => "not-score",
-            2 => new ScoreProvider(13),
-            _ => 42,
-        };
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
