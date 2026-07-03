@@ -452,14 +452,6 @@ internal static class AotBenchmarkHost
         "65535",
     ];
 
-    private static readonly object[] InterfaceValues =
-    [
-        new ScoreProvider(7),
-        "not-score",
-        new ScoreProvider(13),
-        42,
-    ];
-
     private static long s_sink;
 
     public static void RunAll()
@@ -738,10 +730,18 @@ internal static class AotBenchmarkHost
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static long InterfaceTypeChecks(int iterations)
     {
+        object[] values =
+        [
+            new ScoreProvider(7),
+            "not-score",
+            new ScoreProvider(13),
+            42,
+        ];
+
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            object value = InterfaceValues[round & 3];
+            object value = values[round & 3];
             if (value is IScoreProvider provider)
             {
                 acc += provider.Score;
