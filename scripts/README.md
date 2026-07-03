@@ -22,6 +22,7 @@ Clean all outputs: `scripts\dev\clean-out.bat` (Windows) or `./scripts/dev/clean
 | Interpreter smoke matrix | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke-matrix.ps1 -Configuration Release` |
 | API whitelist scan | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\api-scan.ps1 -Configuration Release` |
 | NKG/Odin workload smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` |
+| NKG/Odin full AOT smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-aot-smoke.ps1 -Configuration Release` |
 | Host bridge smoke | Run `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\host-bridge-smoke.ps1 -Configuration Release -Scenario <scenario>` for `AbiSkeleton`, `HandleRegistry`, `Dispatcher`, `EventCallback`, `EngineAdapter`, `ValueMarshal`, and `Diagnostics` |
 | Runtime API signature gate | `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` |
 | LeanAOT net10 native smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\aot-smoke.ps1 -Configuration Release -NativeRun` |

@@ -12,6 +12,7 @@
 | 解释 smoke 矩阵 | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke-matrix.ps1 -Configuration Release` |
 | API 白名单扫描 | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\api-scan.ps1 -Configuration Release` |
 | NKG/Odin workload | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` |
+| NKG/Odin 全量 AOT workload | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-aot-smoke.ps1 -Configuration Release` |
 | LeanAOT net10 native smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\aot-smoke.ps1 -Configuration Release -NativeRun` |
 | Runtime API 签名 gate | `python src\generator\check_runtime_api_signatures.py --profile coreclr-net10 --repo-root .` |
 
@@ -41,7 +42,7 @@ foreach ($s in $scenarios) {
 
 ## 口径
 
-上述 gate 通过表示 LeanCLR 自有测试资产、当前 `.NET 10` runtime contract、API 白名单、真实轻量 workload 和 mock host bridge 在当前 profile 下保持绿色。
+上述 gate 通过表示 LeanCLR 自有测试资产、当前 `.NET 10` runtime contract、API 白名单、真实轻量 workload、NKG/Odin 全量 AOT workload 和 mock host bridge 在当前 profile 下保持绿色。
 
 这不表示完整 `Microsoft.NETCore.App`、真实 Unity/Godot SDK binding、完整 debugger、动态 native codegen、Socket 网络栈或多线程 runtime 已完成。
 
