@@ -23,7 +23,7 @@ RtResult<int32_t> SystemReflectionRuntimeModule::get_metadata_token(vm::RtReflec
     RET_OK(static_cast<int32_t>(mod->get_module_token()));
 }
 
-static RtResult<intptr_t> get_metadata_import(vm::RtReflectionModule* module) noexcept
+RtResult<intptr_t> get_metadata_import(vm::RtReflectionModule* module) noexcept
 {
     DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtModuleDef*, mod, vm::Reflection::get_module_from_reflection_object(module));
     RET_OK(reinterpret_cast<intptr_t>(mod));
@@ -115,8 +115,8 @@ static RtResult<const uint8_t*> metadata_import_get_mvid_bytes(metadata::RtModul
     RET_OK(heap.data + offset);
 }
 
-static RtResult<int32_t> metadata_import_get_property_props(metadata::RtModuleDef* module, int32_t md_token, void** name,
-                                                            int32_t* property_attributes, MetadataConstArray* signature) noexcept
+RtResult<int32_t> metadata_import_get_property_props(metadata::RtModuleDef* module, int32_t md_token, void** name,
+                                                     int32_t* property_attributes, MetadataConstArray* signature) noexcept
 {
     if (module == nullptr || name == nullptr || property_attributes == nullptr || signature == nullptr)
     {
@@ -145,8 +145,8 @@ static RtResult<int32_t> metadata_import_get_property_props(metadata::RtModuleDe
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_event_props(metadata::RtModuleDef* module, int32_t md_token, void** name,
-                                                         int32_t* event_attributes) noexcept
+RtResult<int32_t> metadata_import_get_event_props(metadata::RtModuleDef* module, int32_t md_token, void** name,
+                                                  int32_t* event_attributes) noexcept
 {
     if (module == nullptr || name == nullptr || event_attributes == nullptr)
     {
@@ -172,8 +172,8 @@ static RtResult<int32_t> metadata_import_get_event_props(metadata::RtModuleDef* 
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_field_def_props(metadata::RtModuleDef* module, int32_t md_token,
-                                                             int32_t* field_attributes) noexcept
+RtResult<int32_t> metadata_import_get_field_def_props(metadata::RtModuleDef* module, int32_t md_token,
+                                                      int32_t* field_attributes) noexcept
 {
     if (module == nullptr || field_attributes == nullptr)
     {
@@ -196,8 +196,8 @@ static RtResult<int32_t> metadata_import_get_field_def_props(metadata::RtModuleD
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_param_def_props(metadata::RtModuleDef* module, int32_t md_token, int32_t* sequence,
-                                                             int32_t* attributes) noexcept
+RtResult<int32_t> metadata_import_get_param_def_props(metadata::RtModuleDef* module, int32_t md_token, int32_t* sequence,
+                                                      int32_t* attributes) noexcept
 {
     if (module == nullptr || sequence == nullptr || attributes == nullptr)
     {
@@ -221,8 +221,8 @@ static RtResult<int32_t> metadata_import_get_param_def_props(metadata::RtModuleD
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_field_marshal(metadata::RtModuleDef* module, int32_t md_token,
-                                                           MetadataConstArray* field_marshal) noexcept
+RtResult<int32_t> metadata_import_get_field_marshal(metadata::RtModuleDef* module, int32_t md_token,
+                                                    MetadataConstArray* field_marshal) noexcept
 {
     if (module == nullptr || field_marshal == nullptr)
     {
@@ -264,8 +264,8 @@ static RtResult<int32_t> metadata_import_get_field_marshal(metadata::RtModuleDef
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_field_offset(metadata::RtModuleDef* module, int32_t type_token_value, int32_t field_token_value,
-                                                          int32_t* offset, bool* found) noexcept
+RtResult<int32_t> metadata_import_get_field_offset(metadata::RtModuleDef* module, int32_t type_token_value, int32_t field_token_value,
+                                                   int32_t* offset, bool* found) noexcept
 {
     if (module == nullptr || offset == nullptr || found == nullptr)
     {
@@ -298,8 +298,8 @@ static RtResult<int32_t> metadata_import_get_field_offset(metadata::RtModuleDef*
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_class_layout(metadata::RtModuleDef* module, int32_t type_token_value,
-                                                          int32_t* pack_size, int32_t* class_size) noexcept
+RtResult<int32_t> metadata_import_get_class_layout(metadata::RtModuleDef* module, int32_t type_token_value,
+                                                   int32_t* pack_size, int32_t* class_size) noexcept
 {
     if (module == nullptr || pack_size == nullptr || class_size == nullptr)
     {
@@ -331,9 +331,9 @@ static RtResult<int32_t> metadata_import_get_class_layout(metadata::RtModuleDef*
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_default_value(metadata::RtModuleDef* module, int32_t md_token, int64_t* value,
-                                                           const uint16_t** string_metadata_encoding, int32_t* length,
-                                                           int32_t* cor_element_type) noexcept
+RtResult<int32_t> metadata_import_get_default_value(metadata::RtModuleDef* module, int32_t md_token, int64_t* value,
+                                                    const uint16_t** string_metadata_encoding, int32_t* length,
+                                                    int32_t* cor_element_type) noexcept
 {
     if (module == nullptr || value == nullptr || string_metadata_encoding == nullptr || length == nullptr ||
         cor_element_type == nullptr)
@@ -401,8 +401,8 @@ static RtResult<int32_t> metadata_import_get_default_value(metadata::RtModuleDef
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_user_string(metadata::RtModuleDef* module, int32_t md_token,
-                                                         const uint16_t** string_metadata_encoding, int32_t* length) noexcept
+RtResult<int32_t> metadata_import_get_user_string(metadata::RtModuleDef* module, int32_t md_token,
+                                                  const uint16_t** string_metadata_encoding, int32_t* length) noexcept
 {
     if (string_metadata_encoding == nullptr || length == nullptr)
     {
@@ -422,7 +422,7 @@ static RtResult<int32_t> metadata_import_get_user_string(metadata::RtModuleDef* 
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_scope_props(metadata::RtModuleDef* module, uint8_t* mvid) noexcept
+RtResult<int32_t> metadata_import_get_scope_props(metadata::RtModuleDef* module, uint8_t* mvid) noexcept
 {
     if (mvid == nullptr)
     {
@@ -439,8 +439,8 @@ static RtResult<int32_t> metadata_import_get_scope_props(metadata::RtModuleDef* 
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_signature_from_token(metadata::RtModuleDef* module, int32_t md_token,
-                                                                  MetadataConstArray* signature) noexcept
+RtResult<int32_t> metadata_import_get_signature_from_token(metadata::RtModuleDef* module, int32_t md_token,
+                                                           MetadataConstArray* signature) noexcept
 {
     if (module == nullptr || signature == nullptr)
     {
@@ -503,8 +503,8 @@ static RtResult<int32_t> metadata_import_get_signature_from_token(metadata::RtMo
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_member_ref_props(metadata::RtModuleDef* module, int32_t md_token,
-                                                              MetadataConstArray* signature) noexcept
+RtResult<int32_t> metadata_import_get_member_ref_props(metadata::RtModuleDef* module, int32_t md_token,
+                                                       MetadataConstArray* signature) noexcept
 {
     metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(md_token));
     if (token.table_type != metadata::TableType::MemberRef)
@@ -514,8 +514,8 @@ static RtResult<int32_t> metadata_import_get_member_ref_props(metadata::RtModule
     return metadata_import_get_signature_from_token(module, md_token, signature);
 }
 
-static RtResult<int32_t> metadata_import_get_sig_of_method_def(metadata::RtModuleDef* module, int32_t md_token,
-                                                               MetadataConstArray* signature) noexcept
+RtResult<int32_t> metadata_import_get_sig_of_method_def(metadata::RtModuleDef* module, int32_t md_token,
+                                                        MetadataConstArray* signature) noexcept
 {
     metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(md_token));
     if (token.table_type != metadata::TableType::Method)
@@ -525,8 +525,8 @@ static RtResult<int32_t> metadata_import_get_sig_of_method_def(metadata::RtModul
     return metadata_import_get_signature_from_token(module, md_token, signature);
 }
 
-static RtResult<int32_t> metadata_import_get_sig_of_field_def(metadata::RtModuleDef* module, int32_t md_token,
-                                                              MetadataConstArray* signature) noexcept
+RtResult<int32_t> metadata_import_get_sig_of_field_def(metadata::RtModuleDef* module, int32_t md_token,
+                                                       MetadataConstArray* signature) noexcept
 {
     metadata::RtToken token = metadata::RtToken::decode(static_cast<metadata::EncodedTokenId>(md_token));
     if (token.table_type != metadata::TableType::Field)
@@ -536,9 +536,9 @@ static RtResult<int32_t> metadata_import_get_sig_of_field_def(metadata::RtModule
     return metadata_import_get_signature_from_token(module, md_token, signature);
 }
 
-static RtResult<int32_t> metadata_import_get_custom_attribute_props(metadata::RtModuleDef* module, int32_t md_token,
-                                                                    int32_t* constructor_token,
-                                                                    MetadataConstArray* signature) noexcept
+RtResult<int32_t> metadata_import_get_custom_attribute_props(metadata::RtModuleDef* module, int32_t md_token,
+                                                             int32_t* constructor_token,
+                                                             MetadataConstArray* signature) noexcept
 {
     if (module == nullptr || constructor_token == nullptr || signature == nullptr)
     {
@@ -763,7 +763,7 @@ static RtResult<int32_t> find_enclosing_typedef(metadata::RtModuleDef* module, u
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_parent_token(metadata::RtModuleDef* module, int32_t md_token, int32_t* parent_token) noexcept
+RtResult<int32_t> metadata_import_get_parent_token(metadata::RtModuleDef* module, int32_t md_token, int32_t* parent_token) noexcept
 {
     if (module == nullptr || parent_token == nullptr)
     {
@@ -997,7 +997,7 @@ static RtResult<int32_t> metadata_import_get_parent_token(metadata::RtModuleDef*
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_name(metadata::RtModuleDef* module, int32_t md_token, void** name) noexcept
+RtResult<int32_t> metadata_import_get_name(metadata::RtModuleDef* module, int32_t md_token, void** name) noexcept
 {
     if (module == nullptr || name == nullptr)
     {
@@ -1119,7 +1119,7 @@ static RtResult<int32_t> metadata_import_get_name(metadata::RtModuleDef* module,
     RET_OK(0);
 }
 
-static RtResult<int32_t> metadata_import_get_namespace(metadata::RtModuleDef* module, int32_t md_token, void** namespaze) noexcept
+RtResult<int32_t> metadata_import_get_namespace(metadata::RtModuleDef* module, int32_t md_token, void** namespaze) noexcept
 {
     if (module == nullptr || namespaze == nullptr)
     {

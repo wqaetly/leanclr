@@ -496,7 +496,7 @@ namespace LeanAOT.ToCpp
             if (typeName == castToTypeName)
                 return GetEvalVariableName(var);
             else
-                return $"({castToTypeName}){GetEvalVariableName(var)}";
+                return MayFoldCast(typeName, castToTypeName, GetEvalVariableName(var));
         }
 
         private string GetTypeName(EvalVariable evalVar)
@@ -1036,6 +1036,26 @@ namespace LeanAOT.ToCpp
             if (srcTypeName == dstTypeName)
             {
                 return expr;
+            }
+            if (MethodGenerationUtil.IsIntPtrBackedRuntimeHandleInternalTypeName(dstTypeName))
+            {
+                return $"{ConstStrings.CodegenNamespace}::make_intptr_value_type<{dstTypeName}>({expr})";
+            }
+            if (MethodGenerationUtil.IsIntPtrBackedRuntimeHandleInternalPointerTypeName(srcTypeName))
+            {
+                return $"({dstTypeName})(({expr})->__field_0)";
+            }
+            if (MethodGenerationUtil.IsIntPtrBackedRuntimeHandleInternalTypeName(srcTypeName))
+            {
+                return $"({dstTypeName})(({expr}).__field_0)";
+            }
+            if (srcTypeName == ConstStrings.TypedByRefTypeName && MethodGenerationUtil.IsTypedReferenceValueTypeName(dstTypeName))
+            {
+                return $"{ConstStrings.CodegenNamespace}::make_typed_reference_value_type<{dstTypeName}>({expr})";
+            }
+            if (MethodGenerationUtil.IsTypedReferenceValueTypeName(srcTypeName) && dstTypeName == ConstStrings.TypedByRefTypeName)
+            {
+                return $"{ConstStrings.CodegenNamespace}::make_runtime_typed_reference({expr})";
             }
             else
             {

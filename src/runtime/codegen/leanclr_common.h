@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <type_traits>
+#include <utility>
 #include "vm/rt_managed_types.h"
 #include "vm/rt_exception.h"
 #include "vm/method.h"
@@ -345,6 +347,116 @@ static T select_arch(T v32, T v64)
 #else
     return v32;
 #endif
+}
+
+template <typename T>
+struct is_rt_result : std::false_type
+{};
+
+template <typename T>
+struct is_rt_result<RtResult<T>> : std::true_type
+{};
+
+template <typename T>
+struct remove_cvref
+{
+    typedef typename std::remove_cv<typename std::remove_reference<T>::type>::type type;
+};
+
+template <typename Dst, typename Src>
+inline RtResult<Dst> wrap_result_to_impl(Src result, std::true_type) noexcept
+{
+    if (result.is_err())
+    {
+        return result.unwrap_err();
+    }
+    return RtResult<Dst>::Ok((Dst)result.unwrap());
+}
+
+template <typename Dst, typename Src>
+inline RtResult<Dst> wrap_result_to_impl(Src value, std::false_type) noexcept
+{
+    return RtResult<Dst>::Ok((Dst)value);
+}
+
+template <typename Dst, typename Src>
+inline RtResult<Dst> wrap_result_to(Src value) noexcept
+{
+    typedef typename remove_cvref<Src>::type RawSrc;
+    return wrap_result_to_impl<Dst>(std::move(value), is_rt_result<RawSrc>());
+}
+
+template <typename Dst, typename Src>
+inline Dst make_intptr_value_type(Src value) noexcept
+{
+    Dst result = {};
+    result.__field_0 = (intptr_t)value;
+    return result;
+}
+
+template <typename Dst, typename Src>
+inline RtResult<Dst> wrap_intptr_result_to_impl(Src result, std::true_type) noexcept
+{
+    if (result.is_err())
+    {
+        return result.unwrap_err();
+    }
+    return RtResult<Dst>::Ok(make_intptr_value_type<Dst>(result.unwrap()));
+}
+
+template <typename Dst, typename Src>
+inline RtResult<Dst> wrap_intptr_result_to_impl(Src value, std::false_type) noexcept
+{
+    return RtResult<Dst>::Ok(make_intptr_value_type<Dst>(value));
+}
+
+template <typename Dst, typename Src>
+inline RtResult<Dst> wrap_intptr_result_to(Src value) noexcept
+{
+    typedef typename remove_cvref<Src>::type RawSrc;
+    return wrap_intptr_result_to_impl<Dst>(std::move(value), is_rt_result<RawSrc>());
+}
+
+template <typename Dst>
+inline Dst make_typed_reference_value_type(const vm::RtTypedReference& value) noexcept
+{
+    Dst result = {};
+    result.__field_0 = (uint8_t*)value.value;
+    result.__field_1 = (intptr_t)value.type_handle;
+    return result;
+}
+
+template <typename Src>
+inline vm::RtTypedReference make_runtime_typed_reference(const Src& value) noexcept
+{
+    vm::RtTypedReference result = {};
+    result.value = value.__field_0;
+    result.type_handle = (const void*)value.__field_1;
+    result.klass = nullptr;
+    return result;
+}
+
+template <typename Dst>
+inline RtResult<Dst> wrap_typed_reference_result_to_impl(RtResult<vm::RtTypedReference> result, std::true_type) noexcept
+{
+    if (result.is_err())
+    {
+        return result.unwrap_err();
+    }
+    return RtResult<Dst>::Ok(make_typed_reference_value_type<Dst>(result.unwrap()));
+}
+
+template <typename Dst>
+inline RtResult<Dst> wrap_typed_reference_result_to_impl(vm::RtTypedReference value, std::false_type) noexcept
+{
+    return RtResult<Dst>::Ok(make_typed_reference_value_type<Dst>(value));
+}
+
+template <typename Dst, typename Src>
+inline RtResult<Dst> wrap_typed_reference_result_to(Src value) noexcept
+{
+    typedef typename remove_cvref<Src>::type RawSrc;
+    return wrap_typed_reference_result_to_impl<Dst>(std::move(value), is_rt_result<RawSrc>());
 }
 
 using vm::RT_OBJECT_HEADER_SIZE;
