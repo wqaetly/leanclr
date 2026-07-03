@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Text;
+using dnlib.DotNet;
 using LeanAOT.GenerationPlan;
 using LeanAOT.ToCpp;
 using NLog;
@@ -681,6 +682,7 @@ internal class Program
             aotAssemblyNames = aotAssemblyNames,
             AotRulesEvaluator = aotRules,
             PgoIncludeIndex = pgoIncludeIndex,
+            ShouldSkipUnsupportedRuntimeMethod = method => ShouldSkipUnsupportedRuntimeIntrinsic(method, runtimeApiCatalog),
         };
         var manifest = new Manifest(manifestArgs);
 
@@ -717,5 +719,35 @@ internal class Program
         generator.Generate(conf);
 
         Il2CppCompatibilityOutputs.EmitIfRequested(globalServices.Config, manifest, dllSearchPaths, aotAssemblyNames, metaService);
+    }
+
+    private static bool ShouldSkipUnsupportedRuntimeIntrinsic(MethodDef method, RuntimeApiCatalog runtimeApiCatalog)
+    {
+        if (method == null || runtimeApiCatalog == null || !runtimeApiCatalog.IsCoreLibraryModule(method.Module))
+        {
+            return false;
+        }
+
+        bool isRuntimeIntrinsicsType = method.DeclaringType.FullName.StartsWith("System.Runtime.Intrinsics.", StringComparison.Ordinal) ||
+            method.DeclaringType.FullName == "System.Runtime.Intrinsics";
+        bool isMarkedIntrinsic = method.CustomAttributes.Any(IsIntrinsicAttribute) ||
+            method.DeclaringType.CustomAttributes.Any(IsIntrinsicAttribute);
+        if (!isRuntimeIntrinsicsType && !isMarkedIntrinsic)
+        {
+            return false;
+        }
+
+        if (runtimeApiCatalog.TryGetIcallOrIntrinsic(method, out _, out _))
+        {
+            return false;
+        }
+
+        return !method.IsConstructor || !runtimeApiCatalog.TryGetIcallOrIntrinsicNewobj(method, out _, out _);
+    }
+
+    private static bool IsIntrinsicAttribute(CustomAttribute attribute)
+    {
+        return attribute.TypeFullName == "System.Runtime.CompilerServices.IntrinsicAttribute" ||
+            attribute.AttributeType.Name == "IntrinsicAttribute";
     }
 }

@@ -681,7 +681,12 @@ internal static class AotBenchmarkHost
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            acc += 14 + DecimalLength(round & 1023) + DecimalLength((round * 17) & 255);
+            var builder = new StringBuilder(64);
+            builder.Append("entity:");
+            builder.Append(round & 1023);
+            builder.Append(":state:");
+            builder.Append((round * 17) & 255);
+            acc += builder.ToString().Length;
         }
 
         return acc;
