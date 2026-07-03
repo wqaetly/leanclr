@@ -698,8 +698,12 @@ internal static class AotBenchmarkHost
         long acc = 0;
         for (int round = 0; round < iterations; round++)
         {
-            int value = NumericValue(round & 7);
-            acc += DecimalLength(value + round) + value;
+            string text = NumericText(round & 7);
+            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
+            {
+                string formatted = (value + round).ToString(CultureInfo.InvariantCulture);
+                acc += formatted.Length + value;
+            }
         }
 
         return acc;

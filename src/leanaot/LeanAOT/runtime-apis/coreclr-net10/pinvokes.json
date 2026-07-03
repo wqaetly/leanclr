@@ -1,18 +1,28 @@
 {
-  "staticLinkedMethods": {},
+  "staticLinkedMethods": {
+    "QCall": [
+      "Environment_GetProcessorCount",
+      "MarshalNative_IsBuiltInComSupported"
+    ]
+  },
   "runtimeApiNames": [
     "System.Reflection.CustomAttribute::<CreateCustomAttributeInstance>g____PInvoke|30_0(System.Runtime.CompilerServices.QCallModule,System.Runtime.CompilerServices.ObjectHandleOnStack,System.Runtime.CompilerServices.ObjectHandleOnStack,System.IntPtr*,System.IntPtr,System.Int32*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "System.MdUtf8String::<EqualsCaseInsensitive>g____PInvoke|0_0(System.Void*,System.Void*,System.Int32)",
     "System.Reflection.MetadataImport::<Enum>g____PInvoke|8_0(System.IntPtr,System.Int32,System.Int32,System.Int32*,System.Int32*,System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "Interop/Kernel32::<GetCurrentDirectory>g____PInvoke|131_0(System.UInt32,System.Char*)",
     "Interop/Kernel32::<GetFullPathNameW>g____PInvoke|143_0(System.Char*,System.UInt32,System.Char*,System.IntPtr)",
+    "Interop/Kernel32::GetCPInfo(System.UInt32,Interop/Kernel32/CPINFO*)",
     "System.Runtime.InteropServices.NativeLibrary::<LoadFromPath>g____PInvoke|1_0(System.UInt16*,System.Int32)",
     "System.Runtime.InteropServices.NativeLibrary::<LoadByName>g____PInvoke|2_0(System.UInt16*,System.Runtime.CompilerServices.QCallAssembly,System.Int32,System.UInt32,System.Int32)",
     "System.Runtime.InteropServices.NativeLibrary::<GetSymbol>g____PInvoke|4_0(System.IntPtr,System.UInt16*,System.Int32)",
     "System.Runtime.InteropServices.NativeLibrary::FreeLib(System.IntPtr)",
     "System.Runtime.InteropServices.Marshal::<SizeOfHelper>g____PInvoke|3_0(System.Runtime.CompilerServices.QCallTypeHandle,System.Int32)",
+    "System.Runtime.InteropServices.Marshal::<IsBuiltInComSupportedInternal>g____PInvoke|30_0()",
+    "MarshalNative_IsBuiltInComSupported()",
     "Interop/Ole32::CoCreateGuid(System.Guid*)",
     "System.GC::AllocateNewArray(System.IntPtr,System.Int32,System.GC/GC_ALLOC_FLAGS,System.Runtime.CompilerServices.ObjectHandleOnStack)",
+    "System.Environment::<get_ProcessorCount>g____PInvoke|6_0()",
+    "Environment_GetProcessorCount()",
     "System.GC::_WaitForPendingFinalizers()",
     "System.GC::ReRegisterForFinalize(System.Runtime.CompilerServices.ObjectHandleOnStack)",
     "Interop/Kernel32::<CloseHandle>g____PInvoke|277_0(System.IntPtr)",

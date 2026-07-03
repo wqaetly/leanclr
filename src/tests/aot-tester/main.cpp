@@ -88,15 +88,6 @@ static void print_error_and_exit(const std::string& err_message, RtErr err)
         std::exit(-1);
     }
 
-    const metadata::RtPropertyInfo* prop = vm::Class::get_property_for_name(ex->klass, "StackTrace", true);
-    assert(prop);
-    auto ret = vm::Runtime::invoke_with_run_cctor(prop->get_method, ex, nullptr);
-    if (ret.is_err())
-    {
-        std::cerr << "Failed to get exception stack trace" << std::endl;
-        std::exit(-1);
-    }
-
     std::cerr << std::endl;
     std::cerr << std::endl;
 
@@ -135,6 +126,20 @@ static void print_error_and_exit(const std::string& err_message, RtErr err)
     if (ex->inner_exception != nullptr)
     {
         std::cerr << std::endl;
+    }
+
+    const metadata::RtPropertyInfo* prop = vm::Class::get_property_for_name(ex->klass, "StackTrace", true);
+    if (!prop)
+    {
+        std::cerr << "Failed to find exception stack trace property" << std::endl;
+        std::exit(-1);
+    }
+
+    auto ret = vm::Runtime::invoke_with_run_cctor(prop->get_method, ex, nullptr);
+    if (ret.is_err())
+    {
+        std::cerr << "Failed to get exception stack trace, error: " << static_cast<int>(ret.unwrap_err()) << std::endl;
+        std::exit(-1);
     }
 
     sb.clear();

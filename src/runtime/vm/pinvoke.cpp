@@ -52,6 +52,31 @@ const PInvokeRegistry* PInvokes::get_pinvoke(const char* name)
 
 PInvokeFunction PInvokes::get_pinvoke_function(const char* dll_name_no_ext, const char* function_name)
 {
+    if (function_name == nullptr)
+    {
+        return nullptr;
+    }
+
+    if (dll_name_no_ext != nullptr && dll_name_no_ext[0] != '\0')
+    {
+        utils::Utf8StringBuilder sb;
+        sb.append_char('[');
+        sb.append_cstr(dll_name_no_ext);
+        sb.append_char(']');
+        sb.append_cstr(function_name);
+        auto it = g_internalcall_map.find(sb.get_const_chars());
+        if (it != g_internalcall_map.end() && it->second.func != nullptr)
+        {
+            return it->second.func;
+        }
+    }
+
+    auto it = g_internalcall_map.find(function_name);
+    if (it != g_internalcall_map.end() && it->second.func != nullptr)
+    {
+        return it->second.func;
+    }
+
     return nullptr;
 }
 

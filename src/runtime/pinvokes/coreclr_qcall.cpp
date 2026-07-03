@@ -2706,12 +2706,22 @@ RtResultVoid kernel32_get_last_error_invoker(metadata::RtManagedMethodPointer, c
     RET_VOID_OK();
 }
 
+static uint32_t LEANCLR_PINVOKE_CALL_WINAPI kernel32_get_last_error_native() noexcept
+{
+    return static_cast<uint32_t>(vm::Marshal::get_last_win32_error());
+}
+
 RtResultVoid kernel32_set_last_error_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject*) noexcept
 {
     int32_t error = interp::EvalStackOp::get_param<int32_t>(params, 0);
     vm::Marshal::set_last_win32_error(error);
     RET_VOID_OK();
+}
+
+static void LEANCLR_PINVOKE_CALL_WINAPI kernel32_set_last_error_native(uint32_t error) noexcept
+{
+    vm::Marshal::set_last_win32_error(static_cast<int32_t>(error));
 }
 
 RtResultVoid kernel32_query_performance_frequency_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
@@ -3413,6 +3423,13 @@ RtResultVoid kernel32_get_environment_variable_ptr_invoker(metadata::RtManagedMe
     RET_VOID_OK();
 }
 
+static uint32_t LEANCLR_PINVOKE_CALL_WINAPI kernel32_get_environment_variable_native(intptr_t variable_name, intptr_t value,
+                                                                                    uint32_t value_length) noexcept
+{
+    return platform::RtSys::get_environment_variable(reinterpret_cast<Utf16Char*>(variable_name), reinterpret_cast<Utf16Char*>(value),
+                                                     value_length);
+}
+
 RtResultVoid kernel32_set_environment_variable_ptr_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
                                                            const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
 {
@@ -3424,21 +3441,35 @@ RtResultVoid kernel32_set_environment_variable_ptr_invoker(metadata::RtManagedMe
     RET_VOID_OK();
 }
 
-RtResultVoid kernel32_get_cp_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
-                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+static int32_t LEANCLR_PINVOKE_CALL_WINAPI kernel32_set_environment_variable_native(intptr_t variable_name, intptr_t value) noexcept
 {
-    uint32_t code_page = interp::EvalStackOp::get_param<uint32_t>(params, 0);
-    RtCpInfo* cp_info = interp::EvalStackOp::get_param<RtCpInfo*>(params, 1);
+    return platform::RtSys::set_environment_variable(reinterpret_cast<Utf16Char*>(variable_name), reinterpret_cast<Utf16Char*>(value));
+}
+
+extern "C" int32_t LEANCLR_PINVOKE_CALL_WINAPI GetCPInfo(uint32_t code_page, RtCpInfo* cp_info) noexcept
+{
     if (cp_info == nullptr)
     {
-        interp::EvalStackOp::set_return(ret, static_cast<int32_t>(0));
-        RET_VOID_OK();
+        return 0;
     }
 
     std::memset(cp_info, 0, sizeof(RtCpInfo));
     cp_info->max_char_size = code_page == 65001 ? 4u : 2u;
     cp_info->default_char[0] = static_cast<uint8_t>('?');
-    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(1));
+    return 1;
+}
+
+static int32_t LEANCLR_PINVOKE_CALL_WINAPI kernel32_get_cp_info_native(uint32_t code_page, intptr_t cp_info) noexcept
+{
+    return GetCPInfo(code_page, reinterpret_cast<RtCpInfo*>(cp_info));
+}
+
+RtResultVoid kernel32_get_cp_info_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
+                                          const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    uint32_t code_page = interp::EvalStackOp::get_param<uint32_t>(params, 0);
+    RtCpInfo* cp_info = interp::EvalStackOp::get_param<RtCpInfo*>(params, 1);
+    interp::EvalStackOp::set_return(ret, GetCPInfo(code_page, cp_info));
     RET_VOID_OK();
 }
 
@@ -3467,6 +3498,13 @@ RtResultVoid kernel32_get_locale_info_ex_ptr_invoker(metadata::RtManagedMethodPo
     int32_t result = platform::RtSys::get_locale_info_ex(locale_name, lc_type, reinterpret_cast<Utf16Char*>(locale_data), locale_data_length);
     interp::EvalStackOp::set_return(ret, result);
     RET_VOID_OK();
+}
+
+static int32_t LEANCLR_PINVOKE_CALL_WINAPI kernel32_get_locale_info_ex_native(intptr_t locale_name, uint32_t lc_type, intptr_t locale_data,
+                                                                              int32_t locale_data_length) noexcept
+{
+    return platform::RtSys::get_locale_info_ex(reinterpret_cast<Utf16Char*>(locale_name), lc_type,
+                                              reinterpret_cast<Utf16Char*>(locale_data), locale_data_length);
 }
 
 RtResultVoid kernel32_lcid_to_locale_name_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*,
@@ -3806,6 +3844,11 @@ RtResultVoid globalization_load_icu_invoker(metadata::RtManagedMethodPointer, co
     RET_VOID_OK();
 }
 
+extern "C" int32_t LEANCLR_PINVOKE_CALL_WINAPI GlobalizationNative_LoadICU() noexcept
+{
+    return 0;
+}
+
 RtResultVoid advapi32_event_register_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject* params,
                                              interp::RtStackObject* ret) noexcept
 {
@@ -3849,10 +3892,21 @@ RtResultVoid advapi32_event_set_information_invoker(metadata::RtManagedMethodPoi
     RET_VOID_OK();
 }
 
+extern "C" int32_t LEANCLR_PINVOKE_CALL_WINAPI Environment_GetProcessorCount() noexcept
+{
+    int32_t processor_count = vm::Environment::get_processor_count();
+    return processor_count > 0 ? processor_count : 1;
+}
+
+extern "C" int32_t LEANCLR_PINVOKE_CALL_WINAPI MarshalNative_IsBuiltInComSupported() noexcept
+{
+    return 0;
+}
+
 RtResultVoid environment_get_processor_count_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
                                                      interp::RtStackObject* ret) noexcept
 {
-    interp::EvalStackOp::set_return(ret, static_cast<int32_t>(1));
+    interp::EvalStackOp::set_return(ret, Environment_GetProcessorCount());
     RET_VOID_OK();
 }
 
@@ -6058,10 +6112,16 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLastError", nullptr, kernel32_get_last_error_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetLastError()", nullptr, kernel32_get_last_error_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::GetLastError", nullptr, kernel32_get_last_error_invoker);
+    vm::PInvokes::register_pinvoke("[kernel32.dll]GetLastError", (vm::PInvokeFunction)kernel32_get_last_error_native,
+                                   kernel32_get_last_error_invoker);
+    vm::PInvokes::register_pinvoke("GetLastError", (vm::PInvokeFunction)kernel32_get_last_error_native, kernel32_get_last_error_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::SetLastError(System.Int32)", nullptr, kernel32_set_last_error_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::SetLastError", nullptr, kernel32_set_last_error_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::SetLastError(System.Int32)", nullptr, kernel32_set_last_error_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::SetLastError", nullptr, kernel32_set_last_error_invoker);
+    vm::PInvokes::register_pinvoke("[kernel32.dll]SetLastError", (vm::PInvokeFunction)kernel32_set_last_error_native,
+                                   kernel32_set_last_error_invoker);
+    vm::PInvokes::register_pinvoke("SetLastError", (vm::PInvokeFunction)kernel32_set_last_error_native, kernel32_set_last_error_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::QueryPerformanceFrequency(System.Int64*)", nullptr,
                                    kernel32_query_performance_frequency_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::QueryPerformanceFrequency", nullptr, kernel32_query_performance_frequency_invoker);
@@ -6655,6 +6715,10 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    kernel32_get_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::<GetEnvironmentVariable>g____PInvoke|296_0", nullptr,
                                    kernel32_get_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("[kernel32.dll]GetEnvironmentVariableW", (vm::PInvokeFunction)kernel32_get_environment_variable_native,
+                                   kernel32_get_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("GetEnvironmentVariableW", (vm::PInvokeFunction)kernel32_get_environment_variable_native,
+                                   kernel32_get_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0(System.UInt16*,System.UInt16*)",
                                    nullptr, kernel32_set_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0", nullptr,
@@ -6666,6 +6730,10 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke(".Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0(System.UInt16*,System.UInt16*)",
                                    nullptr, kernel32_set_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::<SetEnvironmentVariable>g____PInvoke|316_0", nullptr,
+                                   kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("[kernel32.dll]SetEnvironmentVariableW", (vm::PInvokeFunction)kernel32_set_environment_variable_native,
+                                   kernel32_set_environment_variable_ptr_invoker);
+    vm::PInvokes::register_pinvoke("SetEnvironmentVariableW", (vm::PInvokeFunction)kernel32_set_environment_variable_native,
                                    kernel32_set_environment_variable_ptr_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::SetEnvironmentVariable(System.UInt16*,System.UInt16*)",
                                    nullptr, kernel32_set_environment_variable_ptr_invoker);
@@ -6684,6 +6752,9 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke(".Kernel32::GetCPInfo(System.UInt32,Interop/Kernel32/CPINFO*)", nullptr,
                                    kernel32_get_cp_info_invoker);
     vm::PInvokes::register_pinvoke(".Kernel32::GetCPInfo", nullptr, kernel32_get_cp_info_invoker);
+    vm::PInvokes::register_pinvoke("[kernel32.dll]GetCPInfo", (vm::PInvokeFunction)kernel32_get_cp_info_native,
+                                   kernel32_get_cp_info_invoker);
+    vm::PInvokes::register_pinvoke("GetCPInfo", (vm::PInvokeFunction)kernel32_get_cp_info_native, kernel32_get_cp_info_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
                                    kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::GetLocaleInfoEx", nullptr, kernel32_get_locale_info_ex_invoker);
@@ -6701,6 +6772,10 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0(System.String,System.UInt32,System.Char*,System.Int32)", nullptr,
                                    kernel32_get_locale_info_ex_invoker);
     vm::PInvokes::register_pinvoke("Kernel32::<GetLocaleInfoEx>g____PInvoke|34_0", nullptr,
+                                   kernel32_get_locale_info_ex_ptr_invoker);
+    vm::PInvokes::register_pinvoke("[kernel32.dll]GetLocaleInfoEx", (vm::PInvokeFunction)kernel32_get_locale_info_ex_native,
+                                   kernel32_get_locale_info_ex_ptr_invoker);
+    vm::PInvokes::register_pinvoke("GetLocaleInfoEx", (vm::PInvokeFunction)kernel32_get_locale_info_ex_native,
                                    kernel32_get_locale_info_ex_ptr_invoker);
     vm::PInvokes::register_pinvoke("Interop/Kernel32::LCIDToLocaleName(System.Int32,System.Char*,System.Int32,System.UInt32)", nullptr,
                                    kernel32_lcid_to_locale_name_invoker);
@@ -6891,6 +6966,10 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("Interop/Globalization::LoadICU", nullptr, globalization_load_icu_invoker);
     vm::PInvokes::register_pinvoke("Globalization::LoadICU()", nullptr, globalization_load_icu_invoker);
     vm::PInvokes::register_pinvoke("Globalization::LoadICU", nullptr, globalization_load_icu_invoker);
+    vm::PInvokes::register_pinvoke("[System.Globalization.Native]GlobalizationNative_LoadICU",
+                                   (vm::PInvokeFunction)GlobalizationNative_LoadICU, globalization_load_icu_invoker);
+    vm::PInvokes::register_pinvoke("GlobalizationNative_LoadICU", (vm::PInvokeFunction)GlobalizationNative_LoadICU,
+                                   globalization_load_icu_invoker);
     vm::PInvokes::register_pinvoke("Interop/Advapi32::EventRegister", nullptr, advapi32_event_register_invoker);
     vm::PInvokes::register_pinvoke(
         "Interop/Advapi32::EventRegister(System.Guid*,delegate* unmanaged[Unmanaged]<System.Guid*,System.Int32,System.Byte,System.Int64,System.Int64,Interop/Advapi32/EVENT_FILTER_DESCRIPTOR*,System.Void*,System.Void>,System.Void*,System.Int64*)",
@@ -6919,6 +6998,8 @@ void register_coreclr_qcall_pinvokes() noexcept
         nullptr, advapi32_event_set_information_invoker);
     vm::PInvokes::register_pinvoke("System.Environment::GetProcessorCount()", nullptr, environment_get_processor_count_invoker);
     vm::PInvokes::register_pinvoke("System.Environment::GetProcessorCount", nullptr, environment_get_processor_count_invoker);
+    vm::PInvokes::register_pinvoke("Environment_GetProcessorCount()", nullptr, environment_get_processor_count_invoker);
+    vm::PInvokes::register_pinvoke("Environment_GetProcessorCount", nullptr, environment_get_processor_count_invoker);
     vm::PInvokes::register_pinvoke("System.GC::<_Collect>g____PInvoke|8_0(System.Int32,System.Int32,System.Byte)", nullptr,
                                    gc_collect_invoker);
     vm::PInvokes::register_pinvoke("System.GC::<_Collect>g____PInvoke|8_0", nullptr, gc_collect_invoker);
@@ -6993,6 +7074,8 @@ void register_coreclr_qcall_pinvokes() noexcept
                                    eventpipe_bool_false_invoker);
     vm::PInvokes::register_pinvoke("System.Runtime.InteropServices.Marshal::<IsBuiltInComSupportedInternal>g____PInvoke|30_0", nullptr,
                                    eventpipe_bool_false_invoker);
+    vm::PInvokes::register_pinvoke("MarshalNative_IsBuiltInComSupported()", nullptr, eventpipe_bool_false_invoker);
+    vm::PInvokes::register_pinvoke("MarshalNative_IsBuiltInComSupported", nullptr, eventpipe_bool_false_invoker);
     vm::PInvokes::register_pinvoke(
         "System.Reflection.Assembly::GetExecutingAssemblyNative(System.Runtime.CompilerServices.StackCrawlMarkHandle,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, assembly_get_executing_assembly_invoker);

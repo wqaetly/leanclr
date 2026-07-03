@@ -485,8 +485,18 @@
     "header": "icalls/system_runtime_interopservices_marshal.h"
   },
   {
+    "name": "System.Runtime.InteropServices.Marshal::GetLastPInvokeError()",
+    "func": "SystemRuntimeInteropServicesMarshal::get_last_win32_error",
+    "header": "icalls/system_runtime_interopservices_marshal.h"
+  },
+  {
     "name": "System.Runtime.InteropServices.Marshal::OffsetOf(System.Type,System.String)",
     "func": "SystemRuntimeInteropServicesMarshal::offset_of",
+    "header": "icalls/system_runtime_interopservices_marshal.h"
+  },
+  {
+    "name": "System.Runtime.InteropServices.Marshal::SetLastPInvokeError(System.Int32)",
+    "func": "SystemRuntimeInteropServicesMarshal::set_last_win32_error",
     "header": "icalls/system_runtime_interopservices_marshal.h"
   },
   {
