@@ -620,7 +620,7 @@ internal static class AotBenchmarkHost
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static long DelegateInvoke(int iterations)
     {
-        Func<int, int> fn = AotDelegateTarget;
+        Func<int, int> fn = static value => (value * 13) ^ (value >> 2);
         long acc = 0;
         for (int i = 0; i < iterations; i++)
         {
@@ -628,11 +628,6 @@ internal static class AotBenchmarkHost
         }
 
         return acc;
-    }
-
-    private static int AotDelegateTarget(int value)
-    {
-        return (value * 13) ^ (value >> 2);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
