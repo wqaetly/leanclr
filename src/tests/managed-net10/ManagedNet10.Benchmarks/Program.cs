@@ -394,7 +394,7 @@ internal static class Program
         s_sink ^= value;
     }
 
-    private sealed class Payload
+    internal sealed class Payload
     {
         private readonly int _left;
         private readonly int _right;
@@ -636,7 +636,7 @@ internal static class AotBenchmarkHost
         long acc = 0;
         for (int i = 0; i < iterations; i++)
         {
-            var payload = new AotPayload(i, i + 1);
+            var payload = new Program.Payload(i, i + 1);
             acc += payload.Sum();
         }
 
@@ -788,20 +788,4 @@ internal static class AotBenchmarkHost
         s_sink ^= value;
     }
 
-    private sealed class AotPayload
-    {
-        private readonly int _left;
-        private readonly int _right;
-
-        public AotPayload(int left, int right)
-        {
-            _left = left;
-            _right = right;
-        }
-
-        public int Sum()
-        {
-            return _left + _right;
-        }
-    }
 }
