@@ -15,6 +15,7 @@ class SystemType
     static RtResult<bool> get_is_value_type(vm::RtReflectionRuntimeType* runtime_type) noexcept;
     static RtResult<bool> equals(vm::RtReflectionRuntimeType* left, vm::RtReflectionRuntimeType* right) noexcept;
     static RtResult<bool> not_equals(vm::RtReflectionRuntimeType* left, vm::RtReflectionRuntimeType* right) noexcept;
+    static RtResult<bool> is_assignable_to(vm::RtReflectionRuntimeType* source_type, vm::RtReflectionRuntimeType* target_type) noexcept;
 };
 } // namespace intrinsics
 } // namespace leanclr

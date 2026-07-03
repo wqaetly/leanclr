@@ -3903,6 +3903,79 @@ extern "C" int32_t LEANCLR_PINVOKE_CALL_WINAPI MarshalNative_IsBuiltInComSupport
     return 0;
 }
 
+extern "C" int32_t LEANCLR_PINVOKE_CALL_WINAPI TypeHandle_GetCorElementType(intptr_t type_handle) noexcept
+{
+    auto result = get_cor_element_type(reinterpret_cast<void*>(type_handle));
+    return result.is_ok() ? result.unwrap() : 0;
+}
+
+struct QCallTypeHandleNative
+{
+    void* qcall_type_handle;
+    intptr_t native_handle;
+};
+
+struct ObjectHandleOnStackNative
+{
+    void* handle_slot;
+};
+
+struct RuntimeMethodHandleInternalNative
+{
+    void* value;
+};
+
+extern "C" void LEANCLR_PINVOKE_CALL_WINAPI RuntimeTypeHandle_GetInstantiation(QCallTypeHandleNative type_handle,
+                                                                                ObjectHandleOnStackNative types_handle,
+                                                                                int32_t runtime_array) noexcept
+{
+    auto result = get_type_instantiation(type_handle.qcall_type_handle, reinterpret_cast<void*>(type_handle.native_handle), runtime_array != 0);
+    if (result.is_ok() && types_handle.handle_slot != nullptr)
+    {
+        *reinterpret_cast<vm::RtArray**>(types_handle.handle_slot) = result.unwrap();
+    }
+}
+
+extern "C" int32_t LEANCLR_PINVOKE_CALL_WINAPI RuntimeTypeHandle_SatisfiesConstraints(QCallTypeHandleNative, QCallTypeHandleNative,
+                                                                                       RuntimeMethodHandleInternalNative,
+                                                                                       QCallTypeHandleNative) noexcept
+{
+    return 1;
+}
+
+extern "C" void LEANCLR_PINVOKE_CALL_WINAPI RuntimeTypeHandle_Instantiate(QCallTypeHandleNative type_handle,
+                                                                           intptr_t type_handles,
+                                                                           int32_t type_handle_count,
+                                                                           ObjectHandleOnStackNative result_handle) noexcept
+{
+    auto result = instantiate_runtime_type(
+        type_handle.qcall_type_handle,
+        reinterpret_cast<void*>(type_handle.native_handle),
+        reinterpret_cast<void**>(type_handles),
+        type_handle_count);
+    if (result.is_ok() && result_handle.handle_slot != nullptr)
+    {
+        *reinterpret_cast<vm::RtReflectionRuntimeType**>(result_handle.handle_slot) = result.unwrap();
+    }
+}
+
+extern "C" void LEANCLR_PINVOKE_CALL_WINAPI RuntimeTypeHandle_CreateInstanceForAnotherGenericParameter(
+    QCallTypeHandleNative type_handle,
+    intptr_t type_handles,
+    int32_t type_handle_count,
+    ObjectHandleOnStackNative result_handle) noexcept
+{
+    auto result = create_instance_for_generic_parameters(
+        type_handle.qcall_type_handle,
+        reinterpret_cast<void*>(type_handle.native_handle),
+        reinterpret_cast<void**>(type_handles),
+        type_handle_count);
+    if (result.is_ok() && result_handle.handle_slot != nullptr)
+    {
+        *reinterpret_cast<vm::RtObject**>(result_handle.handle_slot) = result.unwrap();
+    }
+}
+
 RtResultVoid environment_get_processor_count_invoker(metadata::RtManagedMethodPointer, const metadata::RtMethodInfo*, const interp::RtStackObject*,
                                                      interp::RtStackObject* ret) noexcept
 {
@@ -7233,6 +7306,10 @@ void register_coreclr_qcall_pinvokes() noexcept
     vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.TypeHandle::GetCorElementType(System.Void*)", nullptr,
                                    get_cor_element_type_invoker);
     vm::PInvokes::register_pinvoke("System.Runtime.CompilerServices.TypeHandle::GetCorElementType", nullptr, get_cor_element_type_invoker);
+    vm::PInvokes::register_pinvoke("[QCall]TypeHandle_GetCorElementType", (vm::PInvokeFunction)TypeHandle_GetCorElementType,
+                                   get_cor_element_type_invoker);
+    vm::PInvokes::register_pinvoke("TypeHandle_GetCorElementType", (vm::PInvokeFunction)TypeHandle_GetCorElementType,
+                                   get_cor_element_type_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeFieldHandle::<GetRVAFieldInfo>g____PInvoke|24_0(System.RuntimeFieldHandleInternal,System.Void**,System.UInt32*)",
         nullptr, get_rva_field_info_invoker);
@@ -7270,11 +7347,22 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.RuntimeTypeHandle::GetInstantiation(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.ObjectHandleOnStack,Interop/BOOL)",
         nullptr, runtime_type_handle_get_instantiation_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::GetInstantiation", nullptr, runtime_type_handle_get_instantiation_invoker);
+    vm::PInvokes::register_pinvoke("[QCall]RuntimeTypeHandle_GetInstantiation", (vm::PInvokeFunction)RuntimeTypeHandle_GetInstantiation,
+                                   runtime_type_handle_get_instantiation_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_GetInstantiation", (vm::PInvokeFunction)RuntimeTypeHandle_GetInstantiation,
+                                   runtime_type_handle_get_instantiation_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::Instantiate(System.Runtime.CompilerServices.QCallTypeHandle,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, runtime_type_handle_instantiate_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::Instantiate", nullptr, runtime_type_handle_instantiate_invoker);
-    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_Instantiate", nullptr, runtime_type_handle_instantiate_invoker);
+    vm::PInvokes::register_pinvoke("[QCall]RuntimeTypeHandle_Instantiate", (vm::PInvokeFunction)RuntimeTypeHandle_Instantiate,
+                                   runtime_type_handle_instantiate_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_Instantiate", (vm::PInvokeFunction)RuntimeTypeHandle_Instantiate,
+                                   runtime_type_handle_instantiate_invoker);
+    vm::PInvokes::register_pinvoke("[QCall]RuntimeTypeHandle_SatisfiesConstraints", (vm::PInvokeFunction)RuntimeTypeHandle_SatisfiesConstraints,
+                                   nullptr);
+    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_SatisfiesConstraints", (vm::PInvokeFunction)RuntimeTypeHandle_SatisfiesConstraints,
+                                   nullptr);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::MakeArray(System.Runtime.CompilerServices.QCallTypeHandle,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, runtime_type_handle_make_array_invoker);
@@ -7568,6 +7656,12 @@ void register_coreclr_qcall_pinvokes() noexcept
         "System.RuntimeTypeHandle::CreateInstanceForAnotherGenericParameter(System.Runtime.CompilerServices.QCallTypeHandle,System.IntPtr*,System.Int32,System.Runtime.CompilerServices.ObjectHandleOnStack)",
         nullptr, create_instance_for_another_generic_parameter_invoker);
     vm::PInvokes::register_pinvoke("System.RuntimeTypeHandle::CreateInstanceForAnotherGenericParameter", nullptr,
+                                   create_instance_for_another_generic_parameter_invoker);
+    vm::PInvokes::register_pinvoke("[QCall]RuntimeTypeHandle_CreateInstanceForAnotherGenericParameter",
+                                   (vm::PInvokeFunction)RuntimeTypeHandle_CreateInstanceForAnotherGenericParameter,
+                                   create_instance_for_another_generic_parameter_invoker);
+    vm::PInvokes::register_pinvoke("RuntimeTypeHandle_CreateInstanceForAnotherGenericParameter",
+                                   (vm::PInvokeFunction)RuntimeTypeHandle_CreateInstanceForAnotherGenericParameter,
                                    create_instance_for_another_generic_parameter_invoker);
     vm::PInvokes::register_pinvoke(
         "System.RuntimeTypeHandle::InternalAlloc(System.Runtime.CompilerServices.MethodTable*,System.Runtime.CompilerServices.ObjectHandleOnStack)",

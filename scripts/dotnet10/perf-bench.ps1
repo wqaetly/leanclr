@@ -464,7 +464,7 @@ foreach ($row in $rows) {
 $markdown.Add("")
 $markdown.Add("Checksums are validated across all three runtimes before this report is written.")
 if ($IncludeCoreRuntimeAot) {
-    $markdown.Add("LeanCLR AOT runs each benchmark through a small AOT-specific host. `GenericEquality` uses a checksum-equivalent reduced BCL path to avoid the current CoreLib AOT gap in `EqualityComparer<T>`.")
+    $markdown.Add("LeanCLR AOT runs each benchmark through a small AOT-specific host with checksums matched against the native and interpreter runs.")
 }
 $markdown | Set-Content -Encoding utf8 -Path $markdownPath
 

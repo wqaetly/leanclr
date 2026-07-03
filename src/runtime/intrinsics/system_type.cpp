@@ -81,6 +81,33 @@ RtResult<bool> SystemType::not_equals(vm::RtReflectionRuntimeType* left, vm::RtR
     RET_OK(!result);
 }
 
+RtResult<bool> SystemType::is_assignable_to(vm::RtReflectionRuntimeType* source_type, vm::RtReflectionRuntimeType* target_type) noexcept
+{
+    if (source_type == nullptr)
+    {
+        RET_ERR(RtErr::NullReference);
+    }
+    if (target_type == nullptr)
+    {
+        RET_OK(false);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, source_type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(&source_type->reflection_type));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(const metadata::RtTypeSig*, target_type_sig,
+                                            vm::Reflection::get_type_sig_from_reflection_type_object(&target_type->reflection_type));
+    if (source_type_sig->is_by_ref() != target_type_sig->is_by_ref())
+    {
+        RET_OK(false);
+    }
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, source_class, vm::Class::get_class_from_typesig(source_type_sig));
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(metadata::RtClass*, target_class, vm::Class::get_class_from_typesig(target_type_sig));
+    RET_ERR_ON_FAIL(vm::Class::initialize_all(source_class));
+    RET_ERR_ON_FAIL(vm::Class::initialize_all(target_class));
+    RET_OK(vm::Class::is_assignable_from(source_class, target_class));
+}
+
 /// @intrinsic: System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)
 static RtResultVoid get_type_from_handle_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
                                                  const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
@@ -135,6 +162,20 @@ static RtResultVoid not_equals_invoker(metadata::RtManagedMethodPointer methodPt
     RET_VOID_OK();
 }
 
+/// @intrinsic: System.Type::IsAssignableTo(System.Type)
+static RtResultVoid is_assignable_to_invoker(metadata::RtManagedMethodPointer methodPtr, const metadata::RtMethodInfo* method,
+                                             const interp::RtStackObject* params, interp::RtStackObject* ret) noexcept
+{
+    (void)methodPtr;
+    (void)method;
+    auto source_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 0);
+    auto target_type = interp::EvalStackOp::get_param<vm::RtReflectionRuntimeType*>(params, 1);
+
+    DECLARING_AND_UNWRAP_OR_RET_ERR_ON_FAIL(bool, result, SystemType::is_assignable_to(source_type, target_type));
+    interp::EvalStackOp::set_return(ret, result);
+    RET_VOID_OK();
+}
+
 static vm::IntrinsicEntry s_intrinsic_entries_system_type[] = {
     {"System.Type::GetTypeFromHandle(System.RuntimeTypeHandle)", (vm::IntrinsicFunction)&SystemType::get_type_from_handle,
      get_type_from_handle_invoker},
@@ -145,6 +186,7 @@ static vm::IntrinsicEntry s_intrinsic_entries_system_type[] = {
     {"System.Type::op_Equality", (vm::IntrinsicFunction)&SystemType::equals, equals_invoker},
     {"System.Type::op_Inequality(System.Type,System.Type)", (vm::IntrinsicFunction)&SystemType::not_equals, not_equals_invoker},
     {"System.Type::op_Inequality", (vm::IntrinsicFunction)&SystemType::not_equals, not_equals_invoker},
+    {"System.Type::IsAssignableTo(System.Type)", (vm::IntrinsicFunction)&SystemType::is_assignable_to, is_assignable_to_invoker},
 };
 
 utils::Span<vm::IntrinsicEntry> SystemType::get_intrinsic_entries() noexcept

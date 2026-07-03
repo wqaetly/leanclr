@@ -2,7 +2,12 @@
   "staticLinkedMethods": {
     "QCall": [
       "Environment_GetProcessorCount",
-      "MarshalNative_IsBuiltInComSupported"
+      "MarshalNative_IsBuiltInComSupported",
+      "RuntimeTypeHandle_CreateInstanceForAnotherGenericParameter",
+      "RuntimeTypeHandle_GetInstantiation",
+      "RuntimeTypeHandle_Instantiate",
+      "RuntimeTypeHandle_SatisfiesConstraints",
+      "TypeHandle_GetCorElementType"
     ]
   },
   "runtimeApiNames": [
@@ -97,6 +102,7 @@
     "System.RuntimeTypeHandle::IsCollectible(System.Runtime.CompilerServices.QCallTypeHandle)",
     "System.RuntimeTypeHandle::RegisterCollectibleTypeDependency(System.Runtime.CompilerServices.QCallTypeHandle,System.Runtime.CompilerServices.QCallAssembly)",
     "System.RuntimeType/BoxCache::GetBoxInfo(System.Runtime.CompilerServices.QCallTypeHandle,System.Object (System.Void*)*,System.Void**,System.Int32*,System.UInt32*)",
-    "System.RuntimeType/CreateUninitializedCache::GetCreateUninitializedInfo(System.Runtime.CompilerServices.QCallTypeHandle,System.Object (System.Void*)**,System.Void**)"
+    "System.RuntimeType/CreateUninitializedCache::GetCreateUninitializedInfo(System.Runtime.CompilerServices.QCallTypeHandle,System.Object (System.Void*)**,System.Void**)",
+    "System.Runtime.CompilerServices.TypeHandle::GetCorElementType(System.Void*)"
   ]
 }

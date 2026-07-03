@@ -60,6 +60,21 @@
     "header": "intrinsics/system_type.h"
   },
   {
+    "name": "System.Type::IsAssignableTo(System.Type)",
+    "func": "SystemType::is_assignable_to",
+    "header": "intrinsics/system_type.h"
+  },
+  {
+    "name": "System.RuntimeTypeHandle::CopyRuntimeTypeHandles(System.Type[],System.Int32&)",
+    "func": "SystemRuntimeTypeHandle::copy_runtime_type_handles",
+    "header": "intrinsics/system_runtimetypehandle.h"
+  },
+  {
+    "name": "System.RuntimeTypeHandle::Instantiate(System.Type[])",
+    "func": "SystemRuntimeTypeHandle::instantiate",
+    "header": "intrinsics/system_runtimetypehandle.h"
+  },
+  {
     "name": "System.Threading.Interlocked::CompareExchange<>",
     "func": "SystemThreadingInterlocked::compare_exchange",
     "header": "intrinsics/system_threading_interlocked.h"

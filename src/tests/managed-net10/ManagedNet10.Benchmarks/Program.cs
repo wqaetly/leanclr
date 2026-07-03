@@ -736,15 +736,18 @@ internal static class AotBenchmarkHost
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static long GenericEquality(int iterations)
     {
+        EqualityComparer<int> intComparer = EqualityComparer<int>.Default;
+        EqualityComparer<string> stringComparer = EqualityComparer<string>.Default;
+
         long acc = 0;
         for (int i = 0; i < iterations; i++)
         {
-            if ((i & 255) == ((i + 256) & 255))
+            if (intComparer.Equals(i & 255, (i + 256) & 255))
             {
                 acc++;
             }
 
-            if ((i & 7) == ((i + 8) & 7))
+            if (stringComparer.Equals(LookupKey(i & 7), LookupKey((i + 8) & 7)))
             {
                 acc += 3;
             }
