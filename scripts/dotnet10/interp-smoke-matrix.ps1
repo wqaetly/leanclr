@@ -9,6 +9,9 @@ param(
     [string[]]$Entries = @(),
     [string[]]$ExcludeEntries = @(),
     [string[]]$AdditionalAssemblyDir = @(),
+    [switch]$IncludeFullAssemblyEntry,
+    [switch]$IncludeEnvironmentEntries,
+    [switch]$IncludeInterpreterUnsupportedEntries,
     [switch]$ListOnly
 )
 
@@ -64,28 +67,106 @@ function Get-SmokeEntries {
     $names | Sort-Object -Unique
 }
 
+function Get-LegacySmokeEntries {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceDir
+    )
+
+    $pattern = '^\s*public\s+static\s+void\s+(?<name>Run[A-Za-z0-9_]+)\s*\(\s*\)'
+    $matches = Get-ChildItem -LiteralPath $SourceDir -Filter "*.cs" -File |
+        Select-String -Pattern $pattern
+    $names = foreach ($match in $matches) {
+        $match.Matches[0].Groups["name"].Value
+    }
+
+    $names | Sort-Object -Unique
+}
+
+function Split-EntryNames {
+    param(
+        [string[]]$Names
+    )
+
+    @(
+        foreach ($name in $Names) {
+            if ([string]::IsNullOrWhiteSpace($name)) {
+                continue
+            }
+            foreach ($part in $name.Split(",")) {
+                $trimmed = $part.Trim()
+                if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                    $trimmed
+                }
+            }
+        }
+    )
+}
+
 $repoRoot = (Resolve-Path ([System.IO.Path]::Combine($PSScriptRoot, "..", ".."))).Path
 $interpSmokeScript = [System.IO.Path]::Combine($PSScriptRoot, "interp-smoke.ps1")
+$isLegacyTests = $AssemblyName -eq "ManagedNet10.LegacyTests"
+$legacySourceDir = [System.IO.Path]::Combine($repoRoot, "src", "tests", "managed-net10", "ManagedNet10.LegacyTests")
+$environmentEntries = @(
+    "RunAllPrefixThenRuntimeType",
+    "RunAllPrefixThenRuntimeTypeMethod",
+    "RunGcFinalizerMethodThenRuntimeType"
+)
+$interpreterUnsupportedEntries = @(
+    "RunCorlibConsole",
+    "RunCorlibMonitor",
+    "RunCorlibMonitorWaitPulse",
+    "RunCorlibReflectionRuntimeModule",
+    "RunCorlibRuntimeServices"
+)
 
-if ([string]::IsNullOrWhiteSpace($SourceFile)) {
+if ([string]::IsNullOrWhiteSpace($SourceFile) -and -not $isLegacyTests) {
     $SourceFile = [System.IO.Path]::Combine($repoRoot, "src", "tests", "managed-net10", $AssemblyName, "Program.cs")
 }
-$SourceFile = (Resolve-Path $SourceFile).Path
+if (-not [string]::IsNullOrWhiteSpace($SourceFile)) {
+    $SourceFile = (Resolve-Path $SourceFile).Path
+}
 
 if ($Entries.Count -eq 0) {
-    $Entries = @(Get-SmokeEntries -Path $SourceFile)
+    if ($isLegacyTests) {
+        $Entries = @(Get-LegacySmokeEntries -SourceDir $legacySourceDir)
+    }
+    else {
+        $Entries = @(Get-SmokeEntries -Path $SourceFile)
+    }
 }
-if ($ExcludeEntries.Count -ne 0) {
-    $excluded = @{}
-    foreach ($entry in $ExcludeEntries) {
-        if (-not [string]::IsNullOrWhiteSpace($entry)) {
+else {
+    $Entries = @(Split-EntryNames -Names $Entries)
+}
+$ExcludeEntries = @(Split-EntryNames -Names $ExcludeEntries)
+
+$excluded = @{}
+if ($isLegacyTests) {
+    if (-not $IncludeFullAssemblyEntry) {
+        $excluded["RunAll"] = $true
+    }
+    if (-not $IncludeEnvironmentEntries) {
+        foreach ($entry in $environmentEntries) {
             $excluded[$entry] = $true
         }
     }
+    if (-not $IncludeInterpreterUnsupportedEntries) {
+        foreach ($entry in $interpreterUnsupportedEntries) {
+            $excluded[$entry] = $true
+        }
+    }
+}
+foreach ($entry in $ExcludeEntries) {
+    if (-not [string]::IsNullOrWhiteSpace($entry)) {
+        $excluded[$entry] = $true
+    }
+}
+if ($excluded.Count -ne 0) {
     $Entries = @($Entries | Where-Object { -not $excluded.ContainsKey($_) })
 }
 if ($Entries.Count -eq 0) {
-    throw "No smoke entries were found in $SourceFile"
+    $source = if ($isLegacyTests) { $legacySourceDir } else { $SourceFile }
+    throw "No smoke entries were found in $source"
 }
 
 if ($ListOnly) {

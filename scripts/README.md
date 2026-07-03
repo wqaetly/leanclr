@@ -32,6 +32,7 @@ Clean all outputs: `scripts\dev\clean-out.bat` (Windows) or `./scripts/dev/clean
 | API whitelist scan | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\api-scan.ps1 -Configuration Release` |
 | NKG/Odin workload smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-smoke.ps1 -Configuration Release` |
 | Core runtime assemblies AOT compile smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\corelib-aot-smoke.ps1 -Configuration Release` (`System.Console` is opt-in via `-IncludeConsoleAot`) |
+| Legacy net10 interpreter matrix | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\interp-smoke-matrix.ps1 -Configuration Release -AssemblyName ManagedNet10.LegacyTests` |
 | Legacy net10 AOT smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\legacy-aot-smoke.ps1 -Configuration Release -Entry "ManagedNet10.LegacyTests.Program::RunLegacyDiscoverySmoke"` |
 | Legacy net10 AOT matrix | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\legacy-aot-smoke-matrix.ps1 -Configuration Release -Entries RunLegacyDiscoverySmoke` |
 | NKG/Odin full AOT smoke | `powershell -ExecutionPolicy Bypass -File scripts\dotnet10\nkg-aot-smoke.ps1 -Configuration Release` |
