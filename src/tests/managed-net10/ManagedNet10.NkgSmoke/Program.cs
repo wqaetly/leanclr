@@ -11,7 +11,47 @@ internal static class Program
 {
     private static void Main()
     {
+        RunFullWorkloadSurfaceSmoke();
+    }
+
+    public static void RunFullWorkloadSurfaceSmoke()
+    {
         RunCoreWorkloadSurfaceSmoke();
+
+        RunOdinSerializerPrimitiveProbe();
+        RunOdinSerializerConstructionProbe();
+        RunOdinSerializerConstructionWithExplicitPolicyProbe();
+        RunOdinSerializerUninitializedObjectProbe();
+        RunOdinSerializerPrivateFieldSetProbe();
+        RunOdinSerializerPrivateFormatFieldSetProbe();
+        RunOdinSerializerPrivateFormatJsonFieldSetProbe();
+        RunOdinSerializerPrivatePolicyFieldSetProbe();
+        RunOdinSerializerPrivateLoggingFieldSetProbe();
+        RunOdinSerializerPrivateLoggingZeroFieldSetProbe();
+        RunOdinSerializerPrivateErrorHandlingFieldSetProbe();
+        RunOdinSerializerConstructorMetadataProbe();
+        RunOdinSerializerEnumValueProbe();
+        RunOdinSerializerEnumTypeEqualityProbe();
+        RunOdinSerializerEnumIsInstanceProbe();
+        RunOdinCustomSerializationPolicyConstructionProbe();
+        RunOdinSerializationPoliciesEverythingProbe();
+        RunOdinSerializerPrimitiveSerializeProbe();
+        RunOdinSerializationUtilityWeakPrimitiveProbe();
+        RunOdinSerializationUtilityWeakSnapshotProbe();
+
+        RunGodotPlaneWebDebugSmoke();
+        RunSamplerOdinRoundTripProbe();
+
+        RunAssemblyNameSmoke();
+        RunReferencedAssembliesSmoke();
+        RunTypesSmoke();
+        RunTypeNamespaceSmoke();
+        RunTypeCustomAttributeDataSmoke();
+        RunMemberEnumerationSmoke();
+        RunMemberCustomAttributeDataSmoke();
+        RunFieldCustomAttributeDataSmoke();
+        RunPropertyCustomAttributeDataSmoke();
+        RunMethodCustomAttributeDataSmoke();
     }
 
     public static void RunCoreWorkloadSurfaceSmoke()
@@ -724,7 +764,11 @@ internal static class Program
 
         var snapshot = InvokeStatic(bridgeType, "StepSession") as string;
         Require(!string.IsNullOrWhiteSpace(snapshot), "Godot plane bridge snapshot was empty");
-        Require(snapshot!.Contains("STATE", StringComparison.Ordinal), "Godot plane bridge snapshot state missing");
+        Require(snapshot!.StartsWith("NKGCB1\nbase64\n", StringComparison.Ordinal), "Godot plane bridge snapshot envelope missing");
+
+        var commandBytes = InvokeStatic(bridgeType, "StepSessionCommandBytes") as byte[];
+        Require(commandBytes != null && commandBytes.Length >= 2, "Godot plane bridge command bytes were empty");
+        Require(commandBytes![0] == 1 && commandBytes[^1] == 255, "Godot plane bridge command byte envelope mismatch");
 
         var health = InvokeStatic(bridgeType, "HandleDebugRequest", "GET\n/_nkg/debug/health\n") as string;
         Require(!string.IsNullOrWhiteSpace(health), "Godot plane debug health response was empty");
