@@ -6,7 +6,8 @@ param(
     [string]$CMakeGenerator,
     [string]$CMakeArchitecture,
     [string]$Entry = "ManagedNet10.NkgSmoke.Program::RunCoreWorkloadSurfaceSmoke",
-    [switch]$SkipNkgBuild
+    [switch]$SkipNkgBuild,
+    [switch]$BuildOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -109,6 +110,9 @@ if (-not [string]::IsNullOrWhiteSpace($CMakeGenerator)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($CMakeArchitecture)) {
     $args += @("-CMakeArchitecture", $CMakeArchitecture)
+}
+if ($BuildOnly) {
+    $args += "-BuildOnly"
 }
 
 $interpArgs = @("-ExecutionPolicy", "Bypass", "-File", $interpSmokeScript) + $args
