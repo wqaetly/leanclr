@@ -149,6 +149,9 @@ if (-not $SkipAotBuild) {
     if ($SkipCoreLibAot) {
         $buildArgs += "-SkipCoreLibAot"
     }
+    if ($IncludeNetworkEntries) {
+        $buildArgs += "-IncludeNetworkEntries"
+    }
 
     Invoke-Checked powershell @buildArgs
 }

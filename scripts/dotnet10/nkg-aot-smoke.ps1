@@ -9,6 +9,7 @@ param(
     [string]$Entry = "ManagedNet10.NkgSmoke.Program::RunFullWorkloadSurfaceSmoke",
     [switch]$SkipNkgBuild,
     [switch]$SkipCoreLibAot,
+    [switch]$IncludeNetworkEntries,
     [switch]$BuildOnly
 )
 
@@ -93,6 +94,11 @@ function Clear-GeneratedOutputDirectory {
 }
 
 $repoRoot = (Resolve-Path ([System.IO.Path]::Combine($PSScriptRoot, "..", ".."))).Path
+$networkEntries = @("ManagedNet10.NkgSmoke.Program::RunHostingWebDebugStartSmoke")
+
+if (-not $IncludeNetworkEntries -and $networkEntries -contains $Entry) {
+    throw "$Entry is a network/hosting smoke entry. Pass -IncludeNetworkEntries to include NKG hosting AOT surface."
+}
 
 if ([string]::IsNullOrWhiteSpace($NkgRoot)) {
     $candidateRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($repoRoot, "..", "NKGGameFramework"))
@@ -211,13 +217,15 @@ $aotAssemblies = @(
     "ManagedNet10.NkgSmoke",
     "NKGGameFramework",
     "NKGGameFramework.Diagnostics",
-    "NKGGameFramework.Hosting",
     "NKGGameFramework.Adapter.Godot",
     "NKGGameFramework.GodotPlaneSample",
     "NKGGameFramework.Sampler",
     "OdinSerializer",
     "UniTask"
 )
+if ($IncludeNetworkEntries) {
+    $aotAssemblies += "NKGGameFramework.Hosting"
+}
 
 $leanAotArgs = @(
     $leanAotDll,
@@ -241,7 +249,6 @@ $expectedFiles = @(
     "ManagedNet10_NkgSmoke.module_registration.cpp",
     "NKGGameFramework.module_registration.cpp",
     "NKGGameFramework_Diagnostics.module_registration.cpp",
-    "NKGGameFramework_Hosting.module_registration.cpp",
     "NKGGameFramework_Adapter_Godot.module_registration.cpp",
     "NKGGameFramework_GodotPlaneSample.module_registration.cpp",
     "NKGGameFramework_Sampler.module_registration.cpp",
@@ -251,6 +258,9 @@ $expectedFiles = @(
     "method_invokers_part0.cpp",
     "method_direct_call_bridges_part0.cpp"
 )
+if ($IncludeNetworkEntries) {
+    $expectedFiles += "NKGGameFramework_Hosting.module_registration.cpp"
+}
 
 foreach ($fileName in $expectedFiles) {
     $path = [System.IO.Path]::Combine($OutputDir, $fileName)
