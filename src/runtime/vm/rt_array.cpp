@@ -96,8 +96,16 @@ RtResult<RtArray*> Array::__new_mdarray_from_array_klass(const metadata::RtClass
     for (uint8_t i = 0; i < rank; ++i)
     {
         int32_t dimension_length = lengths[i];
-        // Check for overflow
-        if (static_cast<uint32_t>(dimension_length) > static_cast<uint32_t>(RT_MAX_ARRAY_INDEX) / static_cast<uint32_t>(total_length))
+        // 每维独立判负(CoreCLR 语义:任一负维抛 OverflowException)。不能只靠下面的溢出检查:
+        // 前维为 0 时 total 恒 0 会跳过检查,负维被静默写进 bounds(GetLength 返回负数)。
+        if (dimension_length < 0)
+        {
+            RET_ERR(RtErr::Overflow);
+        }
+        // Check for overflow. Skip when a prior dimension was zero: the product stays zero (a legal
+        // empty multi-dim array such as new int[0, 5]), and dividing RT_MAX_ARRAY_INDEX by a zero
+        // total_length would trap (SIGFPE).
+        if (total_length != 0 && static_cast<uint32_t>(dimension_length) > static_cast<uint32_t>(RT_MAX_ARRAY_INDEX) / static_cast<uint32_t>(total_length))
         {
             RET_ERR(RtErr::Overflow);
         }
@@ -108,7 +116,9 @@ RtResult<RtArray*> Array::__new_mdarray_from_array_klass(const metadata::RtClass
     const metadata::RtClass* ele_klass = arr_klass->element_class;
     int32_t ele_size = static_cast<int32_t>(Class::get_stack_location_size(ele_klass));
 
-    if (ele_size > RT_MAX_ARRAY_INDEX / total_length)
+    // total_length == 0 (a zero-length dimension) needs no element-size overflow check and must not
+    // divide by zero here.
+    if (total_length != 0 && ele_size > RT_MAX_ARRAY_INDEX / total_length)
     {
         RET_ERR(RtErr::Overflow);
     }
@@ -116,6 +126,11 @@ RtResult<RtArray*> Array::__new_mdarray_from_array_klass(const metadata::RtClass
     size_t total_array_bytes = get_array_allocation_size(arr_klass, total_length);
 
     RtArray* arr_obj = reinterpret_cast<RtArray*>(gc::GarbageCollector::allocate_array(arr_klass, total_array_bytes LEANCLR_GC_CALL_SITE_PARAM));
+
+    if (!arr_obj)
+    {
+        RET_ERR(RtErr::OutOfMemory);
+    }
 
     // Set up bounds
     ArrayBounds* bounds = Array::get_array_bounds(arr_obj);
