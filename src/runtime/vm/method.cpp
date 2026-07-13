@@ -198,6 +198,32 @@ RtResult<const RtMethodInfo*> Method::get_virtual_method_impl_on_klass(const RtC
     }
     if (!actual_method)
     {
+        // SZ 数组的泛型集合接口成员:CoreCLR 语义路由到 System.SZArrayHelper 同名泛型方法
+        // (this 重解释为数组,corlib IL 原生语义如 EqualityComparer<T>.Default 零自写;
+        // T 取接口实参而非元素类型——数组协变下二者可不同)。shim 层 Count/get_Item/CopyTo/
+        // GetEnumerator 快径不受影响,此处只兜 vtable/接口表 miss 的成员(Contains/IndexOf 等)。
+        if (Class::is_szarray_class(klass) && Class::is_interface(declaring_klass) && declaring_klass->namespaze != nullptr &&
+            std::strcmp(declaring_klass->namespaze, "System.Collections.Generic") == 0 && declaring_klass->by_val != nullptr &&
+            declaring_klass->by_val->ele_type == metadata::RtElementType::GenericInst)
+        {
+            const metadata::RtGenericInst* iface_inst = declaring_klass->by_val->data.generic_class->class_inst;
+            metadata::RtModuleDef* corlib = metadata::RtModuleDef::get_corlib_module();
+            if (iface_inst != nullptr && iface_inst->generic_arg_count == 1 && corlib != nullptr)
+            {
+                auto helper_ret = corlib->get_class_by_name2("System", "SZArrayHelper", false, false);
+                if (helper_ret.is_ok() && helper_ret.unwrap() != nullptr)
+                {
+                    metadata::RtClass* helper = helper_ret.unwrap();
+                    RET_ERR_ON_FAIL(Class::initialize_methods(helper));
+                    const RtMethodInfo* helper_def = Class::get_method_for_name(helper, virtual_method->name, virtual_method->parameter_count, false);
+                    if (helper_def != nullptr && helper_def->generic_container != nullptr &&
+                        helper_def->generic_container->generic_param_count == 1)
+                    {
+                        return GenericMethod::get_method(helper_def, nullptr, iface_inst);
+                    }
+                }
+            }
+        }
         RET_ERR(RtErr::MissingMethod);
     }
     if (actual_method->generic_container)
