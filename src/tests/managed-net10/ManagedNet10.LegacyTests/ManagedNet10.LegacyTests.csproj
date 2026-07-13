@@ -314,12 +314,18 @@
   <Target Name="BuildLegacyIlAssembly" BeforeTargets="ResolveAssemblyReferences">
     <PropertyGroup>
       <IlNativeOutput>$(OutputPath)$(IlNativeAssemblyName).dll</IlNativeOutput>
-      <_IlAsmExe Condition="'$(Platform)' == 'x86'">$(PkgILAsm)\bin\Win.x86\ilasm.exe</_IlAsmExe>
-      <_IlAsmExe Condition="'$(_IlAsmExe)' == ''">$(PkgILAsm)\bin\Win.x64\ilasm.exe</_IlAsmExe>
+      <_IlAsmExe Condition="'$(_IlAsmExe)' == '' And '$(OS)' == 'Windows_NT' And '$(Platform)' == 'x86'">$(PkgILAsm)\bin\Win.x86\ilasm.exe</_IlAsmExe>
+      <_IlAsmExe Condition="'$(_IlAsmExe)' == '' And '$(OS)' == 'Windows_NT'">$(PkgILAsm)\bin\Win.x64\ilasm.exe</_IlAsmExe>
+      <!-- 非 Windows:ILAsm nuget 只带 Win 位,须经 _IlAsmExe 属性/环境变量注入平台 ilasm
+           (runtime.<rid>.Microsoft.NETCore.ILAsm);unix ilasm 只认 - 风格参数,/ 会被当输入文件 -->
+      <_IlAsmArgs Condition="'$(OS)' == 'Windows_NT'">/dll /output:&quot;$(IlNativeOutput)&quot; /quiet</_IlAsmArgs>
+      <_IlAsmArgs Condition="'$(OS)' != 'Windows_NT'">-dll -output=&quot;$(IlNativeOutput)&quot; -quiet</_IlAsmArgs>
       <_IlSources>@(IlFile->'&quot;$(MSBuildProjectDirectory)\%(Identity)&quot;', ' ')</_IlSources>
     </PropertyGroup>
+    <Error Condition="'$(_IlAsmExe)' == ''"
+           Text="ilasm not resolved for this platform. Set the _IlAsmExe property/environment variable to a platform ilasm (e.g. runtime.osx-arm64.Microsoft.NETCore.ILAsm)." />
     <MakeDir Directories="$(OutputPath)" />
-    <Exec Command="&quot;$(_IlAsmExe)&quot; /dll /output:&quot;$(IlNativeOutput)&quot; /quiet $(_IlSources)" />
+    <Exec Command="&quot;$(_IlAsmExe)&quot; $(_IlAsmArgs) $(_IlSources)" />
     <ItemGroup>
       <Reference Include="$(IlNativeAssemblyName)">
         <HintPath>$(IlNativeOutput)</HintPath>
